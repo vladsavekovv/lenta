@@ -1,0 +1,28 @@
+[Unit]
+Description=LENTA Media Server
+Documentation=file:///opt/lenta/docs/INSTALL.md
+After=network-online.target remote-fs.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Filled in by deploy/install.sh from SERVICE_USER. Never root.
+User=@SERVICE_USER@
+Group=@SERVICE_GROUP@
+# GPU access comes from this user's membership in the existing video/render groups.
+EnvironmentFile=/etc/lenta/lenta.env
+WorkingDirectory=/opt/lenta/server
+ExecStart=/opt/lenta/venv/bin/python -m lenta
+Restart=on-failure
+RestartSec=5
+
+# Hardening: the service can read media anywhere but only write its own data folder.
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+# Filled in from LENTA_DATA_DIR (and LENTA_TRANSCODE_DIR when it lives elsewhere).
+ReadWritePaths=@DATA_DIR@@EXTRA_RW@
+
+[Install]
+WantedBy=multi-user.target

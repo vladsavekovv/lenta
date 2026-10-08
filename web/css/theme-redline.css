@@ -1,0 +1,469 @@
+/* Redline — the look of today's big streaming services: near-black, signal red, a menu bar along the top,
+   a full-width billboard and rows of wide pictures that grow when you point at them.
+   Everything here only applies when the Redline theme is chosen (Settings › Look). */
+
+[data-theme="redline"] {
+  --bg: #141414; --bg-2: #181818; --bg-3: #2F2F2F; --line: #404040;
+  --text: #FFFFFF; --text-soft: #E5E5E5; --muted: #B3B3B3; --faint: #808080;
+  --accent: #E50914; --accent-hover: #F40612; --accent-ink: #FFFFFF; --accent-fill: var(--accent);
+  --bg-rgb: 20 20 20; --bg2-rgb: 24 24 24; --deep-rgb: 0 0 0; --text-rgb: 255 255 255; --accent-rgb: 229 9 20;
+  --red: #E87C03; --green: #46D369;
+  --body: 'Helvetica Neue', Helvetica, Arial, 'Golos Text', sans-serif;
+  --display: 'Helvetica Neue', Helvetica, Arial, 'Golos Text', sans-serif;
+  --display-weight: 700; --display-transform: none; --display-tracking: -0.01em; --brand-tracking: .02em;
+  --radius: 4px; --panel-radius: 6px;
+  --poster-hue: 0; --poster-sat: 0%;
+  --gutter: 4%;
+  --topbar: 68px;
+}
+
+[data-theme="redline"] body { background: #141414; }
+[data-theme="redline"] .btn { border-radius: 4px; font-weight: 700; }
+[data-theme="redline"] .avatar { border-radius: 4px; color: #fff; }
+[data-theme="redline"] .panel { background: #181818; border-color: #2a2a2a; }
+[data-theme="redline"] ::selection { background: #E50914; color: #fff; }
+
+/* ---------- the menu bar along the top (computers and TVs; phones keep the bar at the bottom) ---------- */
+@media (min-width: 721px) and (min-height: 501px), (min-width: 721px) and (hover: hover) {
+  html[data-theme="redline"] body { --rail: 0px; }             /* nothing on the left: full width for pages and the player bar */
+  html[data-theme="redline"] body .d-actions { max-width: 92vw; }
+  [data-theme="redline"] .app { display: block; }
+  [data-theme="redline"] .view { margin-left: 0 !important; min-width: 0; }
+  html[data-theme="redline"] body .rail {
+    position: fixed !important; top: 0; left: 0; right: 0; bottom: auto; width: auto !important; height: var(--topbar);
+    flex-direction: row; align-items: center; gap: 4px;
+    padding: 0 var(--gutter) !important; border: 0; z-index: 60;
+    background: linear-gradient(180deg, rgb(0 0 0 / .7) 10%, rgb(0 0 0 / 0));
+    transition: background-color .4s;
+  }
+  html[data-theme="redline"].scrolled body .rail { background-color: #141414; }
+  /* Home · libraries (TV Shows, Movies…) · My list */
+  html[data-theme="redline"] body .rail .brand-row { order: 0; }
+  html[data-theme="redline"] body .rail a[href="#/"] { order: 1; }
+  html[data-theme="redline"] body .rail .lib-list { order: 2; }
+  html[data-theme="redline"] body .rail a[href="#/mylist"] { order: 3; }
+  html[data-theme="redline"] body .rail .brand-row { display: flex; align-items: center; margin-right: 26px; flex: none; }
+  html[data-theme="redline"] body .rail .brand-mark-link, html[data-theme="redline"] body .rail .rail-toggle { display: none !important; }
+  html[data-theme="redline"] body .rail .brand, html[data-theme="redline"] body .rail .brand-text { display: flex !important; align-items: center; padding: 0; margin: 0; }
+  html[data-theme="redline"] body .rail .brand small { display: none; }
+  html[data-theme="redline"] body .rail .brand-word { width: 120px; height: auto; max-height: 30px; object-fit: contain; margin-top: 8px; }
+  html[data-theme="redline"] body .rail .group { display: none; }
+  html[data-theme="redline"] body .rail .lib-list { display: flex; flex-direction: row; align-items: center; gap: 4px; flex-wrap: nowrap; }
+  html[data-theme="redline"] body .rail .lib-item > a { padding-right: 9px; }
+  html[data-theme="redline"] body .rail .lib-item { display: flex; align-items: center; }
+  html[data-theme="redline"] body .rail .lib-more { display: none; }
+  html[data-theme="redline"] body .rail .spacer { flex: 1; }
+  html[data-theme="redline"] body .rail .tabbar { display: none; }
+
+  /* text links, like Home · TV Shows · Movies · My List */
+  html[data-theme="redline"] body .rail a, html[data-theme="redline"] body .rail button.navlike {
+    width: auto; padding: 6px 9px; border-radius: 4px; background: none !important; gap: 8px;
+    color: #E5E5E5; font-size: 14px; font-weight: 400; justify-content: flex-start;
+    transition: color .3s;
+  }
+  html[data-theme="redline"] body .rail a:hover, html[data-theme="redline"] body .rail button.navlike:hover { color: #B3B3B3; }
+  html[data-theme="redline"] body .rail a.active { color: #fff; font-weight: 700; }
+  html[data-theme="redline"] body .rail a.active::before { display: none; }
+  html[data-theme="redline"] body .rail a svg { display: none; }
+  html[data-theme="redline"] body .rail .label { display: inline !important; overflow: visible; }
+
+  /* on the right: search, settings and admin as icons, then the profile */
+  html[data-theme="redline"] body .rail a[href="#/search"] { order: 10; margin-left: auto; }
+  html[data-theme="redline"] body .rail .spacer { order: 9; flex: 1; }
+  html[data-theme="redline"] body .rail a[href="#/settings"] { order: 11; }
+  html[data-theme="redline"] body .rail a[href="#/admin"] { order: 12; }
+  html[data-theme="redline"] body .rail #account-btn { order: 13; margin-left: 8px; }
+  html[data-theme="redline"] body .rail a[href="#/search"] svg,
+  html[data-theme="redline"] body .rail a[href="#/settings"] svg,
+  html[data-theme="redline"] body .rail a[href="#/admin"] svg { display: block; width: 22px; height: 22px; color: #fff; }
+  html[data-theme="redline"] body .rail a[href="#/search"] .label,
+  html[data-theme="redline"] body .rail a[href="#/settings"] .label,
+  html[data-theme="redline"] body .rail a[href="#/admin"] .label,
+  html[data-theme="redline"] body .rail #account-btn .label { display: none !important; }
+  html[data-theme="redline"] body .rail #account-btn .avatar { width: 32px; height: 32px; }
+
+  /* not enough room for every library: one "Libraries" button instead (body.nav-compact, set by app.js) */
+  html[data-theme="redline"] body.nav-compact .rail .lib-list,
+  html[data-theme="redline"] body.nav-compact .rail a[href="#/mylist"] { display: none !important; }
+  html[data-theme="redline"] body.nav-compact .rail .tabbar { display: flex !important; order: 2; position: static; height: auto;
+    background: none; border: 0; padding: 0; box-shadow: none; }
+  html[data-theme="redline"] body.nav-compact .rail .tabbar > :not(#tab-libs) { display: none !important; }
+  html[data-theme="redline"] body .rail #tab-libs { display: flex; align-items: center; gap: 6px; padding: 6px 9px; border: 0;
+    background: none; color: #E5E5E5; font: 400 14px var(--body); cursor: pointer; }
+  html[data-theme="redline"] body .rail #tab-libs svg { display: none; }
+  html[data-theme="redline"] body .rail #tab-libs::after { content: ""; border: 5px solid transparent; border-top-color: currentColor;
+    margin-top: 5px; }
+  html[data-theme="redline"] body .rail #tab-libs:hover { color: #B3B3B3; }
+  html[data-theme="redline"] body .rail #tab-libs.active { color: #fff; font-weight: 700; }
+
+  /* pages start under the bar; the billboard and title pages run behind it */
+  [data-theme="redline"] .app:not(.bare) .view > :first-child:not(.hero):not(.d-hero):not(.page-hero) { margin-top: var(--topbar); }
+  [data-theme="redline"] .view > .page, [data-theme="redline"] .view > .settings { padding-top: calc(var(--topbar) + 12px); }
+}
+
+/* ---------- billboard ---------- */
+[data-theme="redline"] .hero {
+  min-height: 56.25vw; max-height: 100vh; align-items: center;
+  padding: var(--topbar) var(--gutter) 0;
+}
+[data-theme="redline"] .hero::before {
+  background:                                   /* the fade into the page lies on top of the side shade */
+    linear-gradient(180deg, rgb(20 20 20 / 0) 0%, rgb(20 20 20 / .15) 40%, rgb(20 20 20 / .7) 72%, #141414 100%),
+    linear-gradient(77deg, rgb(0 0 0 / .6) 0%, rgb(0 0 0 / 0) 85%);
+}
+[data-theme="redline"] .hero-body { max-width: max(36%, 460px); min-width: 0; margin-top: 4vw; }
+[data-theme="redline"] .hero .logo { max-width: 100%; max-height: 14vw; margin-bottom: 1.2vw; }
+[data-theme="redline"] .hero .marquee {
+  font: 700 clamp(32px, 4vw, 88px)/1.02 var(--display); text-transform: none; letter-spacing: -.02em;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  text-shadow: 2px 2px 4px rgb(0 0 0 / .45); margin-bottom: 1.2vw;
+}
+[data-theme="redline"] .hero .meta { color: #fff; font-size: clamp(14px, 1.1vw, 20px); text-shadow: 2px 2px 4px rgb(0 0 0 / .45); }
+[data-theme="redline"] .hero .overview {
+  color: #fff; font-size: clamp(15px, 1.2vw, 22px); line-height: 1.3; font-weight: 400;
+  text-shadow: 2px 2px 4px rgb(0 0 0 / .45); margin-bottom: 1.6vw;
+}
+[data-theme="redline"] .hero .actions, [data-theme="redline"] .d-hero .actions { gap: 1rem; }
+
+/* Play: white; More info and the others: see-through grey */
+[data-theme="redline"] .hero .btn, [data-theme="redline"] .d-hero .btn {
+  height: auto; min-height: 44px; padding: .55rem 1.6rem .55rem 1.3rem; border: 0; border-radius: 4px;
+  font-size: clamp(15px, 1.2vw, 20px); font-weight: 700; backdrop-filter: none;
+  background: rgb(109 109 110 / .7); color: #fff;
+}
+[data-theme="redline"] .hero .btn:hover, [data-theme="redline"] .d-hero .btn:hover { background: rgb(109 109 110 / .4); filter: none; }
+[data-theme="redline"] .hero .btn.primary, [data-theme="redline"] .d-hero .btn.primary { background: #fff; color: #000; }
+[data-theme="redline"] .hero .btn.primary:hover, [data-theme="redline"] .d-hero .btn.primary:hover { background: rgb(255 255 255 / .75); }
+[data-theme="redline"] .hero .btn svg, [data-theme="redline"] .d-hero .btn svg { width: 1.5em; height: 1.5em; }
+[data-theme="redline"] .hero .btn.icon, [data-theme="redline"] .d-hero .btn.icon { padding: .55rem; border-radius: 50%; width: 44px;
+  background: rgb(42 42 42 / .6); border: 2px solid rgb(255 255 255 / .5); }
+@media (max-width: 1180px) {
+  [data-theme="redline"] .d-actions .glass-btn { width: 44px; min-width: 44px; padding: 0; border-radius: 50%; justify-content: center; }
+  [data-theme="redline"] .d-actions .glass-btn svg { width: 22px; height: 22px; }
+}
+[data-theme="redline"] .hero-pill { background: none; border: 0; backdrop-filter: none; }
+[data-theme="redline"] .hero-pill button { border: 1px solid rgb(255 255 255 / .7); background: rgb(0 0 0 / .2); color: #fff; }
+
+/* the rows ride up over the bottom of the billboard */
+[data-theme="redline"] .hero + .rows, [data-theme="redline"] .hero + * .rows { margin-top: -7vw; position: relative; z-index: 2; }
+[data-theme="redline"] .rows { gap: 1.45vw; }
+
+/* ---------- rows ---------- */
+[data-theme="redline"] .row h2, [data-theme="redline"] .section-title {
+  font: 700 clamp(15px, 1.4vw, 26px)/1.25 var(--display); color: #E5E5E5; letter-spacing: 0;
+  margin: 0 var(--gutter) .5em;
+}
+[data-theme="redline"] .row h2 a:hover { color: #fff; }
+[data-theme="redline"] .track { gap: .4vw; padding: 0 var(--gutter) 4px; scroll-padding: 0 var(--gutter); }
+[data-theme="redline"] .track.landscape { grid-auto-columns: calc((92vw - 5 * .4vw) / 6); }
+[data-theme="redline"] .track.poster { grid-auto-columns: calc((92vw - 7 * .4vw) / 8); }
+[data-theme="redline"] .track.square { grid-auto-columns: calc((92vw - 6 * .4vw) / 7); }
+@media (max-width: 1400px) {
+  [data-theme="redline"] .track.landscape { grid-auto-columns: calc((92vw - 4 * .4vw) / 5); }
+  [data-theme="redline"] .track.poster { grid-auto-columns: calc((92vw - 6 * .4vw) / 7); }
+}
+@media (max-width: 1100px) {
+  [data-theme="redline"] .track.landscape { grid-auto-columns: calc((92vw - 3 * .4vw) / 4); }
+  [data-theme="redline"] .track.poster { grid-auto-columns: calc((92vw - 5 * .4vw) / 6); }
+}
+@media (max-width: 720px) {
+  [data-theme="redline"] .track.landscape { grid-auto-columns: 42vw; }
+  [data-theme="redline"] .track.poster { grid-auto-columns: 30vw; }
+}
+
+/* the side arrows: full height, dark, the arrow grows when pointed at */
+[data-theme="redline"] .scroll-btn {
+  top: 0; bottom: 4px; width: var(--gutter); min-width: 28px; background: rgb(20 20 20 / .5); border-radius: 0;
+}
+[data-theme="redline"] .scroll-btn:hover { background: rgb(20 20 20 / .7); }
+[data-theme="redline"] .scroll-btn svg { width: 2.2vw; height: 2.2vw; min-width: 22px; min-height: 22px; transition: transform .1s; }
+[data-theme="redline"] .scroll-btn:hover svg { transform: scale(1.25); }
+
+/* cards: just the picture (the name is on it, and in the card that opens on pointing) */
+[data-theme="redline"] .card .frame { border-radius: 4px; background: #232323; outline: 0; }
+[data-theme="redline"] .card:hover .frame { outline: 0; }
+[data-theme="redline"] .badge { background: #E50914; color: #fff; border-radius: 2px; }
+[data-theme="redline"] .grid { gap: 2.4vw .4vw; }
+
+/* ---------- the card that opens when you point at a picture ---------- */
+[data-theme="redline"] .hovercard { border-radius: 6px; background: #181818; box-shadow: 0 3px 10px rgb(0 0 0 / .75); }
+[data-theme="redline"] .hc-art { border-radius: 6px 6px 0 0; }
+[data-theme="redline"] .hc-body { padding: 14px 16px 18px; }
+[data-theme="redline"] .hc-btn { width: 40px; height: 40px; border: 2px solid rgb(255 255 255 / .5); background: rgb(42 42 42 / .6); color: #fff; }
+[data-theme="redline"] .hc-btn:hover { border-color: #fff; background: rgb(42 42 42 / .6); }
+[data-theme="redline"] .hc-btn.play { width: 40px; height: 40px; background: #fff; border-color: #fff; color: #000; }
+[data-theme="redline"] .hc-btn.play:hover { background: rgb(255 255 255 / .8); }
+[data-theme="redline"] .hc-facts .score { color: #46D369; font-weight: 700; }
+[data-theme="redline"] .hc-facts .box { border-color: rgb(255 255 255 / .4); color: #fff; border-radius: 2px; }
+[data-theme="redline"] .hc-title { text-transform: none; font-weight: 700; letter-spacing: -.01em; }
+[data-theme="redline"] .hc-options button:hover svg, [data-theme="redline"] .hc-name:hover { color: #fff; }
+
+/* ---------- title pages ---------- */
+[data-theme="redline"] .d-hero { padding-top: calc(var(--topbar) + 60px); }
+[data-theme="redline"] .d-title { text-transform: none; letter-spacing: -.02em; font-weight: 700; text-shadow: 2px 2px 4px rgb(0 0 0 / .45); }
+[data-theme="redline"] .chip-g { border-radius: 2px; background: none; border: 0; padding: 0 6px 0 0; color: #BCBCBC; backdrop-filter: none; font-size: 15px; }
+[data-theme="redline"] .chip-g.score, [data-theme="redline"] .chip-g.good { color: #46D369; font-weight: 700; }
+[data-theme="redline"] .btn.glass-btn { background: rgb(42 42 42 / .6); border: 2px solid rgb(255 255 255 / .5); backdrop-filter: none; }
+[data-theme="redline"] .btn.glass-btn:hover { border-color: #fff; background: rgb(42 42 42 / .6); }
+[data-theme="redline"] .btn.glass-btn.on { color: #fff; border-color: #fff; }
+[data-theme="redline"] .d-progress .bar { background: #4d4d4d; border-radius: 0; height: 3px; }
+[data-theme="redline"] .d-progress .bar i { background: #E50914; }
+[data-theme="redline"] .pill-ctl { background: rgb(0 0 0 / .4); border-color: rgb(255 255 255 / .2); }
+
+/* episodes: number · picture · name and length · description, divided by thin lines */
+[data-theme="redline"] .episode { border-radius: 4px; border-bottom: 1px solid #404040; padding: 1.6em 1.2em; }
+[data-theme="redline"] .episode:hover, [data-theme="redline"] .episode:focus { background: #333; }
+[data-theme="redline"] .episode .num { font-size: 24px; color: #D2D2D2; font-family: var(--display); font-weight: 400; }
+[data-theme="redline"] .episode .frame { border-radius: 4px; }
+
+/* ---------- player: red line, white controls ---------- */
+[data-theme="redline"] .player { --accent: #E50914; --accent-fill: #E50914; }
+
+/* ---------- sign-in and profiles ---------- */
+[data-theme="redline"] .auth { background: #141414; }
+[data-theme="redline"] .auth h1 { font-weight: 500; font-size: clamp(28px, 3.5vw, 56px); color: #fff; letter-spacing: 0; text-transform: none; }
+[data-theme="redline"] .profile { color: #808080; }
+[data-theme="redline"] .profile .avatar { border-radius: 4px; }
+[data-theme="redline"] .profile:hover, [data-theme="redline"] .profile:focus { color: #E5E5E5; }
+[data-theme="redline"] .profile:hover .avatar, [data-theme="redline"] .profile:focus .avatar { box-shadow: 0 0 0 3px #E5E5E5; }
+[data-theme="redline"] .auth-form .btn.primary { background: #E50914; color: #fff; }
+
+/* ---------- TV: a clear white frame around what is chosen ---------- */
+html.tv[data-theme="redline"] .card .frame-link:focus .frame::after { border-color: #fff; border-radius: 4px; }
+html.tv[data-theme="redline"] .card .frame-link:focus .frame { transform: scale(1.06); transition: transform .2s; }
+html.tvhtml[data-theme="redline"] body .rail a:focus { color: #fff; font-weight: 700; box-shadow: none; text-decoration: underline; text-underline-offset: 6px; }
+
+/* ---------- dialogs: the chosen tab white with a red mark (red on dark grey is hard to read) ---------- */
+[data-theme="redline"] .ed-tabs button.on { color: #fff; background: #2F2F2F; box-shadow: inset 3px 0 0 #E50914; }
+[data-theme="redline"] .tabs a.active { color: #fff; }
+
+/* ---------- phones: a taller billboard, the rows start below it ---------- */
+@media (max-width: 720px) {
+  [data-theme="redline"] .hero { min-height: 72vh; max-height: none; align-items: flex-end; padding: var(--topbar) var(--gutter) 28px; }
+  [data-theme="redline"] .hero-body { max-width: 100%; min-width: 0; margin-top: 0; }
+  [data-theme="redline"] .hero + .rows, [data-theme="redline"] .hero + * .rows { margin-top: 0; }
+  [data-theme="redline"] { --topbar: 0px; }
+}
+[data-theme="redline"] .pill.accent { background: #E50914; color: #fff; border-color: #E50914; }
+[data-theme="redline"] a.pill.accent:hover { background: #F40612; }
+
+/* =====================================================================================================
+   The 2025 billboard: a rounded card inside the page, the page tinted with the picture's colour,
+   pill buttons, a "Movie · Action · 2025 · 1h 23m · 16+" line, labels in the corner. While the trailer
+   plays only the title, that line and the buttons show; when it ends the picture and the description
+   come back with a button to replay it.
+   ===================================================================================================== */
+[data-theme="redline"] body.home-page {
+  /* fixed to the window, so the colour stays with you all the way down the page and back up */
+  background: linear-gradient(180deg, var(--hero-tint, #141414) 0%, color-mix(in srgb, var(--hero-tint, #141414) 70%, #141414) 55%,
+    color-mix(in srgb, var(--hero-tint, #141414) 45%, #141414) 100%) fixed, #141414;
+  transition: background .8s;
+}
+@media (min-width: 721px) and (min-height: 501px), (min-width: 721px) and (hover: hover) {
+  html[data-theme="redline"] body.home-page .rail { background: none; }
+  html[data-theme="redline"].scrolled body.home-page .rail { background-color: var(--hero-tint, #141414); }
+  /* the menu entry of the page you're on: a grey pill */
+  html[data-theme="redline"] body .rail a.active { background: rgb(255 255 255 / .2) !important; border-radius: 999px; padding: 6px 16px; }
+  html[data-theme="redline"] body .rail a, html[data-theme="redline"] body .rail #tab-libs { font-size: 15px; font-weight: 500; padding: 6px 12px; }
+}
+
+[data-theme="redline"] .hero {
+  margin: calc(var(--topbar) + 8px) var(--gutter) 0;
+  min-height: 0; height: min(42.3vw, calc(100vh - var(--topbar) - 40px)); max-height: none;
+  padding: 0 4.5% 3.4%; align-items: flex-end;
+  border-radius: 22px; overflow: hidden; isolation: isolate;
+  box-shadow: 0 12px 40px rgb(0 0 0 / .45), 0 0 0 1px rgb(255 255 255 / .06);
+}
+[data-theme="redline"] .hero .art { border-radius: inherit; }
+[data-theme="redline"] .hero::before {
+  background:
+    linear-gradient(0deg, rgb(0 0 0 / .62) 0%, rgb(0 0 0 / .25) 30%, rgb(0 0 0 / 0) 52%),
+    linear-gradient(90deg, rgb(0 0 0 / .5) 0%, rgb(0 0 0 / .12) 42%, rgb(0 0 0 / 0) 60%);
+}
+[data-theme="redline"] .hero-trailer { border-radius: inherit; overflow: hidden; }
+[data-theme="redline"] .hero-body { max-width: min(46%, 760px); margin-top: 0; }
+[data-theme="redline"] .hero .logo { max-height: min(13vw, 220px); max-width: 100%; margin-bottom: 1.1vw; }
+[data-theme="redline"] .hero .marquee { margin-bottom: .9vw; }
+
+/* Movie · Action · 2025 · 1h 23m · 16+ */
+[data-theme="redline"] .hero .meta { display: none; }
+[data-theme="redline"] .hero-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0; margin: 0 0 1.1vw;
+  color: #fff; font-weight: 700; font-size: clamp(14px, 1.05vw, 20px); text-shadow: 0 1px 6px rgb(0 0 0 / .5);
+}
+[data-theme="redline"] .hero-meta > span + span::before { content: "•"; color: rgb(255 255 255 / .6); margin: 0 .5em; font-weight: 400; }
+[data-theme="redline"] .hero-meta .cert { font-weight: 500; font-size: .9em; }
+
+/* the description: only when no trailer is playing */
+[data-theme="redline"] .hero .overview {
+  font-size: clamp(15px, 1.25vw, 24px); line-height: 1.3; max-width: 40ch; margin-bottom: 1.5vw;
+  transition: opacity .6s, max-height .6s, margin .6s; max-height: 8em; overflow: hidden;
+}
+[data-theme="redline"] .hero.trailer-on .overview { opacity: 0; max-height: 0; margin-bottom: 0; }
+
+/* pill buttons; More info without its icon */
+[data-theme="redline"] .hero .btn { border-radius: 999px; padding: .55rem 1.5rem; min-height: 46px; font-size: clamp(15px, 1.15vw, 20px); }
+[data-theme="redline"] .hero .btn.primary { padding-left: 1.2rem; }
+[data-theme="redline"] .hero .btn.ghost { background: rgb(255 255 255 / .2); backdrop-filter: blur(6px); }
+[data-theme="redline"] .hero .btn.ghost:hover { background: rgb(255 255 255 / .3); }
+[data-theme="redline"] .hero .btn.ghost svg { display: none; }
+
+/* sound / replay: a small round button in the top right corner */
+[data-theme="redline"] .hero-pill { position: absolute; top: 3.2%; right: 2.2%; bottom: auto; padding: 0; gap: 8px; }
+[data-theme="redline"] .hero-pill button { width: 34px; height: 34px; border: 1px solid rgb(255 255 255 / .35); background: rgb(40 40 40 / .55); }
+[data-theme="redline"] .hero-pill button:hover { background: rgb(80 80 80 / .7); border-color: #fff; }
+[data-theme="redline"] .hero-pill svg { width: 16px; height: 16px; }
+
+/* labels in the bottom right corner */
+[data-theme="redline"] .hero-badges { display: flex; gap: 8px; position: absolute; right: 2.2%; bottom: 3.6%; z-index: 2; }
+[data-theme="redline"] .hb {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 6px;
+  background: rgb(28 28 28 / .82); color: #fff; font: 700 13px/1 var(--body); backdrop-filter: blur(6px);
+}
+[data-theme="redline"] .hb .hb-mark { height: 19px; margin: -3px 0; width: auto; display: block; flex: none; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .6)); }   /* LENTA's mark */
+[data-theme="redline"] .hb.score b { color: #F5C518; font-size: 14px; }
+
+/* the rows start under the card now (it no longer runs to the page edge) */
+[data-theme="redline"] .hero + .rows, [data-theme="redline"] .hero + * .rows { margin-top: 2.4vw; }
+
+@media (max-width: 720px) {
+  [data-theme="redline"] .hero { margin: 12px 12px 0; height: 68vh; border-radius: 16px; padding: 0 18px 22px; }
+  [data-theme="redline"] .hero-body { max-width: 100%; }
+  [data-theme="redline"] .hero-badges { display: none; }
+  [data-theme="redline"] .hero + .rows, [data-theme="redline"] .hero + * .rows { margin-top: 18px; }
+}
+
+
+/* =====================================================================================================
+   Cards like the streaming service: rounded pictures with the title's logo on them, no name underneath
+   (only where the picture shows the title), "Recently added" in red at the bottom, and the progress
+   line under the picture. Rows and libraries alike.
+   ===================================================================================================== */
+[data-theme="redline"] .card .frame { border-radius: 6px; }
+[data-theme="redline"] .card .frame img { border-radius: 6px; }
+[data-theme="redline"] .track { gap: 8px; }
+[data-theme="redline"] .grid { gap: 26px 8px; }
+
+/* the name under the picture only when the picture doesn't show it */
+[data-theme="redline"] .card.has-logo .caption { display: none; }
+[data-theme="redline"] .card .caption { padding-top: 6px; }
+[data-theme="redline"] .card .caption .t { font-size: 13px; font-weight: 500; color: #E5E5E5; }
+[data-theme="redline"] .card .caption .s { font-size: 12px; color: #A3A3A3; }
+
+/* the logo: bottom left, large enough to read across the room */
+[data-theme="redline"] .card .frame .card-logo { left: 6%; bottom: 12%; max-width: 58%; max-height: 46%; }
+
+/* Recently added: a red label in the middle of the picture's bottom edge */
+[data-theme="redline"] .new-badge {
+  display: block; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 2; white-space: nowrap;
+  background: #E50914; color: #fff; font: 700 11px/1 var(--body); letter-spacing: .01em; padding: 4px 7px 4px; border-radius: 3px 3px 0 0;
+  pointer-events: none;
+}
+[data-theme="redline"] .card .badge { top: 6px; right: 6px; }
+
+/* progress: a short line under the picture (not on it) */
+[data-theme="redline"] .card .frame { overflow: visible; }
+[data-theme="redline"] .card .frame .wide-fill { inset: 0; clip-path: inset(0 round 6px); }
+[data-theme="redline"] .card .frame .progress {
+  top: calc(100% + 7px); bottom: auto; left: 18%; right: 18%; height: 2px; background: #5a5a5a; border-radius: 0;
+}
+[data-theme="redline"] .card .frame .progress i { background: #E50914; }
+[data-theme="redline"] .card:has(.progress) .caption, [data-theme="redline"] .track .card .frame:has(.progress) { margin-bottom: 0; }
+[data-theme="redline"] .track { padding-bottom: 14px; }
+[data-theme="redline"] .card .frame .play-hint { border-radius: 6px; }
+
+/* No names under the pictures: the backgrounds show the title (written on them, or the logo laid on top).
+   A text-free picture without a logo gets the name written on it instead. */
+[data-theme="redline"] .card.has-art .caption { display: none; }
+[data-theme="redline"] .card-name {
+  display: block; position: absolute; left: 7%; right: 7%; bottom: 13%; z-index: 1; pointer-events: none;
+  color: #fff; font: 800 clamp(15px, 1.35vw, 24px)/1.05 var(--display); letter-spacing: -.01em;
+  text-shadow: 0 2px 10px rgb(0 0 0 / .85); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+[data-theme="redline"] .track .card.has-art { padding-bottom: 0; }
+
+/* title pages: one icon size on every button, round buttons the same height as the others */
+[data-theme="redline"] .d-hero .btn { min-height: 46px; height: 46px; }
+[data-theme="redline"] .d-hero .btn svg { width: 22px; height: 22px; flex: none; }
+[data-theme="redline"] .d-hero .btn.primary svg { width: 24px; height: 24px; }
+[data-theme="redline"] .d-hero .btn.icon, [data-theme="redline"] .d-actions .glass-btn:not(:has(.lbl)),
+[data-theme="redline"] .d-hero .btn.round { width: 46px; min-width: 46px; padding: 0; justify-content: center; border-radius: 50%; }
+[data-theme="redline"] .d-hero .btn.icon svg { width: 22px; height: 22px; }
+
+/* pictures on Home and in the libraries: 13 px corners */
+[data-theme="redline"] { --card-radius: 13px; }
+[data-theme="redline"] .card .frame,
+[data-theme="redline"] .card .frame img,
+[data-theme="redline"] .card .frame .play-hint,
+[data-theme="redline"] .card .frame .gen-poster { border-radius: var(--card-radius); }
+[data-theme="redline"] .card .frame .wide-fill { clip-path: inset(0 round var(--card-radius)); }
+[data-theme="redline"] .new-badge { border-radius: 4px 4px 0 0; }
+html.tv[data-theme="redline"] .card .frame-link:focus .frame::after { border-radius: var(--card-radius); }
+
+/* every picture on Home and in the libraries: 13px corners */
+[data-theme="redline"] .card .frame, [data-theme="redline"] .card .frame > img, [data-theme="redline"] .card .frame > svg,
+[data-theme="redline"] .card .frame .play-hint, [data-theme="redline"] .card .frame .genposter, [data-theme="redline"] .dthumb .genposter,
+[data-theme="redline"] .dthumb, [data-theme="redline"] .dthumb img, [data-theme="redline"] .tt img, [data-theme="redline"] .tt .noimg { border-radius: 13px; }
+[data-theme="redline"] .card .frame .wide-fill { clip-path: inset(0 round 13px); }
+html.tv[data-theme="redline"] .card .frame-link:focus .frame::after { border-radius: 13px; }
+
+/* a soft shadow under every picture, like the banner */
+[data-theme="redline"] .card .frame { box-shadow: 0 6px 18px rgb(0 0 0 / .45), 0 2px 5px rgb(0 0 0 / .3); }
+[data-theme="redline"] .card .frame-link:hover .frame { box-shadow: 0 10px 26px rgb(0 0 0 / .55), 0 3px 8px rgb(0 0 0 / .35); }
+
+/* row arrows: just a white arrow at the very edge of the screen, as tall as the pictures (no dark box) */
+[data-theme="redline"] .scroller .scroll-btn, [data-theme="redline"] .scroller .scroll-btn:hover {
+  top: var(--frame-top, 0px); bottom: auto; height: var(--frame-h, calc(100% - 14px));
+  width: var(--gutter); min-width: 36px; border-radius: 0; background: none !important; color: #fff;
+  display: grid; place-items: center; transition: opacity .2s;
+}
+[data-theme="redline"] .scroller .scroll-btn.prev { left: 0; }
+[data-theme="redline"] .scroller .scroll-btn.next { right: 0; }
+[data-theme="redline"] .scroller .scroll-btn svg {
+  width: 40px; height: 40px; min-width: 0; min-height: 0; stroke-width: 2.5;
+  filter: drop-shadow(0 0 3px rgb(0 0 0 / .9)) drop-shadow(0 2px 10px rgb(0 0 0 / .7)); transition: transform .15s;
+}
+[data-theme="redline"] .scroller .scroll-btn:hover svg { transform: scale(1.3); }
+
+/* ---- sign-in, Netflix style: deep red wash, small logo in the corner, big square profiles ---- */
+[data-theme="redline"] .auth {
+  background:
+    radial-gradient(120% 80% at 100% 100%, rgb(0 0 0 / .85), transparent 60%),
+    linear-gradient(180deg, #56121A 0%, #44101A 30%, #2D0A0F 65%, #160406 100%);
+  place-items: center;
+}
+[data-theme="redline"] .auth-corner { display: block; position: absolute; top: 28px; left: 4%; width: 150px; height: auto; }   /* the same silver wordmark as in the menu bar */
+[data-theme="redline"] .auth-logo, [data-theme="redline"] .auth-server { display: none; }
+[data-theme="redline"] .auth h1 { font: 700 clamp(26px, 2.4vw, 40px)/1.2 var(--body); color: #fff; margin: 0 0 1.4em; letter-spacing: 0; }
+[data-theme="redline"] .profiles { gap: clamp(18px, 2.2vw, 40px); margin-bottom: 44px; }
+[data-theme="redline"] .profile { gap: 14px; color: #B3B3B3; font: 500 clamp(14px, 1.1vw, 18px)/1.2 var(--body); }
+[data-theme="redline"] .profile .avatar { width: clamp(84px, 8vw, 150px); height: clamp(84px, 8vw, 150px); border-radius: 6px;
+  font: 700 clamp(40px, 4vw, 72px)/1 var(--body); color: #fff; outline: 0; box-shadow: none; transition: box-shadow .15s, transform .15s; }
+[data-theme="redline"] .profile:hover, [data-theme="redline"] .profile:focus-visible { color: #fff; }
+[data-theme="redline"] .profile:hover .avatar, [data-theme="redline"] .profile:focus-visible .avatar { box-shadow: 0 0 0 3px #fff; outline: 0; }
+[data-theme="redline"] .auth-who .linkish { display: inline-block; padding: .55em 1.6em; border: 1px solid #808080; border-radius: 2px;
+  color: #808080; text-decoration: none; font: 500 clamp(14px, 1.05vw, 17px)/1.4 var(--body); letter-spacing: .06em; background: none; }
+[data-theme="redline"] .auth-who .linkish:hover, [data-theme="redline"] .auth-who .linkish:focus-visible { color: #fff; border-color: #fff; }
+/* the password form: a dark card like the sign-in page of streaming services */
+[data-theme="redline"] .auth-signin .auth-inner { width: min(450px, 100%); background: rgb(0 0 0 / .72); border-radius: 6px;
+  padding: 44px clamp(24px, 5vw, 64px) 52px; }
+[data-theme="redline"] .auth-signin h1 { font-size: 32px; text-align: left; margin-bottom: 26px; }
+[data-theme="redline"] .auth-signin .profiles { margin-bottom: 22px; }
+[data-theme="redline"] .auth-signin .profile .avatar { width: 84px; height: 84px; font-size: 40px; }
+[data-theme="redline"] .auth-signin .profile { font-size: 16px; color: #fff; }
+[data-theme="redline"] .auth-form { width: 100%; }
+[data-theme="redline"] .auth-form label { color: #B3B3B3; }
+[data-theme="redline"] .auth-form .input { height: 52px; background: rgb(22 22 22 / .7); border: 1px solid rgb(128 128 128 / .7); border-radius: 4px; color: #fff; font-size: 16px; }
+[data-theme="redline"] .auth-form .input:focus { border-color: #fff; outline: 2px solid #fff; outline-offset: 1px; }
+[data-theme="redline"] .auth-form .btn.primary { height: 44px; border-radius: 4px; font-weight: 700; font-size: 16px; }
+[data-theme="redline"] .auth-form .btn.primary:hover { background: #C11119; }
+[data-theme="redline"] .auth-signin .linkish { color: #B3B3B3; }
+[data-theme="redline"] .auth-signin .linkish:hover { color: #fff; }
+
+/* Top 10 row: Netflix proportions, grey outlined numbers */
+[data-theme="redline"] .track.top10 { --rh: 8.6vw; gap: 2.1vw; }
+@media (max-width: 1100px) { [data-theme="redline"] .track.top10 { --rh: 11.6vw; } }
+@media (max-width: 720px) { [data-theme="redline"] .track.top10 { --rh: 32vw; } }
+
+[data-theme="redline"] .card.rank .frame { box-shadow: -10px 0 18px -2px rgb(0 0 0 / .8), -24px 0 44px -6px rgb(0 0 0 / .55), 0 6px 16px rgb(0 0 0 / .45); }
+[data-theme="redline"] .track .card.rank { padding-bottom: 0; }

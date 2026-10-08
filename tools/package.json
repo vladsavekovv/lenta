@@ -1,0 +1,15 @@
+{
+  "name": "lenta-tools",
+  "private": true,
+  "description": "Builds web/legacy/: LENTA's web client for older TV browsers (Samsung 2017-2022). Run: npm install && npm run legacy",
+  "scripts": {
+    "legacy": "node build-legacy.mjs"
+  },
+  "devDependencies": {
+    "@babel/core": "^8.0.7",
+    "@babel/preset-env": "^8.0.7",
+    "core-js": "^3.40.0",
+    "esbuild": "^0.25.0",
+    "lightningcss": "^1.29.0"
+  }
+}

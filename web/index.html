@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#17121F">
+  <title>LENTA</title>
+  <link rel="icon" href="img/favicon.ico" sizes="any">
+  <link rel="icon" href="img/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="img/favicon-16.png" type="image/png" sizes="16x16">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LENTA">
+  <meta name="format-detection" content="telephone=no">
+  <!-- trailers play from YouTube: connect early so they start sooner -->
+  <link rel="preconnect" href="https://www.youtube-nocookie.com">
+  <link rel="preconnect" href="https://www.youtube.com">
+  <link rel="preconnect" href="https://i.ytimg.com">
+  <link rel="preconnect" href="https://www.google.com">
+  <link rel="dns-prefetch" href="https://googlevideo.com">
+  <link rel="stylesheet" href="css/fonts.css">
+  <script>
+    // Older TV web engines (e.g. Samsung TVs before 2023) get the same app rewritten for them (web/legacy/).
+    window.LENTA_LEGACY = !(window.CSS && CSS.supports && CSS.supports('aspect-ratio', '1'));
+    try { new Function('var a = {}; return a?.b ?? 1'); } catch (e) { window.LENTA_LEGACY = true; }
+    if (/[?&]legacy=1/.test(location.search)) window.LENTA_LEGACY = true;          // to try it on a normal browser
+    document.write(window.LENTA_LEGACY ? '<link rel="stylesheet" href="legacy/app.css">'
+      : '<link rel="stylesheet" href="css/app.css"><link rel="stylesheet" href="css/mobile.css"><link rel="stylesheet" href="css/theme-redline.css">');
+  </script>
+</head>
+<body>
+  <div id="app" class="app">
+    <nav id="rail" class="rail" aria-label="Main"></nav>
+    <main id="view" class="view" tabindex="-1"></main>
+  </div>
+  <div id="musicbar" class="musicbar" hidden></div>
+  <div id="player-root"></div>
+  <div id="modal-root"></div>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <script src="vendor/hls.min.js"></script>
+  <script>document.write(window.LENTA_LEGACY ? '<script src="legacy/app.js"><\/script>' : '<script type="module" src="js/app.js"><\/script>');</script>
+</body>
+</html>

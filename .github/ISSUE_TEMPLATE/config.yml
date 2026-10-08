@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Installation help
+    url: https://github.com/vladsavekovv/lenta/blob/main/docs/INSTALL.md#troubleshooting
+    about: Most installation problems are covered in the troubleshooting guide.

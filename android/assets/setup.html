@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LENTA</title>
+<style>
+  :root { color-scheme: dark; --bg: #0A0A0C; --panel: #16161A; --line: #2A2A31; --text: #EEEEF1; --muted: #9B9BA3; --accent: #F2B33D; --red: #F06B5B; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+  main { min-height: 100vh; display: grid; place-items: center; padding: 32px 22px calc(32px + env(safe-area-inset-bottom)); }
+  .box { width: min(420px, 100%); }
+  .logo { display: block; width: 190px; height: auto; margin: 0 auto 34px; }
+  h1 { font-size: 21px; font-weight: 600; margin: 0 0 8px; }
+  p { color: var(--muted); margin: 0 0 20px; font-size: 15px; }
+  label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+  input { width: 100%; height: 52px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel);
+    color: var(--text); font: inherit; font-size: 17px; outline: none; }
+  input:focus { border-color: var(--accent); }
+  .hint { font-size: 13px; color: var(--muted); margin: 8px 0 22px; }
+  button { width: 100%; height: 52px; border: 0; border-radius: 10px; font: inherit; font-weight: 600; font-size: 16px; cursor: pointer; }
+  .primary { background: var(--accent); color: #1B1405; }
+  .secondary { background: var(--panel); color: var(--text); border: 1px solid var(--line); margin-top: 10px; }
+  button:disabled { opacity: .6; }
+  .error { color: var(--red); font-size: 14px; min-height: 1.4em; margin: -10px 0 14px; }
+  .server { font-family: ui-monospace, monospace; color: var(--text); word-break: break-all; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main><div class="box">
+  <img class="logo" src="lenta-logo.png" alt="LENTA">
+
+  <section id="offline" hidden>
+    <h1>Can't reach your LENTA server</h1>
+    <p>Tried <span class="server" id="off-server"></span>. Check that the server is on and that this phone is on your home
+      Wi-Fi (or your VPN is connected).</p>
+    <button class="primary" id="retry">Try again</button>
+    <button class="secondary" id="change">Use a different address</button>
+  </section>
+
+  <form id="setup" hidden autocomplete="off">
+    <h1 id="setup-title">Connect to your LENTA server</h1>
+    <p>Type the address you use in the browser, for example <span class="server">192.168.1.50:8484</span>.</p>
+    <label for="addr">Server address</label>
+    <input id="addr" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="192.168.1.50:8484">
+    <div class="hint">Port 8484 is used when you leave it out. https addresses work too.</div>
+    <div class="error" id="err"></div>
+    <button class="primary" id="go">Connect</button>
+    <button class="secondary" type="button" id="anyway" hidden>Use this address anyway</button>
+    <button class="secondary" type="button" id="cancel" hidden>Cancel</button>
+  </form>
+</div></main>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const app = window.LentaApp;
+  const saved = app ? app.server() : '';
+  const q = new URLSearchParams(location.search);
+
+  function normalise(text) {
+    let s = text.trim().replace(/\/+$/, '');
+    if (!s) return '';
+    if (!/^https?:\/\//i.test(s)) s = 'http://' + s;
+    let u;
+    if (/\s/.test(s)) return '';
+    try { u = new URL(s); } catch { return ''; }
+    if (!/^[a-z0-9.-]+$|^\[[0-9a-f:.]+\]$/i.test(u.hostname)) return '';
+    if (!u.port && u.protocol === 'http:') u.port = '8484';
+    return `${u.protocol}//${u.host}`;
+  }
+
+  // Is a LENTA server answering there? (A cross-origin request is fine for this: we only need an answer.)
+  async function reachable(url) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 6000);
+    try { await fetch(url + '/api/server', { mode: 'no-cors', signal: ctl.signal, cache: 'no-store' }); return true; }
+    catch { return false; }
+    finally { clearTimeout(t); }
+  }
+
+  function showSetup(prefill, changing) {
+    $('#offline').hidden = true;
+    $('#setup').hidden = false;
+    $('#setup-title').textContent = changing ? 'Change the server address' : 'Connect to your LENTA server';
+    $('#addr').value = (prefill || '').replace(/^http:\/\//, '');
+    $('#cancel').hidden = !(changing && saved);
+  }
+
+  $('#setup').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = normalise($('#addr').value);
+    $('#anyway').hidden = true;
+    if (!url) { $('#err').textContent = 'That doesn\'t look like an address. Try something like 192.168.1.50:8484'; return; }
+    $('#go').disabled = true;
+    $('#go').textContent = 'Connecting…';
+    $('#err').textContent = '';
+    const ok = await reachable(url);
+    $('#go').disabled = false;
+    $('#go').textContent = 'Connect';
+    if (ok) { app.setServer(url); return; }
+    $('#err').textContent = `No answer from ${url}. Is the address right, and is this phone on the same network?`;
+    $('#anyway').hidden = false;
+    $('#anyway').onclick = () => app.setServer(url);
+  });
+  $('#cancel').addEventListener('click', () => { location.href = saved; });
+  $('#retry').addEventListener('click', () => { location.href = saved; });
+  $('#change').addEventListener('click', () => showSetup(saved, true));
+
+  if (!app) {
+    showSetup('', false);
+    $('#err').textContent = 'Open this page in the LENTA app.';
+  } else if (q.has('error') && saved) {
+    $('#off-server').textContent = saved;
+    $('#offline').hidden = false;
+  } else {
+    showSetup(saved, q.has('change'));
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+# --- Secrets: never commit ---------------------------------------------------
+# Android signing key. Keep a private backup: without it you can't publish APK updates.
+android/*.pem
+*.pem
+*.key
+*.keystore
+*.jks
+.env
+*.cred
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# --- Local data while developing ---------------------------------------------
+server/dev-data/
+dev-data/
+*.db
+*.db-wal
+*.db-shm
+
+# --- Build output and packages -----------------------------------------------
+# web/download/lenta.apk IS committed on purpose: the server offers it for download.
+/out/
+*.tar.gz
+*.zip
+android/build/
+
+# --- Editors and OS ----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# build tools for the older-TV version
+tools/node_modules/
+tools/.fills.js

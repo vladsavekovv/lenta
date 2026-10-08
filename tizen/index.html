@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920">
+<title>LENTA</title>
+<script src="server.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: #14121c; color: #f2efe8; font-family: sans-serif; overflow: hidden; }
+  .box { position: absolute; left: 50%; top: 50%; width: 1000px; margin-left: -500px; transform: translateY(-50%); text-align: center; }
+  h1 { font-size: 96px; letter-spacing: 10px; margin: 0 0 10px; color: #f0b43c; }
+  p { font-size: 34px; line-height: 1.4; color: #c9c4ba; margin: 18px 0; }
+  .hint { font-size: 26px; color: #8d877d; }
+  input { width: 820px; font-size: 40px; padding: 18px 24px; border-radius: 12px; border: 3px solid #4a4658; background: #221f2d; color: #fff; }
+  button { font-size: 36px; padding: 18px 48px; margin: 26px 12px 0; border-radius: 12px; border: 3px solid transparent; background: #f0b43c; color: #1a1408; font-weight: bold; }
+  button.ghost { background: #2a2736; color: #f2efe8; }
+  input:focus, button:focus { outline: none; border-color: #fff; box-shadow: 0 0 0 6px rgba(240,180,60,.45); }
+  .err { color: #ff8d7a; min-height: 44px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="box" id="connecting">
+  <h1>LENTA</h1>
+  <p id="cmsg">Connecting…</p>
+  <p class="hint">Press ▼ to change the server</p>
+</div>
+<div class="box" id="setup" hidden>
+  <h1>LENTA</h1>
+  <p>Address of your LENTA server</p>
+  <input id="addr" type="text" placeholder="192.168.1.20:8484" autocomplete="off" spellcheck="false">
+  <p class="err" id="err"></p>
+  <div><button id="go">Connect</button><button id="quit" class="ghost">Exit</button></div>
+  <p class="hint">Find the address in LENTA on another device: Server admin › Dashboard, or the address bar of your browser.</p>
+</div>
+<div class="box" id="old" hidden>
+  <h1>LENTA</h1>
+  <p>This TV's web engine is too old for LENTA.<br>The LENTA app needs a Samsung TV from 2017 or newer.</p>
+  <p class="hint" id="ua"></p>
+  <div><button id="quit2" class="ghost">Exit</button></div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var KEY = 'lenta-server';
+  var $ = function (id) { return document.getElementById(id); };
+  var timer = null;
+
+  function modern() {                                   // what LENTA needs at least (Samsung TVs from 2017 on)
+    try { new Function('"use strict"; class A {} const f = () => 1; return `${f()}`;'); } catch (e) { return false; }
+    return !!(window.fetch && window.Promise && window.CSS && CSS.supports && CSS.supports('display', 'flex'));
+  }
+  function exitApp() {
+    try { tizen.application.getCurrentApplication().exit(); } catch (e) { window.close(); }
+  }
+  function normalise(a) {
+    a = (a || '').replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
+    if (!a) return '';
+    if (!/^https?:\/\//i.test(a)) a = 'http://' + a;
+    if (!/:\d+$/.test(a.replace(/^https?:\/\//i, '')) && !/^https:/i.test(a)) a += ':8484';
+    return a;
+  }
+  function show(id) {
+    ['connecting', 'setup', 'old'].forEach(function (x) { $(x).hidden = x !== id; });
+  }
+  function home() { return location.href.split('?')[0].split('#')[0]; }
+
+  function check(addr, ok, fail) {
+    var x = new XMLHttpRequest(), done = false;
+    var t = setTimeout(function () { if (!done) { done = true; x.abort(); fail('No answer from ' + addr + '.'); } }, 6000);
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4 || done) return;
+      done = true; clearTimeout(t);
+      if (x.status === 200 && /"version"/.test(x.responseText)) ok();
+      else fail(x.status ? 'That address answered, but it is not a LENTA server.' : 'Can\'t reach ' + addr + '. Is the server on and the TV on the same network?');
+    };
+    try { x.open('GET', addr + '/api/server', true); x.send(); } catch (e) { done = true; clearTimeout(t); fail('Not a valid address.'); }
+  }
+  function open(addr) {
+    location.replace(addr + '/?tvapp=1&home=' + encodeURIComponent(home()));
+  }
+  function setup(msg) {
+    clearTimeout(timer);
+    show('setup');
+    $('addr').value = (localStorage.getItem(KEY) || window.LENTA_DEFAULT_SERVER || '').replace(/^http:\/\//, '');
+    $('err').textContent = msg || '';
+    $('addr').focus();
+  }
+  function connect() {
+    var addr = normalise($('addr').value);
+    if (!addr) { $('err').textContent = 'Type the address first.'; return; }
+    $('err').textContent = 'Connecting…';
+    check(addr, function () { localStorage.setItem(KEY, addr); open(addr); }, function (m) { $('err').textContent = m; });
+  }
+
+  // remote: arrows move between the box and the buttons, Back leaves
+  var order = ['addr', 'go', 'quit'];
+  document.addEventListener('keydown', function (e) {
+    var k = e.keyCode;
+    if (!$('connecting').hidden) { if (k === 40 || k === 13) { e.preventDefault(); setup(); } else if (k === 10009) exitApp(); return; }
+    if (!$('old').hidden) { if (k === 10009 || k === 13) exitApp(); return; }
+    var i = order.indexOf(document.activeElement && document.activeElement.id);
+    if (k === 10009) { e.preventDefault(); exitApp(); return; }
+    if (k === 13 && document.activeElement && document.activeElement.id === 'addr') { e.preventDefault(); connect(); return; }
+    if (k === 40 && i === 0) { e.preventDefault(); $('go').focus(); }
+    else if (k === 38 && i > 0) { e.preventDefault(); $('addr').focus(); }
+    else if (k === 39 && i === 1) { e.preventDefault(); $('quit').focus(); }
+    else if (k === 37 && i === 2) { e.preventDefault(); $('go').focus(); }
+  });
+  $('go').onclick = connect;
+  $('quit').onclick = exitApp;
+  $('quit2').onclick = exitApp;
+
+  if (!modern()) { show('old'); $('ua').textContent = navigator.userAgent; $('quit2').focus(); return; }
+  var saved = localStorage.getItem(KEY) || normalise(window.LENTA_DEFAULT_SERVER || '');
+  if (!saved || /[?&]setup=1/.test(location.search)) { setup(); return; }
+  $('cmsg').textContent = 'Connecting to ' + saved.replace(/^https?:\/\//, '') + '…';
+  timer = setTimeout(function () {                    // a moment to press ▼ before LENTA opens
+    check(saved, function () { if ($('setup').hidden) open(saved); },
+      function (m) { setup(m); });
+  }, 1200);
+}());
+</script>
+</body>
+</html>

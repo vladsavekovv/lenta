@@ -1,0 +1,1 @@
+"""LENTA Media Server."""
