@@ -284,6 +284,16 @@ All of these are free and set in **Server admin › Settings**. None is required
 > Fanart.tv sometimes says *"Proxy or VPN detected"* even if you don't use one; this is about your
 > internet provider's address, not your computer. Try signing up from your phone on mobile data.
 
+### Trailers in the Home banner
+
+> [!IMPORTANT]
+> The big banner at the top of Home **plays no trailers until you allow them, title by title**. Until then it
+> shows pictures only, which is how LENTA starts.
+
+For each title you want: open its **Edit** dialog (the pencil on its picture, or **Server admin › Metadata** ›
+pencil), tick **Show the trailer in the Home banner** at the bottom of the **General** tab and press
+**Save Changes**. Details and screenshot: [User Guide › Trailers in the Home banner](USER-GUIDE.md#trailers-in-the-home-banner-tick-them-per-title).
+
 ---
 
 ## 10. Watch on phones, tablets and TVs (WORK IN PROGRESS!!)
@@ -558,6 +568,20 @@ sudo journalctl -u lenta -n 100 --no-pager
   quality in the player.
 - Over Wi-Fi, 4K files can be more than the connection carries; try a lower quality.
 - Put `LENTA_TRANSCODE_DIR` on an SSD if the data folder is on a slow disk.
+
+### No trailer in the Home banner
+
+The banner shows a title's picture instead of its trailer until **all** of these are true:
+
+1. The title's **Edit › General › Show the trailer in the Home banner** box is ticked and saved. It is
+   **unticked for every title** until you tick it ([how](USER-GUIDE.md#trailers-in-the-home-banner-tick-them-per-title)).
+2. The title has a trailer: its media page shows a Trailer button or plays one.
+3. **Settings › Home screen › Trailer in the big banner** is *muted* or *with sound*, not *Off*. Each person sets this
+   for themselves.
+4. The title's library is ticked under **Settings › Home screen › Pick titles from**.
+
+If the trailer plays but silently: browsers allow sound only after you click something on the page. LENTA turns
+the sound on by itself at your first click; the speaker button in the banner does it at once.
 
 ### No Apple TV trailers
 

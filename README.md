@@ -46,24 +46,28 @@ Currently it supports only HTTP but HTTPs layer is being developed and will soon
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/home-banner-2.jpg" alt="Featured banner"><br><b>Featured banner.</b> A title from your libraries plays its trailer in the background, with sound that fades in and out.</td>
-    <td width="50%"><img src="docs/images/home-rows.jpg" alt="Home rows"><br><b>Home rows.</b> Continue watching with progress bars, new movies, recently added, and rows you make yourself.</td>
+    <td width="50%" valign="top"><img src="docs/images/home-banner-2.jpg" alt="Featured banner"><br><b>Featured banner.</b> A title from your libraries plays its trailer in the background, with sound that fades in and out.</td>
+    <td width="50%" valign="top"><img src="docs/images/edit-banner-trailer.jpg" alt="Show the trailer in the Home banner"><br><b>You pick the banner trailers.</b> Tick <i>Show the trailer in the Home banner</i> in a title's Edit dialog; until you do, the banner shows pictures only.</td>
   </tr>
   <tr>
-    <td><img src="docs/images/home-top10.jpg" alt="Top 10 row"><br><b>Top 10.</b> The highest-rated titles on your server, with big ranking numbers.</td>
-    <td><img src="docs/images/my-list.jpg" alt="My list"><br><b>My list.</b> Pick one or many titles and remove them in one go.</td>
+    <td width="50%" valign="top"><img src="docs/images/home-rows.jpg" alt="Home rows"><br><b>Home rows.</b> Continue watching with progress bars, new movies, recently added, and rows you make yourself.</td>
+    <td width="50%" valign="top"><img src="docs/images/home-top10.jpg" alt="Top 10 row"><br><b>Top 10.</b> The highest-rated titles on your server, with big ranking numbers.</td>
   </tr>
   <tr>
-    <td><img src="docs/images/settings-look.jpg" alt="Themes"><br><b>Six themes.</b> Each person picks their own; the administrator sets the one the sign-in screen uses.</td>
-    <td><img src="docs/images/settings-home-sections.jpg" alt="Home sections"><br><b>Your Home, your way.</b> Rename, reorder, delete or create Home rows and choose which libraries fill each one.</td>
+    <td width="50%" valign="top"><img src="docs/images/my-list.jpg" alt="My list"><br><b>My list.</b> Pick one or many titles and remove them in one go.</td>
+    <td width="50%" valign="top"><img src="docs/images/settings-look.jpg" alt="Themes"><br><b>Six themes.</b> Each person picks their own; the administrator sets the one the sign-in screen uses.</td>
   </tr>
   <tr>
-    <td><img src="docs/images/settings-folded.jpg" alt="Folded settings"><br><b>Tidy settings.</b> Every block folds to its title, and you choose which ones start open.</td>
-    <td><img src="docs/images/reorder-mode.jpg" alt="Reorder mode"><br><b>Reorder mode.</b> Drag, resize and arrange the blocks of Settings and the admin pages any way you like.</td>
+    <td width="50%" valign="top"><img src="docs/images/settings-home-sections.jpg" alt="Home sections"><br><b>Your Home, your way.</b> Rename, reorder, delete or create Home rows and choose which libraries fill each one.</td>
+    <td width="50%" valign="top"><img src="docs/images/settings-folded.jpg" alt="Folded settings"><br><b>Tidy settings.</b> Every block folds to its title, and you choose which ones start open.</td>
   </tr>
   <tr>
-    <td><img src="docs/images/admin-dashboard.jpg" alt="Admin dashboard"><br><b>Server dashboard.</b> What's playing, library size, scans, the graphics card in use and free disk space.</td>
-    <td><img src="docs/images/admin-settings.jpg" alt="Admin settings"><br><b>Server settings.</b> Scanning, hardware conversion, metadata, artwork, trailers and subtitles.</td>
+    <td width="50%" valign="top"><img src="docs/images/reorder-mode.jpg" alt="Reorder mode"><br><b>Reorder mode.</b> Drag, resize and arrange the blocks of Settings and the admin pages any way you like.</td>
+    <td width="50%" valign="top"><img src="docs/images/admin-dashboard.jpg" alt="Admin dashboard"><br><b>Server dashboard.</b> What's playing, library size, scans, the graphics card in use and free disk space.</td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top"><img src="docs/images/admin-settings.jpg" alt="Admin settings"><br><b>Server settings.</b> Scanning, hardware conversion, metadata, artwork, trailers and subtitles.</td>
+    <td width="50%"></td>
   </tr>
 </table>
 
@@ -74,6 +78,8 @@ to illustrate how LENTA displays your own library. They are not part of LENTA an
 
 **Watching**
 - 🎬 Netflix-style home with a featured banner and rows: *Continue watching*, *Next up*, *Recently added*, *My list*
+- 🎞️ Banner trailers for the titles **you** pick: tick *Show the trailer in the Home banner* in a title's Edit dialog
+  ([how](docs/USER-GUIDE.md#trailers-in-the-home-banner-tick-them-per-title); none are ticked at first)
 - ▶️ Hover previews that play the trailer and carry on to the exact frame on the title page
 - 🖥️ A full player: seek anywhere, audio and subtitle tracks, quality, next-episode autoplay, keyboard shortcuts
 - 🎵 Music with a player bar that keeps going while you browse; photo albums with a swipeable viewer

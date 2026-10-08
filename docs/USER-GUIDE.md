@@ -261,10 +261,31 @@ users. Windows-1251 Cyrillic and other legacy encodings are detected automatical
 
 ## Trailers and theme music
 
-**Home banner trailers** play only for titles you choose: open a title's **Edit › General** and tick **Show the
-trailer in the Home banner**. Every other title shows its picture in the banner. In **Settings › Home screen**,
-**30 seconds limit** stops banner trailers after 30 seconds of playing; the picture and description come back with a
-Replay button.
+### Trailers in the Home banner: tick them per title
+
+> [!IMPORTANT]
+> **No title plays its trailer in the Home banner until you allow it.** Out of the box the box below is unticked
+> for every title, so the banner shows only pictures. This is on purpose: you decide which trailers greet everyone
+> on Home (no wrong matches, no spoilers).
+
+To let a title play its trailer in the banner (administrator only):
+
+1. Open the title's **Edit** dialog: the pencil on its picture (hover it), the **⋯** menu on its page ›
+   **Edit metadata…**, or **Server admin › Metadata** › pencil.
+2. On the **General** tab, scroll to the bottom and tick **Show the trailer in the Home banner**.
+3. Press **Save Changes**.
+
+<p align="center"><img src="images/edit-banner-trailer.jpg" alt="Edit dialog, General tab: Show the trailer in the Home banner" width="640"></p>
+
+A banner trailer then plays when all of these are true:
+
+- the title has the box ticked (above), and a trailer was found for it (its media page shows a Trailer);
+- **Settings › Home screen › Trailer in the big banner** is *muted* or *with sound*, not *Off* (each person sets this);
+- the title's library is ticked under **Settings › Home screen › Pick titles from**.
+
+Titles with the box ticked are picked for the banner first; the others follow, showing their picture only.
+**30 seconds limit** (Settings › Home screen) stops banner trailers after 30 seconds of playing; the picture and
+description come back with a Replay button.
 
 **Where trailers come from**, best first (Admin › Settings › Trailers):
 
@@ -314,6 +335,8 @@ Each person chooses in Settings › Media pages:
   something on the page, so a media page opened straight from a bookmark starts the trailer muted. Where they come from is described above.
 - **Home banner trailer** (Settings › Home screen, a separate setting): the featured title at the top
   of Home plays its trailer after a few seconds — off, muted, or with sound — with a sound button.
+  Only titles whose **Show the trailer in the Home banner** box is ticked play one
+  (see [Trailers in the Home banner](#trailers-in-the-home-banner-tick-them-per-title)).
   Its sound fades as you scroll away (it pauses once the banner is mostly gone), and fades out over the
   last seconds of the 30 seconds limit; then the picture comes back.
   The same section chooses which movie and TV libraries the banner picks from, and how often it moves
