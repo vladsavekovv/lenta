@@ -8,6 +8,8 @@
   Created with the idea to give us more power and flexibility than Plex and Jellyfin.
 </p>
 
+https://github.com/user-attachments/assets/fd15839a-c3be-4ab5-9f9b-38d438728136
+
 <p align="center">
   <img alt="Version" src="https://img.shields.io/badge/version-1.1.0-8a5cf6">
   <img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-24.04%20%7C%2026.04-E95420?logo=ubuntu&logoColor=white">
