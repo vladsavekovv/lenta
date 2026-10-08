@@ -111,8 +111,8 @@ permissions, NAS shares, graphics cards, phones, remote access, updates, backups
 |---|---|
 | [**Install guide**](docs/INSTALL.md) | Requirements, installation, first setup, GPU, NAS, remote access, updating, backups, uninstalling, troubleshooting, FAQ |
 | [**User guide**](docs/USER-GUIDE.md) | Naming your files, libraries, the apps, themes, subtitles, trailers, metadata and artwork, users, shortcuts, API |
-| [**Samsung TV**](docs/SAMSUNG-TV.md) | Watching on a Samsung TV: the TV's browser, or the LENTA TV app installed from your server |
-| [**Contributing**](CONTRIBUTING.md) | Running from source, project layout, rebuilding the Android app, sending changes |
+| [**Samsung TV**](docs/SAMSUNG-TV.md) | !! WORK IN PROGRESS !! Watching on a Samsung TV: the TV's browser, or the LENTA TV app installed from your server |
+| [**Contributing**](CONTRIBUTING.md) | Running from source, project layout, rebuilding the Android app (WORK IN PROGRESS), sending changes |
 | [**Third-party notices**](THIRD-PARTY-NOTICES.md) | The open-source pieces and data services LENTA uses |
 
 ## 🧩 How it fits together
