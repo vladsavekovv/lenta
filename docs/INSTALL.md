@@ -19,7 +19,7 @@ open a terminal on the server and type commands.
 7. [Connect to TMDB for posters and descriptions](#7-connect-to-tmdb-for-posters-and-descriptions)
 8. [Add your libraries](#8-add-your-libraries)
 9. [Optional extras](#9-optional-extras)
-10. [Watch on phones, tablets and TVs](#10-watch-on-phones-tablets-and-tvs)
+10. [(WORK IN PROGRESS)Watch on phones, tablets and TVs](#10-watch-on-phones-tablets-and-tvs)
 
 Then: [GPU transcoding](#gpu-hardware-transcoding) ·
 [Media on a NAS](#media-on-a-nas) ·
