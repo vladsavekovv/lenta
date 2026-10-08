@@ -5,6 +5,7 @@
 <p align="center">
   <b>Your own streaming service at home.</b><br>
   A free, self-hosted media server and web player for your movies, TV shows, music and photos.
+  Created wiht the idea to give us more power, privacy and flexability than Plex and Jellyfin.
 </p>
 
 <p align="center">
