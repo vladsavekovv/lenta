@@ -40,3 +40,6 @@ Thumbs.db
 # build tools for the older-TV version
 tools/node_modules/
 tools/.fills.js
+
+# which GitHub version a package was built on (read by tools/github-update.sh)
+.github-base

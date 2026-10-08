@@ -5,7 +5,7 @@
 <p align="center">
   <b>Your own streaming service at home.</b><br>
   A free, self-hosted media server and web player for your movies, TV shows, music and photos.
-  Created wiht the idea to give us more power and flexability than Plex and Jellyfin.
+  Created with the idea to give us more power and flexibility than Plex and Jellyfin.
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
 
 ---
 I wanted a media organizer which gives me more than Plex and Jellyfin do. This project is and probably going to be forever work-in-progress. 
-I am working on an Android app and support for Samsung TV's after 2017 onwards. You would see this in the source - you can try and use them but they are not stable at all (maybe the Android app is bit better). 
+I am working on an Android app and support for Samsung TVs from 2017 onwards. You would see this in the source - you can try and use them but they are not stable at all (maybe the Android app is bit better). 
 I am doing this just for the fun of it - I am in no way a professional. This project is completely FREE to everyone. Do whatever you like with it. Contributions and ideas are highly appreciated! 
 
 LENTA runs on one Linux machine in your home, reads your media folders, finds posters, descriptions,
@@ -36,14 +36,26 @@ No accounts, no subscriptions, no cloud, no tracking. Your media stays on your d
 
 Currently it supports only HTTP but HTTPs layer is being developed and will soon be released. 
 
-<p align="center"><a href="#-screenshots"><b>Screenshots ↓</b></a></p>
+<p align="center">
+  <img src="docs/images/home-banner.jpg" alt="LENTA home screen with the featured trailer banner" width="100%">
+</p>
+
+<p align="center"><a href="#-screenshots"><b>More screenshots ↓</b></a></p>
 
 ## 📸 Screenshots
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/settings-look.jpg" alt="Themes"><br><b>Six themes.</b> Each person picks their own; the administrator sets the one the sign-in screen uses.</td>
-    <td width="50%"><img src="docs/images/settings-home-sections.jpg" alt="Home sections"><br><b>Your Home, your way.</b> Rename, reorder, delete or create Home rows and choose which libraries fill each one.</td>
+    <td width="50%"><img src="docs/images/home-banner-2.jpg" alt="Featured banner"><br><b>Featured banner.</b> A title from your libraries plays its trailer in the background, with sound that fades in and out.</td>
+    <td width="50%"><img src="docs/images/home-rows.jpg" alt="Home rows"><br><b>Home rows.</b> Continue watching with progress bars, new movies, recently added, and rows you make yourself.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/home-top10.jpg" alt="Top 10 row"><br><b>Top 10.</b> The highest-rated titles on your server, with big ranking numbers.</td>
+    <td><img src="docs/images/my-list.jpg" alt="My list"><br><b>My list.</b> Pick one or many titles and remove them in one go.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/settings-look.jpg" alt="Themes"><br><b>Six themes.</b> Each person picks their own; the administrator sets the one the sign-in screen uses.</td>
+    <td><img src="docs/images/settings-home-sections.jpg" alt="Home sections"><br><b>Your Home, your way.</b> Rename, reorder, delete or create Home rows and choose which libraries fill each one.</td>
   </tr>
   <tr>
     <td><img src="docs/images/settings-folded.jpg" alt="Folded settings"><br><b>Tidy settings.</b> Every block folds to its title, and you choose which ones start open.</td>
@@ -55,8 +67,8 @@ Currently it supports only HTTP but HTTPs layer is being developed and will soon
   </tr>
 </table>
 
-<sub>Screenshots of the Home screen are left out on purpose: they would show film posters and stills, which belong
-to the studios. Only LENTA's own screens are shown here.</sub>
+<sub>Film posters, artwork and stills in these screenshots belong to their respective owners and are shown only
+to illustrate how LENTA displays your own library. They are not part of LENTA and not covered by its license.</sub>
 
 ## ✨ Features
 
