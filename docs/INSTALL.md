@@ -286,7 +286,7 @@ All of these are free and set in **Server admin › Settings**. None is required
 
 ---
 
-## 10. Watch on phones, tablets and TVs
+## 10. Watch on phones, tablets and TVs (WORK IN PROGRESS!!)
 
 - **Any device with a browser:** open `http://<server-address>:8484`. Phones get a layout made for touch.
 - **iPhone / iPad:** in Safari, Share › **Add to Home Screen** for a full-screen app with its own icon.
