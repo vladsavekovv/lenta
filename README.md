@@ -5,7 +5,7 @@
 <p align="center">
   <b>Your own streaming service at home.</b><br>
   A free, self-hosted media server and web player for your movies, TV shows, music and photos.
-  Created wiht the idea to give us more power, privacy and flexability than Plex and Jellyfin.
+  Created wiht the idea to give us more power and flexability than Plex and Jellyfin.
 </p>
 
 <p align="center">
@@ -33,6 +33,8 @@ cast and trailers, and streams everything to any browser, phone or tablet on you
 can't play a file as it is, LENTA converts it on the fly, on your graphics card if you have one.
 
 No accounts, no subscriptions, no cloud, no tracking. Your media stays on your disks.
+
+Currently it supports only HTTP but HTTPs layer is being developed and will soon be released. 
 
 <p align="center"><a href="#-screenshots"><b>Screenshots ↓</b></a></p>
 
