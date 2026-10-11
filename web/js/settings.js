@@ -149,18 +149,14 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
         <button class="btn" id="p-pass">Change password</button></section>
       </div>
       <div id="p-hidden" hidden></div>
-      <div class="save-bar"><button class="btn primary" id="p-save" disabled>Save changes</button><span class="note" id="p-note"></span></div>
     </div>`);
   // only this page's blocks are shown; the others stay (hidden) so every control keeps working
   const keep = PAGE_PANELS[page] || ['look'];
   [...view.querySelectorAll('.settings-cols > .panel')].forEach(p => { if (!keep.includes(p.dataset.panel)) view.querySelector('#p-hidden').append(p); });
 
-  const saveBtn = $('#p-save');
-  const dirty = () => {
-    const changed = Object.keys(draft).some(k => String(draft[k]) !== String(saved[k]));
-    saveBtn.disabled = !changed;
-    $('#p-note').textContent = changed ? 'You have unsaved changes' : '';
-  };
+  let lay = null;
+  const isDirty = () => Object.keys(draft).some(k => String(draft[k]) !== String(saved[k]));
+  const dirty = () => lay?.changed();       // the page's Save / Discard buttons follow
   view.querySelectorAll('[data-theme-id]').forEach(b => b.addEventListener('click', () => {
     draft.theme = b.dataset.themeId;
     applyTheme(draft.theme);
@@ -221,7 +217,8 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
   libTicks('data-banner-lib', 'home_banner_libraries', 'the banner');
   sectionOrder(body, draft, dirty);
   const pl = pageLayout(state.prefs.settings_layout, page);       // one saved arrangement per page
-  blockLayout({ root: view, canvas: view.querySelector('.settings-cols'), value: pl.value,
+  lay = blockLayout({ root: view, canvas: view.querySelector('.settings-cols'), value: pl.value,
+    form: { dirty: isDirty, save: () => saveSettings(), discard: () => { pending = null; applyTheme(state.prefs.theme); renderSettings(target, page); } },
     names: { look: 'Look', audio: 'Audio and subtitles', intros: 'TV show intros', home: 'Home screen', media: 'Media pages', app: 'LENTA app', account: 'Account' },
     save: async (value) => {
       const all = pageLayout(state.prefs.settings_layout, page).merge(value);
@@ -242,8 +239,7 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
   window.addEventListener('hashchange', offInstall, { once: true });
   $('#p-install')?.addEventListener('click', async () => { if (await promptInstall()) toast('LENTA installed'); installUi(); });
   $('#p-change-server')?.addEventListener('click', () => window.LentaApp.changeServer());
-  saveBtn.addEventListener('click', async () => {
-    saveBtn.disabled = true;
+  const saveSettings = async () => {
     try {
       const r = await api.put('/api/me/prefs', draft);
       state.prefs = r.prefs;
@@ -257,8 +253,8 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
       renderRail();
       dirty();
       toast('Settings saved');
-    } catch (ex) { toast(ex.message, 'error'); saveBtn.disabled = false; }
-  });
+    } catch (ex) { toast(ex.message, 'error'); }
+  };
   // Leaving Settings without saving: put the saved theme back and forget the changes.
   const restore = () => {
     if (!location.hash.startsWith('#/settings')) { pending = null; applyTheme(state.prefs.theme); }

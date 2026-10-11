@@ -23,7 +23,7 @@ const layoutPref = (key, page = null) => {
 const KIND_NAMES = { movies: 'Movies', shows: 'TV shows', music: 'Music', audiobooks: 'Audiobooks', photos: 'Photos' };
 let pollTimer = null;
 
-// Settings pages made of the server settings blocks (one form; Save settings saves them all)
+// Settings pages made of the server settings blocks (one form; Save saves them all)
 const SETTINGS_PAGES = {
   general: ['general'], network: ['http-and-https'], scanning: ['scanning'], 'metadata-sources': ['metadata'],
   artwork: ['artwork-sources'], 'about-panel': ['about-panel-extras'], transcoding: ['transcoding'],
@@ -510,7 +510,7 @@ function netPanel(n) {
       </div>
       ${cert.mode !== 'auto' && !cert.ok && cert.error ? html`<p class="net-warn">${cert.error}</p>` : ''}
     </div>
-    <span class="hint" style="display:block;margin-top:12px">Changes take effect a moment after <b>Save settings</b>, without restarting LENTA.
+    <span class="hint" style="display:block;margin-top:12px">Changes take effect a moment after <b>Save</b>, without restarting LENTA.
       If this server has a firewall, open a new port there too (e.g. <code>sudo ufw allow 8443/tcp</code>).</span>
   </div>`;
 }
@@ -557,7 +557,7 @@ function netWire(body, n) {
       })));
       const r = await api.post('/api/admin/network/certificate', { files: enc, password: q('#n-pass').value });
       const c = r.certificate;
-      out.textContent = `Accepted: ${c.subject}, valid until ${c.valid_until}. Press Save settings to use it.`;
+      out.textContent = `Accepted: ${c.subject}, valid until ${c.valid_until}. Press Save to use it.`;
       body.querySelector('[name="net-mode"][value="upload"]').checked = true;
       q('#n-files').value = ''; q('#n-pass').value = '';
       toast('Certificate checked and stored');
@@ -733,13 +733,14 @@ async function settings(body, page = 'general') {
     </div>
     </div>
     <div id="aset-hidden" hidden></div>
-    <div class="aset-save"><button class="btn primary">Save settings</button></div>
   </form>`);
   // only this page's blocks are shown and arranged; the others stay in the form (hidden) so Save keeps their values
   const keep = SETTINGS_PAGES[page] || ['general'];
   const stash = body.querySelector('#aset-hidden');
   [...body.querySelectorAll('#aset-panels > .panel')].forEach(p => { if (!keep.includes(p.dataset.panel)) stash.append(p); });
-  blockLayout({ root: body, canvas: body.querySelector('#aset-panels'), ...layoutPref('admin_settings_layout', page) });
+  // one Save (top and bottom right) for the settings on this page; Discard puts them back
+  const form = { dirty: () => false, save: () => saveForm(), discard: () => settings(body, page) };
+  const lay = blockLayout({ root: body, canvas: body.querySelector('#aset-panels'), ...layoutPref('admin_settings_layout', page), form });
   const val = (id) => body.querySelector(id).value;
   const netInitial = net ? netPayload(body) : null;
   if (net) netWire(body, net);
@@ -762,8 +763,20 @@ async function settings(body, page = 'general') {
     artwork_sources_show: artOrder.show.map(x => ({ id: x.id, enabled: x.enabled })), omdb_api_key: val('#s-omdb').trim() || null,
     hw_accel: val('#s-hw'), vaapi_device: val('#s-dev'), x264_preset: val('#s-preset'), max_transcodes: val('#s-max'),
   });
-  body.querySelector('#sform').addEventListener('submit', async (e) => {
-    e.preventDefault();
+  const snap = () => JSON.stringify([payload(), net ? netPayload(body) : null]);
+  let initial = null;
+  setTimeout(() => {                                    // after the page has filled in its controls
+    if (!body.isConnected) return;
+    initial = snap();
+    form.dirty = () => initial !== null && snap() !== initial;
+    const changed = () => lay.changed();
+    body.querySelector('#sform').addEventListener('input', changed);
+    body.querySelector('#sform').addEventListener('change', changed);
+    body.querySelector('#sform').addEventListener('click', () => setTimeout(changed, 0));
+    changed();
+  }, 0);
+  body.querySelector('#sform').addEventListener('submit', (e) => { e.preventDefault(); saveForm(); });
+  async function saveForm() {
     try {
       const p = payload();
       const keyAdded = p.tmdb_api_key && !s.tmdb_api_key_set;
@@ -784,7 +797,7 @@ async function settings(body, page = 'general') {
       if (netChanged) { toast('HTTP and HTTPS are being updated'); await new Promise(r => setTimeout(r, 1800)); }
       settings(body, page);
     } catch (ex) { toast(ex.message, 'error'); }
-  });
+  }
   const osUser = body.querySelector('#s-os-user');
   const osHint = () => {
     const isEmail = osUser.value.includes('@');
@@ -806,7 +819,7 @@ async function settings(body, page = 'general') {
     try { await api.post('/api/admin/settings/test-tmdb', { tmdb_api_key: val('#s-tmdb').trim() || null }); toast('TMDB key works'); }
     catch (ex) { toast(ex.message, 'error'); }
   });
-  // ---- artwork sources: tick to use, arrows to reorder (saved with "Save settings")
+  // ---- artwork sources: tick to use, arrows to reorder (saved with Save)
   const drawSources = () => body.querySelectorAll('.art-sources').forEach(ol => {
     const k = ol.dataset.kind, list = artOrder[k];
     mount(ol, list.map((x, i) => html`<li class="${x.enabled ? '' : 'off'}">

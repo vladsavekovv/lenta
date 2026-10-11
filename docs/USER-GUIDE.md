@@ -277,8 +277,8 @@ menu folds into a button at the top that shows where you are. Settings remembers
 | **Media** | Transcoding · Trailers and theme music · Subtitles · Previews and intros | Hardware conversion; trailer sources and theme music; OpenSubtitles; seek-bar previews and intro detection |
 | **Advanced** | Logs | The server log |
 
-My settings keep your unsaved changes while you move between their pages, and one **Save changes** saves them
-all. On the administrator pages, **Save settings** saves that page. Old bookmarks to *Server admin* pages open the
+My settings keep your unsaved changes while you move between their pages, and one **Save** saves them
+all. On the administrator pages, **Save** saves that page. **Save** sits at the top right of every settings page and, as soon as something is changed, also at the bottom right together with **Discard**, which puts the page back as it was. **Reorder** appears only on pages with more than one block. Old bookmarks to *Server admin* pages open the
 matching Settings page.
 
 ### Arranging the blocks of a page
@@ -422,7 +422,7 @@ Each person chooses in Settings › Playback › Media pages:
     undoes a rename or library change;
   - **add your own** with *New section*: a name, the libraries, and what it shows: recently added,
     highest rated (a Top 10 row), shuffled (a new mix every day) or one genre. New sections start at the top.
-  Press *Save changes* to keep it. A section that appears later, such as a new library or genre, is listed
+  Press *Save* to keep it. A section that appears later, such as a new library or genre, is listed
   too and starts next to the section it follows by default. *Default order* puts the order back.
 - **Theme music:** plays softly when you open a movie or show and fades out when you leave or press Play.
   Sources, in order:

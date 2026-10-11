@@ -228,7 +228,7 @@ It's free for personal use:
    the form (for "Application URL" anything such as `http://localhost` is fine; describe it as a
    personal media server).
 3. Copy the **API Key** (or the longer **API Read Access Token**, both work).
-4. In LENTA: profile › **Settings › Metadata › TMDB and language**, paste the key and press **Save settings**.
+4. In LENTA: profile › **Settings › Metadata › TMDB and language**, paste the key and press **Save**.
    (Until you do, Settings › Metadata › Fix matches shows *Online metadata is off*.)
 5. Optionally set **Language** (for example `de-DE`, `fr-FR`, `bg-BG`) to get titles and descriptions
    in your language where TMDB has them.
@@ -396,7 +396,7 @@ LENTA answers on **HTTP and HTTPS at the same time**, out of the box:
 | HTTPS | `https://<server-address>:8443` | 8443 |
 
 Everything is set in **Settings › Network**: tick or untick each one, change its port
-(1024–65535), and choose the certificate. **Save settings** applies it within a few seconds, without restarting
+(1024–65535), and choose the certificate. **Save** applies it within a few seconds, without restarting
 LENTA; videos playing over the other protocol carry on. The block shows whether each one is running, and
 why not when it isn't (a port used by another program, a certificate problem).
 
@@ -421,7 +421,7 @@ good, install LENTA's certificate on each device once (below). Add a domain or a
 **2. My own certificate: upload it.** For a certificate from Let's Encrypt, your company or a certificate seller.
 Choose the certificate and the private key together and press **Upload**: PEM files (`fullchain.pem` +
 `privkey.pem`), `.crt` + `.key`, one combined `.pem`, or one `.pfx`/`.p12` (type its password). LENTA checks
-that the key belongs to the certificate and that it hasn't expired, then **Save settings** puts it to use.
+that the key belongs to the certificate and that it hasn't expired, then **Save** puts it to use.
 When it's renewed, upload the new one the same way.
 
 **3. My own certificate: files on this server.** For certificates renewed on the server itself, e.g. by

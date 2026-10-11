@@ -1688,3 +1688,10 @@ html.tv .dock .dk-btn:focus, html.tv .dock .dk-seek:focus { outline: 3px solid v
 /* seasons: always the row of tabs (wraps onto more lines when there are many) */
 .season-tabs { border-radius: 22px; flex: 0 1 auto; max-width: calc(100% - 200px); }
 @media (max-width: 720px) { .season-tabs { max-width: 100%; } }
+/* Save / Discard floating at the bottom right while a settings page has unsaved changes */
+.save-float { position: fixed; right: 28px; bottom: 24px; z-index: 40; display: flex; gap: 10px; padding: 10px; border-radius: 14px;
+  background: rgb(var(--bg2-rgb) / .96); border: 1px solid var(--line); box-shadow: 0 14px 40px rgb(0 0 0 / .5); animation: fadein .2s ease; }
+.save-float[hidden] { display: none; }
+body.has-music .save-float { bottom: calc(var(--dock-h) + 18px); }
+@media (max-width: 720px) { .save-float { right: 12px; left: 12px; justify-content: flex-end; bottom: calc(var(--tabbar-h) + 12px); }
+  body.has-music .save-float { bottom: calc(var(--tabbar-h) + var(--dock-h) + 12px); } }

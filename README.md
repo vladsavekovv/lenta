@@ -56,19 +56,15 @@ HTTP and HTTPS run side by side out of the box, with LENTA's own certificate or 
     <td width="50%" valign="top"><img src="docs/images/home-top10.jpg" alt="Top 10 row"><br><b>Top 10.</b> The highest-rated titles on your server, with big ranking numbers.</td>
   </tr>
   <tr>
+    <td width="50%" valign="top"><img src="docs/images/hover-preview.jpg" alt="Hover preview with trailer"><br><b>Hover previews.</b> Rest the pointer on a title: a larger card plays its trailer, with Play, My list, Watched and the details.</td>
     <td width="50%" valign="top"><img src="docs/images/my-list.jpg" alt="My list"><br><b>My list.</b> Pick one or many titles and remove them in one go.</td>
-    <td width="50%" valign="top"><img src="docs/images/settings-look.jpg" alt="Themes"><br><b>Six themes.</b> Each person picks their own; the administrator sets the one the sign-in screen uses.</td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><img src="docs/images/settings-home-sections.jpg" alt="Home sections"><br><b>Your Home, your way.</b> Rename, reorder, delete or create Home rows and choose which libraries fill each one.</td>
-    <td width="50%" valign="top"><img src="docs/images/settings-folded.jpg" alt="Folded settings"><br><b>Tidy settings.</b> Every block folds to its title, and you choose which ones start open.</td>
+    <td width="50%" valign="top"><img src="docs/images/player-settings.jpg" alt="Player with playback settings"><br><b>Plex-style player.</b> One player bar for films, episodes, music and audiobooks, with <i>Playback settings</i> for quality, speed, audio, subtitles and auto play.</td>
+    <td width="50%" valign="top"><img src="docs/images/settings-menu.jpg" alt="Settings with a sidebar"><br><b>One Settings page.</b> A sidebar with your own settings and the server's; one Save, with Discard, for each page.</td>
   </tr>
   <tr>
-    <td width="50%" valign="top"><img src="docs/images/reorder-mode.jpg" alt="Reorder mode"><br><b>Reorder mode.</b> Drag, resize and arrange the blocks of Settings and the admin pages any way you like.</td>
-    <td width="50%" valign="top"><img src="docs/images/admin-dashboard.jpg" alt="Admin dashboard"><br><b>Server dashboard.</b> What's playing, library size, scans, the graphics card in use and free disk space.</td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top"><img src="docs/images/admin-settings.jpg" alt="Admin settings"><br><b>Server settings.</b> Scanning, hardware conversion, metadata, artwork, trailers and subtitles.</td>
+    <td width="50%" valign="top"><img src="docs/images/settings-reorder.jpg" alt="Reorder mode"><br><b>Arrange it your way.</b> Reorder mode lets you drag, resize and place the blocks of any Settings page wherever they fit you best.</td>
     <td width="50%" valign="top"><img src="docs/images/settings-https.jpg" alt="HTTP and HTTPS settings"><br><b>HTTP and HTTPS.</b> Both run side by side on ports you choose. Use LENTA's own certificate, upload yours (PEM or PFX), or point at Let's Encrypt files. All from <i>Settings › Network</i>.</td>
   </tr>
 </table>

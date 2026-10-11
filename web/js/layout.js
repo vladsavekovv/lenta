@@ -38,26 +38,37 @@ function foldPanels(canvas, closed) {
 const UNITS = 48, YSNAP = 8, GAP = 22, MIN_W = 8, MIN_H = 120, SNAP = 14;
 
 /** The Reorder / Save / Default buttons (for the page head) and the bar shown while reordering. */
+// One Save for the whole page: it saves the settings you changed and, while reordering, the layout. Discard
+// appears once there is something to save. The same two buttons float at the bottom right while there are
+// unsaved changes, so they are always at hand on long pages.
 export const layoutButtons = () => html`<div class="lay-btns" id="lay-btns">
-    <button type="button" class="btn" id="lay-reorder" title="Move and resize the blocks of this page">${icon('grip')}<span>Reorder</span></button>
-    <button type="button" class="btn primary" id="lay-save" disabled title="Keep this layout">Save</button>
-    <button type="button" class="btn ghost" id="lay-default" title="Back to the original layout">Default</button>
+    <button type="button" class="btn" id="lay-reorder" hidden title="Move and resize the blocks of this page">${icon('grip')}<span>Reorder</span></button>
+    <button type="button" class="btn ghost" id="lay-default" hidden title="Back to the original layout">Default layout</button>
+    <button type="button" class="btn ghost" id="lay-discard" hidden title="Forget the changes">Discard</button>
+    <button type="button" class="btn primary" id="lay-save" hidden disabled title="Save the changes on this page">Save</button>
+  </div>
+  <div class="save-float" id="save-float" hidden>
+    <button type="button" class="btn ghost" data-float="discard">Discard</button>
+    <button type="button" class="btn primary" data-float="save">Save</button>
   </div>`;
 export const layoutBar = () => html`<div class="lay-bar" id="lay-bar" hidden></div>`;
 
 /** Folding and the free layout for the blocks (.panel[data-panel]) in `canvas`. `value` is the saved layout
  *  (JSON); `save(value)` stores it. Returns { refresh, editing } — call refresh() after the page replaced the
  *  insides of its blocks (the arrows come back, the layout is drawn again). */
-export function blockLayout({ root, canvas, value, save, names = {} }) {
+export function blockLayout({ root, canvas, value, save, names = {}, form = null }) {
   const view = root, cols = canvas;
   const btns = view.querySelector('#lay-btns');
   let closedAtStart = [];
   try { closedAtStart = JSON.parse(value || '{}').closed || []; } catch { /* none */ }
   cols.classList.add('lay-canvas');
   foldPanels(cols, closedAtStart);
-  const api0 = { refresh: () => foldPanels(cols, closedAtStart), editing: () => false };
+  const api0 = { refresh: () => foldPanels(cols, closedAtStart), editing: () => false, changed: () => {} };
   if (!cols || !btns) return api0;
-  if (!window.ResizeObserver || !window.CSS || !CSS.supports || !CSS.supports('display', 'grid')) { btns.hidden = true; return api0; }
+  if (!window.ResizeObserver || !window.CSS || !CSS.supports || !CSS.supports('display', 'grid')) {
+    api0.changed = formOnly(view, form);
+    return api0;
+  }
   const panels = () => [...cols.children].filter(p => p.matches && p.matches('.panel[data-panel]'));
   const IDS = panels().map(p => p.dataset.panel);
   const el = (id) => cols.querySelector(`.panel[data-panel="${id}"]`);
@@ -170,10 +181,10 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
   const ro = new ResizeObserver(redraw);
   panels().forEach(p => ro.observe(p));
   ro.observe(cols);
-  const onWin = () => { btns.hidden = phone(); redraw(); };
+  const onWin = () => { setButtons(); redraw(); };
   window.addEventListener('resize', onWin);
   onCleanup(() => { ro.disconnect(); window.removeEventListener('resize', onWin); document.removeEventListener('keydown', onKey); });
-  btns.hidden = phone();
+  btns.hidden = false;
   render();
 
   // ---- the log and the buttons
@@ -193,12 +204,16 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
         <button type="button" class="btn small" data-arrange="columns">Columns</button>
         <button type="button" class="btn small" data-arrange="tidy" title="Move everything up to close the gaps">Tidy up</button></div>`);
   };
+  const layoutDirty = () => editing && JSON.stringify(cur) !== JSON.stringify(before);
   const setButtons = () => {
     const r = view.querySelector('#lay-reorder');
+    r.hidden = IDS.length < 2 || phone();                 // nothing to reorder with one block (or on a phone)
     r.classList.toggle('on', editing);
     r.querySelector('span').textContent = editing ? 'Cancel' : 'Reorder';
     r.title = editing ? 'Leave without saving the layout' : 'Move and resize the blocks of this page';
-    view.querySelector('#lay-save').disabled = !editing || JSON.stringify(cur) === JSON.stringify(before);
+    view.querySelector('#lay-default').hidden = !editing;
+    const dirty = layoutDirty() || !!form?.dirty();
+    showSave(view, { show: !!form || editing, dirty });
   };
   const commit = (boxes, msg) => { cur.items = fromBoxes(boxes); if (msg) note(msg); };
 
@@ -248,9 +263,20 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
     stored = clone(cur);
   };
   view.querySelector('#lay-reorder').addEventListener('click', () => (editing ? leave(false) : enter()));
-  view.querySelector('#lay-save').addEventListener('click', async () => {
-    try { await persist('Saved the layout'); leave(true); toast('Layout saved'); } catch (ex) { toast(ex.message, 'error'); }
-  });
+  const saveAll = async () => {
+    try {
+      if (layoutDirty()) { await persist('Saved the layout'); leave(true); if (!form?.dirty()) toast('Layout saved'); }
+      else if (editing) leave(false);
+      if (form?.dirty()) await form.save();
+    } catch (ex) { toast(ex.message, 'error'); }
+    setButtons();
+  };
+  const discardAll = () => {
+    if (editing) leave(false);
+    if (form?.dirty()) form.discard();
+    setButtons();
+  };
+  wireSave(view, saveAll, discardAll);
   view.querySelector('#lay-default').addEventListener('click', async () => {
     cur = { items: null, closed: [], log: cur.log };
     try {
@@ -389,7 +415,32 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
   return {
     refresh: () => { foldPanels(cols, closedAtStart); if (editing) panels().forEach(p => { if (!p.querySelector('.lay-tools')) tools(p); }); redraw(); },
     editing: () => editing,
+    changed: () => setButtons(),          // the page's form changed: show Save / Discard
   };
+}
+
+function showSave(view, { show, dirty }) {
+  const sv = view.querySelector('#lay-save'), dc = view.querySelector('#lay-discard'), fl = view.querySelector('#save-float');
+  if (sv) { sv.hidden = !show; sv.disabled = !dirty; }
+  if (dc) dc.hidden = !dirty;
+  if (fl) fl.hidden = !dirty;
+}
+function wireSave(view, save, discard) {
+  view.querySelector('#lay-save')?.addEventListener('click', save);
+  view.querySelector('#lay-discard')?.addEventListener('click', discard);
+  view.querySelector('#save-float')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-float]');
+    if (b) (b.dataset.float === 'save' ? save : discard)();
+  });
+}
+/** Old TV engines (no free layout): only the form's Save / Discard. */
+function formOnly(view, form) {
+  const btns = view.querySelector('#lay-btns');
+  if (btns) btns.hidden = !form;
+  const set = () => showSave(view, { show: !!form, dirty: !!form?.dirty() });
+  wireSave(view, async () => { try { await form?.save(); } catch (ex) { toast(ex.message, 'error'); } set(); }, () => { form?.discard(); set(); });
+  set();
+  return set;
 }
 
 /** Layouts are kept per page inside one preference: { pages: { <page>: { items, closed, log } } }. */
