@@ -26,8 +26,8 @@ https://github.com/user-attachments/assets/fd15839a-c3be-4ab5-9f9b-38d438728136
 </p>
 
 ---
-I wanted a media organizer which gives me more than Plex and Jellyfin do. This project is and probably going to be forever work-in-progress. 
-I am working on an Android app and support for Samsung TVs from 2017 onwards. You would see this in the source - you can try and use them but they are not stable at all (maybe the Android app is bit better). 
+I wanted a media organizer which gives me more than what Plex and Jellyfin do. This project is and probably is going to be forever work-in-progress. 
+I am working on an Android app and support for Samsung TVs 2017 onwards. You would see this in the source - you can try and use them but they are not stable at all (maybe the Android app is bit better). 
 I am doing this just for the fun of it - I am in no way a professional. This project is completely FREE to everyone. Do whatever you like with it. Contributions and ideas are highly appreciated! 
 
 LENTA runs on one Linux machine in your home, reads your media folders, finds posters, descriptions,
