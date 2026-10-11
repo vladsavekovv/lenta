@@ -5,9 +5,11 @@ Everything LENTA can do once it is installed. New here? Start with the
 
 - [How LENTA works](#how-lenta-works)
 - [Organising files](#organising-files)
+- [Audiobooks](#audiobooks)
 - [Phones and tablets](#phones-and-tablets-the-lenta-app)
 - [Libraries](#libraries-in-the-menu)
 - [Looks](#looks-five-dark-themes)
+- [Settings](#settings)
 - [Subtitles](#subtitles)
 - [Trailers and theme music](#trailers-and-theme-music)
 - [Metadata, artwork and the About panel](#metadata)
@@ -22,6 +24,7 @@ Everything LENTA can do once it is installed. New here? Start with the
 | Module | Job |
 |---|---|
 | `scanner.py` | Walks library folders, parses names (guessit), reads tags and EXIF, builds movie / show › season › episode / album › track / photo-album trees, removes what disappeared, runs on a schedule |
+| `audiobooks.py` | Works out which files make one audiobook, reads chapters, and looks books up on Google Books and Open Library |
 | `metadata.py` | TMDB lookups: posters, backdrops, title logos, cast, crew, ratings, age ratings, season and episode titles and stills |
 | `probe.py` | ffprobe: codecs, resolution, HDR, audio and subtitle streams |
 | `transcode.py` | Hardware detection (NVENC → Quick Sync → VA-API → x264), FFmpeg HLS sessions, throttling, idle clean-up |
@@ -64,6 +67,10 @@ TV/
   Breaking Bad/Specials/Breaking.Bad.S00E01.mkv
 Music/
   Artist/Album (Year)/01 - Track.flac             ← tags are preferred; cover.jpg or embedded art
+Audiobooks/
+  Alien/01.Alien - Out of the Shadows.mp3         ← one file per book: the folder is the series
+  J.R.R. Tolkien/The Hobbit/Chapter 01.mp3 …      ← a folder of chapter files is one book
+  Frank Herbert/Dune.m4b                          ← one file per book, chapters inside
 Photos/
   Rila 2024/IMG_0001.jpg                          ← each folder becomes an album
 ```
@@ -84,6 +91,46 @@ collection folder's name are split into their own titles and matched again. Titl
 are left alone. Symbolic links are followed, but each folder is read once, so a link pointing back up
 the tree can't stall a scan. If a scan can't read something (permissions, file names that aren't
 UTF-8 on a CIFS mount), the reason is shown under the library in **Admin → Libraries**.
+
+## Audiobooks
+
+Make a library of the type **Audiobooks** (Settings › Libraries › Manage libraries › Add library). A library
+that is already of the type **Music** can be switched: open it with **Edit library…**, pick **Audiobooks**
+and save. Its files are read again as books. Listening progress and changes made by hand in that library
+start over; your files are not touched. You can switch back to Music the same way.
+
+**Which files make one book.** LENTA looks at every folder as a whole, so the usual layouts work without
+renaming anything:
+
+| Your folder | What LENTA makes |
+|---|---|
+| `Alien/01.Alien - Out of the Shadows.mp3`, `02.Alien - River of Pain.mp3` … | one book per file. The folder is the **series** and the leading number is the book's place in it: *Out of the Shadows*, Alien · Book 1 |
+| `The Hobbit/Chapter 01.mp3`, `Chapter 02.mp3` … (names differ only by numbers and words like *chapter*, *part*, *track*, *disc*, *CD*) | one book; each file is a chapter |
+| files that all carry the same album tag | one book named after the album tag |
+| `Author/Book Title/…` | the folder above the book is the author |
+| `Dune/Dune.m4b`, or a single file with a generic name (`audiobook.mp3`) | one book named after the folder |
+| `Tolkien/The Hobbit.mp3` (a single file with a real name in a top folder) | the book is the file; the folder is the author |
+
+Tags win over names: the album tag is the book's title, the album artist (or artist) tag is the author,
+and the composer tag is the narrator. Chapters inside an `.m4b` (or any file longer than ten minutes)
+are read and listed. The cover is `cover.jpg` / `folder.jpg` in the book's folder, a picture named like
+the file, or the picture inside the file. LENTA plays `.m4b`, `.mp3`, `.m4a`, `.flac`, `.ogg`, `.opus`
+and the other audio formats; the server converts what a browser can't play.
+
+**Details from the internet.** After each scan LENTA looks every new book up on **Google Books** and
+**Open Library**: description, author, year, genres and a cover (a cover in the book's folder or file is
+kept). No API key is needed. A book that isn't found is listed in **Settings › Metadata › Fix matches**
+with the other titles; use **Fix match** to search by hand — write `title by author` to narrow it down.
+**Edit metadata** has the book fields (Author, Narrator, Series, Number in series) and offers the covers
+found online; a field you change is locked, so **Refresh Metadata** keeps it.
+
+**Listening.** A book's page shows the cover, the series, the author and narrator, the length, the
+description and the chapters; below are the other books of the series and more by the author.
+**Play** starts the book in the player bar at the bottom of the screen, which keeps going while you
+browse: back 15 seconds, forward 30 seconds, previous and next chapter, the chapter list, speed
+(0.75× to 2×, remembered) and the time left at that speed. Your place is saved on the server every few
+seconds, so the book appears in **Continue watching** and carries on from the same spot on any device.
+The **⋯** button marks a book finished or not finished.
 
 ### New media is added by itself
 
@@ -126,8 +173,9 @@ The same address works on phones and tablets, with a layout made for them:
 
 - **iPhone / iPad** (Safari): Share › *Add to Home Screen*. LENTA opens full screen with its own icon.
 - **Android / Chrome / Edge**: *Install the LENTA app* in Settings or in your profile menu.
-  Browsers only offer a full install on a secure (https) address, so this needs LENTA behind https
-  (see [Access from outside your home](INSTALL.md#access-from-outside-your-home); with Tailscale, `tailscale serve --bg 8484` gives you an https address). On a plain
+  Browsers only offer a full install on a trusted https address: open LENTA's HTTPS address
+  (`https://<server>:8443`) after installing LENTA's certificate on the device ([how](INSTALL.md#install-lentas-certificate-on-your-devices)),
+  or use your own certificate. With Tailscale, `tailscale serve --bg 8484` also gives you one. On a plain
   `http://192.168…` address you can still use the browser menu › *Add to Home screen* as a shortcut.
 
 The installed app keeps a copy of its own pages, so it opens instantly and says clearly when the server
@@ -171,7 +219,7 @@ again* for just that library) and **Edit library…** (name and folders).
 ## Libraries: picture style, size and views
 
 Movies and shows are shown as wide pictures with the name below (Netflix style) everywhere: Home,
-libraries, search, My list. **Settings › Look › Pictures of movies and shows** switches back to the
+libraries, search, My list. **Settings › Appearance › Pictures of movies and shows** switches back to the
 original portrait posters. In a library, the **slider** next to the sort menu makes the pictures bigger
 or smaller (fewer or more per row), and the **view menu** beside it switches between **Grid**, **Detail**
 (picture, facts, genres and the start of the description) and **Table** (click a column heading to sort).
@@ -189,7 +237,7 @@ Look › Pictures of TV episodes** switches back to a picture from the episode i
 ## Looks: six dark themes
 
 Each person picks a theme in **Settings** (rail › Settings). The administrator sets the default for the
-sign-in screen and new users in Server admin › Settings.
+sign-in screen and new users in Settings › General.
 
 | Theme | Feel |
 |---|---|
@@ -204,18 +252,40 @@ Media pages show the backdrop full screen. It drifts slowly, fades and blurs as 
 details sit on translucent panels.
 
 **The server's default theme** is used on the sign-in screen ("Who's watching?") and for users who haven't
-picked a theme. An administrator sets it in Settings › Look (pick a theme, then *Use … on the sign-in screen*)
-or in Server admin › Settings › Default theme. With Redline the sign-in screen has the streaming-service
+picked a theme. An administrator sets it in Settings › Appearance (pick a theme, then *Use … on the sign-in screen*)
+or in Settings › General › Default theme. With Redline the sign-in screen has the streaming-service
 look: a deep red background, the silver LENTA logo in the corner and large square profiles.
 
-## The Settings page layout
+## Settings
 
-The same works on **Server admin › Dashboard** and **Server admin › Settings** (the buttons are above the
-blocks); each of the three pages keeps its own layout. The Dashboard keeps refreshing its figures without
-moving or opening your blocks, and pauses while you reorder.
+Everything is under one **Settings** button (the gear at the bottom of the side menu, or at the top right with
+the Redline theme). The page has a menu on the left, like Jellyfin's: group headings, items, and items with an
+arrow that open more. Everyone sees **My settings**; administrators also see the server pages. On a phone the
+menu folds into a button at the top that shows where you are. Settings remembers the last page you opened.
 
-The blocks of Settings sit side by side (three columns on a wide screen, two on a laptop). Press **Reorder**
-at the top right to place them however you like; the layout is free, not a table:
+| Group | Page | What's there |
+|---|---|---|
+| **My settings** | Appearance | Theme, side menu, picture styles, hover trailers |
+| | Home screen | Banner trailer, which titles it picks, Home sections |
+| | Playback › Audio and subtitles · TV show intros · Media pages | Languages and subtitle mode; Skip intro; trailers and theme music on media pages |
+| | LENTA app · Account | Installing the app and the TV app; your password |
+| **Server** | Dashboard | Playing now, library size, scans, transcoding, storage, server |
+| | General | Server name, default theme, profile pictures on the sign-in screen |
+| | Users · Network | Accounts and library access; HTTP and HTTPS ([HTTPS guide](INSTALL.md#https)) |
+| **Libraries** | Libraries › Manage libraries · Scanning | Add and edit libraries; scan schedule and watching folders for new media |
+| | Metadata › Fix matches · TMDB and language · Artwork sources · About panel extras | Titles without metadata; TMDB key and language; where pictures come from; IMDb, Wikipedia, OMDb |
+| **Media** | Transcoding · Trailers and theme music · Subtitles · Previews and intros | Hardware conversion; trailer sources and theme music; OpenSubtitles; seek-bar previews and intro detection |
+| **Advanced** | Logs | The server log |
+
+My settings keep your unsaved changes while you move between their pages, and one **Save changes** saves them
+all. On the administrator pages, **Save settings** saves that page. Old bookmarks to *Server admin* pages open the
+matching Settings page.
+
+### Arranging the blocks of a page
+
+Every Settings page made of blocks (all of them except Users, Manage libraries, Fix matches and Logs) can be
+arranged with **Reorder**, at the top right; each page keeps its own arrangement. The Dashboard keeps refreshing
+its figures without moving or opening your blocks, and pauses while you reorder. The layout is free, not a table:
 
 - **Move** a block by dragging its bar: put it anywhere — left, centre, right, next to another block. It snaps to the left and right edges and the centre of the page and to the edges of the
   other blocks (a red guide line shows the snap). Near the top or bottom of the window the page scrolls along.
@@ -230,7 +300,7 @@ at the top right to place them however you like; the layout is free, not a table
 - **Save** keeps the layout for you; **Cancel** or Esc leaves without saving.
 - **Folding**: every block has an arrow on its title. Click it to fold the block to just its title (the blocks
   below move up), click again to open it. In Reorder mode, the **Starts open** tick on each block chooses
-  whether it is open or folded when the Settings page opens; *Save* keeps that too.
+  whether it is open or folded when the page opens; *Save* keeps that too.
 
 Every change is recorded in the background with the layout (not shown on the page). **Default** puts back
 the original layout at any time. Positions are
@@ -239,14 +309,14 @@ in the same order. Settings themselves are not affected. On old TV browsers the 
 
 ## Subtitles
 
-**Preferences** (Settings › Audio and subtitles, per person): automatically select tracks, preferred
+**Preferences** (Settings › Playback › Audio and subtitles, per person): automatically select tracks, preferred
 audio language, subtitle mode (off / only forced / always / when the audio isn't in my language),
 preferred subtitle language, and *download missing subtitles automatically when I press Play*.
 
 **Online search** uses OpenSubtitles.com:
 
 1. Create a free account at opensubtitles.com, then *API consumers* › create one to get an **API key**.
-2. Server admin › Settings › Online subtitles: paste the key, add your username and password
+2. Settings › Subtitles: paste the key, add your username and password
    (optional, raises the daily download limit), press **Test OpenSubtitles**.
 
 Then:
@@ -271,7 +341,7 @@ users. Windows-1251 Cyrillic and other legacy encodings are detected automatical
 To let a title play its trailer in the banner (administrator only):
 
 1. Open the title's **Edit** dialog: the pencil on its picture (hover it), the **⋯** menu on its page ›
-   **Edit metadata…**, or **Server admin › Metadata** › pencil.
+   **Edit metadata…**, or **Settings › Metadata › Fix matches** › pencil.
 2. On the **General** tab, scroll to the bottom and tick **Show the trailer in the Home banner**.
 3. Press **Save Changes**.
 
@@ -302,7 +372,7 @@ description come back with a Replay button.
 4. **YouTube** trailers listed on TMDB.
 
 **Skipping the green card.** Many older trailers open with the green "The following preview has been approved for
-appropriate audiences" card. **Settings › Media pages › Start trailers after** (3, 5 or 8 seconds) starts every
+appropriate audiences" card. **Settings › Playback › Media pages › Start trailers after** (3, 5 or 8 seconds) starts every
 trailer that far in: on media pages, in hover previews, in the Home banner and with the Trailer button. The previews
 in Edit metadata › Trailers always start at the beginning.
 
@@ -327,7 +397,7 @@ are looked at again once in the background.
 Non-Commercial Datasets, for personal use) — no key; switch off in Admin › Settings › About panel extras.
 
 
-Each person chooses in Settings › Media pages:
+Each person chooses in Settings › Playback › Media pages:
 
 - **Trailers:** off, a Trailer button, or playing in the background of the media page after a
   few seconds (Netflix style), either muted or with sound, with sound and stop controls. With sound,
@@ -358,7 +428,7 @@ Each person chooses in Settings › Media pages:
   Sources, in order:
   1. a file next to the media: `theme.mp3` (or .m4a .flac .ogg .opus .wav) in the movie folder or the
      show's top folder, or the first file in a `theme-music/` folder. This is the Plex/Jellyfin convention;
-  2. if *Look up soundtrack previews online* is on (Server admin › Settings), the 30-second Apple Music
+  2. if *Look up soundtrack previews online* is on (Settings › Trailers and theme music), the 30-second Apple Music
      preview of the soundtrack album's main theme, with a link to Apple Music.
 
 **Trailer index.** LENTA looks up every movie's and show's trailer in the background and keeps it in its
@@ -434,7 +504,7 @@ ratings every two weeks. **Admin → Dashboard** shows the progress.
 
 Resting the pointer on a movie, show or episode for half a second opens a preview card (Netflix style).
 After a moment it plays the title's trailer over the picture, with a sound button in the corner
-(Settings › Look › **Trailer in hover previews**: off, muted or with sound). While it plays, the Home banner's
+(Settings › Appearance › **Trailer in hover previews**: off, muted or with sound). While it plays, the Home banner's
 trailer pauses and continues when you leave the preview; with sound, theme music pauses too. The card has a larger picture, **Play**, **My list**, **Watched**, the genres, year, length, rating and quality.
 Its **⌄** button opens the options: More info, Mark as watched and, for administrators, **Edit metadata…**,
 **Refresh Metadata** and **Fix match…**. On touch screens, where there is no pointer to rest, administrators
@@ -467,17 +537,40 @@ players (VLC, mpv) can open them.
 
 ### In the player
 
-**Mini player.** The **⌄** button at the top left of the player shrinks the video into a small window in the
-bottom-right corner (on phones, a bar above the tab bar), like Plex. It keeps playing while you browse LENTA;
-trailers, theme music and hover previews stay quiet meanwhile. Click the picture (or ⤢) to go back to full screen
-where you are, ⏯ to pause, ✕ to stop. The next episode starts in the mini player too.
+**Player bar.** The **⌄** button at the top left of the player shrinks the video into the player bar at the
+bottom of the screen, like Plex; the video keeps playing in the bar's picture while you browse LENTA. While something plays in the
+bar, the Home banner's trailer and the trailers in hover previews still play, but muted (pause the bar and their
+sound comes back); hover previews keep working. In **Continue watching**, clicking the picture of a hover preview
+carries on with that title from where you stopped, replacing what plays in the bar. Music and audiobooks play in the same bar, which looks and
+works the same for everything:
+
+- **along the top**, the time bar across the whole width: click or drag to move; pointing at it shows the time
+  (and, for videos, a preview picture);
+- **left**, the picture, the title, the episode / artist / chapter and the time (`19:09 / 42:58`). Click the
+  picture to go back to the full player (a video) or to open the album or book; click the title to open its page;
+- **centre**, previous, back 10 s (15 s for books), play/pause, forward 30 s, next (next episode, song or chapter)
+  and stop;
+- **right**, **⋮** (more: full screen, the title's page, playback settings, play queue, speed…), repeat and
+  shuffle (music), settings, the play queue or chapters, the speaker (mute) and the volume — the thin upright bar
+  at the far right: click or drag it, or turn the mouse wheel over it.
+
+**Playback settings** (the settings button while a video plays) opens one panel with a line for each setting:
+quality, playback speed, audio stream, subtitles, subtitle colour, position and size, subtitle offset (timing) and
+**Auto play** (the next episode starts by itself). Click an orange value to change it. **Play queue** (the list
+button, for TV episodes) shows the episode playing and the ones after it; click one to play it.
+
+Buttons that don't apply are greyed out, so the bar keeps the same layout. The full-screen player uses the
+same bar as its controls (shown when you move the mouse or tap), with a slim band on top: **⌄** to minimise on
+the left, playback info and full screen on the right. One thing plays at a time: starting
+music or a book closes a minimised video, and a video pauses the music. The next episode starts in the bar too.
+On phones the bar sits above the tab bar with the picture, the title, play/pause, stop and **⋮**.
 Clicking the title at the top of the player opens the title's page (a show's page at that episode) the same way:
-the video goes on in the mini player.
+the video goes on in the player bar.
 
 **Skip intro.** LENTA finds the intro of every TV episode by itself: episodes of a season share their theme
 tune, so it compares the sound of the first minutes of each episode with the others (an audio fingerprint, like
 Jellyfin's Intro Skipper). The stretch they share, 15 seconds to 2½ minutes long, is the intro. While it plays the
-player shows **Skip intro**. In **Settings › TV show intros** each person chooses: show the button (default), skip
+player shows **Skip intro**. In **Settings › Playback › TV show intros** each person chooses: show the button (default), skip
 intros automatically (with **Watch intro** to go back), or off. Detection runs in the background a few minutes after
 the server starts and after every scan, reads only the first minutes of each episode, and takes a few seconds per
 season; a season you start watching is analysed next. A season needs at least two episodes. **Admin › Settings ›

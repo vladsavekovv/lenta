@@ -27,7 +27,7 @@ SKIP_DIRS = {"@eadir", "#recycle", "$recycle.bin", "lost+found", ".trickplay", "
 POSTER_NAMES = ("poster", "folder", "cover", "movie", "show")
 BACKDROP_NAMES = ("fanart", "backdrop", "background", "art")
 ALBUM_ART_NAMES = ("cover", "folder", "front", "album", "albumart")
-LEAF_KINDS = ("movie", "episode", "track", "photo")
+LEAF_KINDS = ("movie", "episode", "track", "photo", "book")
 
 # Every library scans on its own: its own queue, worker thread and progress, so new films in one library
 # don't wait for another library's long scan (artwork, metadata). Scans of the same library run one by one.
@@ -614,8 +614,14 @@ HANDLERS = {
     "movies": (VIDEO_EXT, _add_movie),
     "shows": (VIDEO_EXT, _add_episode),
     "music": (AUDIO_EXT, _add_track),
+    "audiobooks": (AUDIO_EXT, lambda *a: _add_book(*a)),
     "photos": (PHOTO_EXT, _add_photo),
 }
+
+
+def _add_book(lib, root, path, st):
+    from . import audiobooks
+    audiobooks.add_book(lib, root, path, st)
 
 
 # ---- frame grabs for items without art ------------------------------------
@@ -812,6 +818,28 @@ def _scan(lib: dict, roots: list, extensions: set, handler, refresh_metadata: bo
         old = known.get(path)
         if old is None or old[0] != st.st_size or abs((old[1] or 0) - st.st_mtime) > 1:
             todo.append((root, path, st))
+    if lib["kind"] == "audiobooks" and not folders:
+        from . import audiobooks
+        if get_setting(f"ab_parser_version_{library_id}") != audiobooks.PARSER_VERSION:
+            state.update(phase="re-reading names")
+            todo = []
+            for root, path in found:
+                try:
+                    todo.append((root, path, os.stat(path)))
+                except OSError:
+                    pass
+            set_setting(f"ab_parser_version_{library_id}", audiobooks.PARSER_VERSION)
+    if lib["kind"] == "audiobooks" and (todo or gone):
+        # a folder is read as a whole (its files may be one book or several): a change re-reads all of it
+        dirs = {os.path.dirname(p) for _, p, _ in todo} | {os.path.dirname(p) for p in gone}
+        have = {p for _, p, _ in todo}
+        for root, path in found:
+            if path not in have and os.path.dirname(path) in dirs:
+                try:
+                    todo.append((root, path, os.stat(path)))
+                except OSError:
+                    pass
+        todo.sort(key=lambda t: t[1])
 
     state.update(phase="reading files", total=len(todo), done=0)
     added = failed = 0
@@ -831,6 +859,13 @@ def _scan(lib: dict, roots: list, extensions: set, handler, refresh_metadata: bo
         for path in gone:
             con.execute("DELETE FROM files WHERE path = ?", (path,))
         removed = _cleanup(con, library_id)
+
+    if lib["kind"] == "audiobooks":
+        from . import audiobooks
+        with db() as con:
+            for r in con.execute("SELECT id FROM items WHERE library_id = ? AND kind = 'book'", (library_id,)).fetchall():
+                audiobooks.refresh_book(con, r["id"])
+        audiobooks.match_library(library_id, refresh_metadata and not folders, state)
 
     if lib["kind"] in ("movies", "shows"):
         tmdb = metadata.TMDB()

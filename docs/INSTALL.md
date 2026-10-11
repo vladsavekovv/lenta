@@ -23,6 +23,7 @@ open a terminal on the server and type commands.
 
 Then: [GPU transcoding](#gpu-hardware-transcoding) ·
 [Media on a NAS](#media-on-a-nas) ·
+[HTTPS](#https) ·
 [Access from outside your home](#access-from-outside-your-home) ·
 [Everyday commands](#everyday-commands) ·
 [Updating](#updating) ·
@@ -48,7 +49,7 @@ Then: [GPU transcoding](#gpu-hardware-transcoding) ·
 | **Graphics card** | not needed | NVIDIA, Intel or AMD for fast video conversion ([details](#gpu-hardware-transcoding)) |
 | **Network** | Internet during installation | Wired network to the server |
 
-Your movies, shows, music and photos can be on the same machine, on another disk or on a NAS.
+Your movies, shows, music, audiobooks and photos can be on the same machine, on another disk or on a NAS.
 LENTA only **reads** them; it never changes, moves or deletes your media files.
 
 > [!NOTE]
@@ -227,8 +228,8 @@ It's free for personal use:
    the form (for "Application URL" anything such as `http://localhost` is fine; describe it as a
    personal media server).
 3. Copy the **API Key** (or the longer **API Read Access Token**, both work).
-4. In LENTA: profile › **Server admin › Settings**, paste the key in the **Metadata** panel and press **Save**.
-   (Until you do, Server admin › Metadata shows *Online metadata is off*.)
+4. In LENTA: profile › **Settings › Metadata › TMDB and language**, paste the key and press **Save settings**.
+   (Until you do, Settings › Metadata › Fix matches shows *Online metadata is off*.)
 5. Optionally set **Language** (for example `de-DE`, `fr-FR`, `bg-BG`) to get titles and descriptions
    in your language where TMDB has them.
 
@@ -238,8 +239,8 @@ Without a key LENTA still plays everything, but shows file names instead of post
 
 ## 8. Add your libraries
 
-1. Profile › **Server admin › Libraries › Add library**.
-2. Choose the type: **Movies**, **TV shows**, **Music** or **Photos**.
+1. Profile › **Settings › Libraries › Manage libraries › Add library**.
+2. Choose the type: **Movies**, **TV shows**, **Music**, **Audiobooks** or **Photos**.
 3. Give it a name and add one or more folders (type the path, for example `/mnt/media/Movies`).
 4. Press **Save**. LENTA scans the folder straight away; posters appear as titles are matched.
 
@@ -257,18 +258,20 @@ TV Shows/
   Breaking Bad/Season 01/Breaking.Bad.S01E01.mkv
 Music/
   Artist/Album (Year)/01 - Track.flac
+Audiobooks/
+  Author/Book Title/01 Chapter One.mp3   (or Series/01.Series - Book Title.mp3, or Book.m4b)
 Photos/
   Holiday 2024/IMG_0001.jpg
 ```
 
 More in the [User Guide › Organising files](USER-GUIDE.md#organising-files). Titles LENTA couldn't match
-show up in **Server admin › Metadata**, where you can fix them by hand.
+show up in **Settings › Metadata › Fix matches**, where you can fix them by hand.
 
 ---
 
 ## 9. Optional extras
 
-All of these are free and set in **Server admin › Settings**. None is required.
+All of these are free and set in **Settings** (the pages under Metadata and Media). None is required.
 
 | Extra | What you get | How to get the key |
 |---|---|---|
@@ -290,7 +293,7 @@ All of these are free and set in **Server admin › Settings**. None is required
 > The big banner at the top of Home **plays no trailers until you allow them, title by title**. Until then it
 > shows pictures only, which is how LENTA starts.
 
-For each title you want: open its **Edit** dialog (the pencil on its picture, or **Server admin › Metadata** ›
+For each title you want: open its **Edit** dialog (the pencil on its picture, or **Settings › Metadata › Fix matches** ›
 pencil), tick **Show the trailer in the Home banner** at the bottom of the **General** tab and press
 **Save Changes**. Details and screenshot: [User Guide › Trailers in the Home banner](USER-GUIDE.md#trailers-in-the-home-banner-tick-them-per-title).
 
@@ -325,7 +328,7 @@ LENTA **detects** what works at start-up; it never installs drivers. What must a
 | Intel (Quick Sync / VA-API) | An Intel VA-API driver such as `intel-media-va-driver` | `vainfo` shows *VAEntrypointEncSlice* |
 | AMD (VA-API) | Mesa's VA-API driver (`mesa-va-drivers`) | `vainfo` shows *VAEntrypointEncSlice* |
 
-Then check in LENTA: **Server admin › Dashboard › Transcoding** shows the encoder in use, for example
+Then check in LENTA: **Settings › Dashboard › Transcoding** shows the encoder in use, for example
 **NVIDIA NVENC · h264_nvenc**. If it says *CPU (x264)*:
 
 ```bash
@@ -334,7 +337,7 @@ ls -l /dev/dri                     # Intel/AMD: renderD128 should exist
 sudo systemctl restart lenta       # after installing or changing drivers
 ```
 
-and press **Detect hardware again** in Server admin › Settings.
+and press **Detect hardware again** in Settings › Transcoding.
 
 Good to know:
 
@@ -383,10 +386,85 @@ library as it is instead of emptying it.
 
 ---
 
+## HTTPS
+
+LENTA answers on **HTTP and HTTPS at the same time**, out of the box:
+
+| | Address | Port |
+|---|---|---|
+| HTTP | `http://<server-address>:8484` | `LENTA_PORT` (8484) |
+| HTTPS | `https://<server-address>:8443` | 8443 |
+
+Everything is set in **Settings › Network**: tick or untick each one, change its port
+(1024–65535), and choose the certificate. **Save settings** applies it within a few seconds, without restarting
+LENTA; videos playing over the other protocol carry on. The block shows whether each one is running, and
+why not when it isn't (a port used by another program, a certificate problem).
+
+- At least one stays on: the page won't let you untick both.
+- If you change the port of the address you are using, LENTA tells you the new address to go to.
+- HTTP and HTTPS keep separate sign-ins, so you sign in once on each.
+- A firewall must allow the ports. The installer opens 8484 and 8443 when `ufw` is active; for another port:
+  `sudo ufw allow <port>/tcp`.
+- The Android app and the Samsung TV app keep using the HTTP address.
+
+### The certificate
+
+Pick one of three:
+
+**1. Made by LENTA (the default).** Nothing to set up. LENTA makes its own small certificate authority once
+("LENTA local CA") and uses it to sign a certificate for this server's names and IP addresses, renewed by itself
+before it expires and whenever the server's address changes. Browsers don't know this authority, so the first
+visit shows a warning (*Your connection is not private* › *Advanced* › *Continue*). To get rid of the warning for
+good, install LENTA's certificate on each device once (below). Add a domain or another address under
+*Other names or addresses* if you reach the server by one LENTA can't see (e.g. a router's DNS name).
+
+**2. My own certificate: upload it.** For a certificate from Let's Encrypt, your company or a certificate seller.
+Choose the certificate and the private key together and press **Upload**: PEM files (`fullchain.pem` +
+`privkey.pem`), `.crt` + `.key`, one combined `.pem`, or one `.pfx`/`.p12` (type its password). LENTA checks
+that the key belongs to the certificate and that it hasn't expired, then **Save settings** puts it to use.
+When it's renewed, upload the new one the same way.
+
+**3. My own certificate: files on this server.** For certificates renewed on the server itself, e.g. by
+certbot. Type the two paths, for example `/etc/letsencrypt/live/media.example.com/fullchain.pem` and
+`…/privkey.pem`. LENTA reads them where they are and picks up renewals by itself (it looks every few hours).
+The LENTA service account (`lenta` unless you chose another) must be allowed to read them:
+
+```bash
+sudo setfacl -R -m u:lenta:rX -m d:u:lenta:rX /etc/letsencrypt/live /etc/letsencrypt/archive
+```
+
+### Install LENTA's certificate on your devices
+
+Only for choice 1, once per device. Download it from **Settings › Network ›
+Download LENTA's certificate**, or on the device itself (no sign-in needed) from
+`http://<server-address>:8484/api/https/lenta-ca.crt`. Then:
+
+- **Windows:** double-click `lenta-ca.crt` › *Install Certificate* › *Current User* › *Place all certificates
+  in the following store* › *Browse* › **Trusted Root Certification Authorities** › *Finish* › *Yes*. Restart the browser.
+- **macOS:** double-click it (Keychain Access opens), then double-click *LENTA local CA* in the list ›
+  *Trust* › *When using this certificate*: **Always Trust**.
+- **iPhone / iPad:** open the download address in **Safari** › *Allow*. Then *Settings › Profile Downloaded* ›
+  *Install*. Finally *Settings › General › About › Certificate Trust Settings* › switch on **LENTA local CA**.
+- **Android:** *Settings › Security & privacy › More security settings › Encryption & credentials ›
+  Install a certificate › CA certificate* › pick `lenta-ca.crt` (the menu names differ a little per phone).
+- **Linux (Chrome):** *Settings › Privacy and security › Security › Manage certificates › Authorities* ›
+  *Import* › tick *Trust this certificate for identifying websites*.
+- **Firefox** (any system) keeps its own list: *Settings › Privacy & Security › Certificates › View
+  Certificates › Authorities › Import* › tick *Trust this CA to identify websites*.
+
+The certificate only lets LENTA's own authority vouch for addresses; it is stored in LENTA's data folder
+(`certs/`) and never leaves your server except when you download it. **Make a new one** in the same block
+renews the server certificate (devices that installed the authority keep trusting it).
+
+With HTTPS trusted, browsers also offer the full **Install app** (see the
+[User guide](USER-GUIDE.md#phones-and-tablets-the-lenta-app)).
+
+---
+
 ## Access from outside your home
 
-LENTA speaks plain HTTP and is meant for your home network. **Don't** forward port 8484 on your router.
-For access on the go, use one of these:
+LENTA is meant for your home network. **Don't** forward its ports on your router, even with HTTPS on:
+a VPN keeps it private. For access on the go, use one of these:
 
 **Tailscale (easiest, free for personal use).** Install it on the server and on your phone/laptop
 ([tailscale.com/download](https://tailscale.com/download)), sign in on both, and open
@@ -423,6 +501,7 @@ sudo journalctl -u lenta -n 100          # last 100 log lines
 sudo journalctl -u lenta -f              # follow the log live (Ctrl+C to quit)
 sudo /opt/lenta/deploy/set-data-dir.sh   # where is the data folder?
 sudo /opt/lenta/deploy/reset-password.sh # list accounts / reset a password
+sudo /opt/lenta/deploy/reset-network.sh  # what LENTA listens on; --reset for HTTP 8484 + HTTPS 8443
 ```
 
 The admin **Dashboard** in LENTA shows the version, data folder, free space, active streams, transcoding
@@ -483,7 +562,7 @@ sudo systemctl start lenta
 ```
 
 If your media is in different folders on the new machine, edit the libraries' folders in
-Server admin › Libraries; watch history is kept for titles that are found again.
+Settings › Libraries › Manage libraries; watch history is kept for titles that are found again.
 
 ---
 
@@ -504,11 +583,11 @@ If the new disk is mounted at boot, make sure it is in `/etc/fstab`.
 ## The configuration file
 
 `/etc/lenta/lenta.env` holds the few settings needed before LENTA starts. Everything else is in
-**Server admin › Settings**. After editing it: `sudo systemctl restart lenta`.
+**Settings**. After editing it: `sudo systemctl restart lenta`.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `LENTA_PORT` | `8484` | Network port |
+| `LENTA_PORT` | `8484` | HTTP port (also the safe fallback). The HTTPS port and both on/off switches are in Settings › Network |
 | `LENTA_HOST` | `0.0.0.0` | Listen address (`127.0.0.1` = only reachable through a reverse proxy on the same machine) |
 | `LENTA_DATA_DIR` | `/var/lib/lenta` | Data folder; change it with `set-data-dir.sh`, not by hand |
 | `LENTA_TRANSCODE_DIR` | `<data>/transcode` | Temporary video segments while converting; an SSD helps |
@@ -542,7 +621,8 @@ sudo journalctl -u lenta -n 100 --no-pager
 3. If it works on the server but not from other devices:
    - firewall: `sudo ufw status`; if active, `sudo ufw allow 8484/tcp`,
    - `LENTA_HOST` in `/etc/lenta/lenta.env` must be `0.0.0.0`,
-   - you are using `http://` (not https) and the right address (`hostname -I`) and port.
+   - you are using the right address (`hostname -I`) and port: `http://…:8484`, or `https://…:8443` for HTTPS
+     (or the ports set in Settings › Network).
 4. *Address already in use* in the log: another program uses the port. Reinstall with another port:
    `sudo LENTA_PORT=8485 ./deploy/install.sh`.
 
@@ -550,14 +630,14 @@ sudo journalctl -u lenta -n 100 --no-pager
 
 - Permissions: `sudo -u lenta ls "/path/to/library"` must list your files; if not, repeat
   [step 5](#5-let-lenta-read-your-media).
-- **Server admin › Libraries** shows under each library what it couldn't read and why.
+- **Settings › Libraries › Manage libraries** shows under each library what it couldn't read and why.
 - Files named `sample`, and folders called `Extras`, `Featurettes` or `Trailers`, are skipped on purpose.
 - On a NAS: is it mounted? `ls /mnt/media`.
 
 ### No posters, or wrong posters
 
-- Is the TMDB key saved in Server admin › Settings?
-- Titles LENTA couldn't match are in **Server admin › Metadata**: use **Fix match** to pick the right one.
+- Is the TMDB key saved in Settings › Metadata › TMDB and language?
+- Titles LENTA couldn't match are in **Settings › Metadata › Fix matches**: use **Fix match** to pick the right one.
 - A wrong match on a title page: **⋯ › Fix match…**.
 - The server's clock must be right (`timedatectl`); a wrong date breaks secure connections to TMDB.
 
@@ -568,6 +648,24 @@ sudo journalctl -u lenta -n 100 --no-pager
   quality in the player.
 - Over Wi-Fi, 4K files can be more than the connection carries; try a lower quality.
 - Put `LENTA_TRANSCODE_DIR` on an SSD if the data folder is on a slow disk.
+
+### I can't reach LENTA after changing HTTP or HTTPS
+
+- If nothing could listen as set (a port used by another program, a broken certificate), LENTA starts plain
+  HTTP on `LENTA_PORT` (8484) by itself, so `http://<server-address>:8484` works and the settings page says why.
+- To see what LENTA listens on, or to put HTTP back on 8484 and HTTPS on 8443 with LENTA's own certificate:
+
+```bash
+sudo /opt/lenta/deploy/reset-network.sh            # shows the current setup
+sudo /opt/lenta/deploy/reset-network.sh --reset    # back to the defaults, then restarts LENTA
+```
+
+### The browser says the HTTPS connection isn't private
+
+That is LENTA's own certificate, which your device doesn't know yet. Choose *Advanced › Continue*, or install
+LENTA's certificate on the device once ([how](#install-lentas-certificate-on-your-devices)). If it appeared after
+the server's address changed, wait a minute (the certificate is renewed by itself) or press **Make a new one**.
+With your own certificate, open the address by the name the certificate is for, not by IP address.
 
 ### No trailer in the Home banner
 
@@ -585,7 +683,7 @@ the sound on by itself at your first click; the speaker button in the banner doe
 
 ### No Apple TV trailers
 
-- Press **Test Apple trailers** in Server admin › Settings › Trailers. It says whether the server can reach
+- Press **Test Apple trailers** in Settings › Trailers and theme music. It says whether the server can reach
   Apple and plays a sample.
 - Apple only has trailers for **movies** (not TV shows), and not for every film. Titles without one keep
   their YouTube trailer, and your own trailer files always come first.
@@ -618,7 +716,7 @@ sudo /opt/lenta/deploy/reset-password.sh alice      # sets a new password for al
 ```
 
 Add `--admin` after the name to also make that account an administrator. Other users' passwords can
-also be changed by an administrator in **Server admin › Users**.
+also be changed by an administrator in **Settings › Users**.
 
 ### The Android app says it can't reach the server
 

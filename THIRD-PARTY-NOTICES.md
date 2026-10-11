@@ -31,6 +31,7 @@ license and terms, and every license file they require is included next to them.
 | [Pillow](https://github.com/python-pillow/Pillow) | MIT-CMU (HPND) |
 | [PyJWT](https://github.com/jpadilla/pyjwt) | MIT |
 | [NumPy](https://numpy.org) | BSD-3-Clause |
+| [cryptography](https://github.com/pyca/cryptography) (HTTPS certificates) | Apache-2.0 OR BSD-3-Clause |
 
 These packages are installed from PyPI on your machine; they are not copied into this repository.
 
@@ -49,7 +50,8 @@ from `tools/`; they are installed only when you rebuild it.
 
 ## Data services
 
-LENTA contacts these services only when they are switched on in Server admin › Settings. Their data stays
+LENTA contacts these services only when they are switched on in Settings (Metadata and Media pages), or, for
+Google Books and Open Library, when you have an Audiobooks library. Their data stays
 under their terms, which bind whoever runs the server, not LENTA. Most need your own free key. Some allow only
 personal, non-commercial use (IMDb's datasets; TMDB's free API): if you run LENTA for anything else, switch those
 off or get a license from the service.
@@ -64,6 +66,8 @@ off or get a license from the service.
 | [AniList](https://anilist.co) | Anime artwork | [AniList API terms](https://docs.anilist.co/guide/terms-of-use) |
 | [OpenSubtitles.com](https://www.opensubtitles.com) | Subtitle search and download (own key) | [OpenSubtitles terms](https://www.opensubtitles.com/en/tos) |
 | [KinoCheck](https://api.kinocheck.com) | Official trailer picks (videos hosted on YouTube) | KinoCheck API terms of use |
+| [Google Books API](https://developers.google.com/books) | Audiobook descriptions, authors, years, genres, covers (no key) | [Google APIs Terms of Service](https://developers.google.com/terms) |
+| [Open Library](https://openlibrary.org) | Audiobook covers and details (no key) | [Open Library API usage](https://openlibrary.org/developers/api); book data is public domain (CC0), covers are shown as the site provides them |
 | Apple iTunes Search API | Apple TV trailers and soundtrack previews | Apple's terms for the iTunes Search API |
 | YouTube | Trailer playback (embedded player, privacy-enhanced mode) | [YouTube Terms of Service](https://www.youtube.com/t/terms) |
 

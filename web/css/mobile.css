@@ -69,9 +69,9 @@
   .tabbar .active svg { color: var(--accent); }
   .tabbar .active .avatar { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
   .view { padding-bottom: calc(var(--tabbar-h) + 28px); }
-  body.has-music .view { padding-bottom: calc(var(--tabbar-h) + 100px); }
+  body.has-music .view { padding-bottom: calc(var(--tabbar-h) + var(--dock-h) + 24px); }
   .toasts { left: 12px; right: 12px; bottom: calc(var(--tabbar-h) + 12px); }
-  body.has-music .toasts { bottom: calc(var(--tabbar-h) + 84px); }
+  body.has-music .toasts { bottom: calc(var(--tabbar-h) + var(--dock-h) + 12px); }
 
   /* ---------- pages ---------- */
   .page { padding-top: calc(22px + env(safe-area-inset-top)); }
@@ -111,12 +111,9 @@
   .episode { grid-template-columns: 28px 128px 1fr !important; gap: 10px !important; }
   .episode .rt { display: none; }
 
-  /* music bar sits above the tab bar */
-  .musicbar { bottom: var(--tabbar-h); left: 0; padding: 8px 12px; border-top: 1px solid var(--line); }
-  .musicbar .now img, .musicbar .now .ph { width: 44px; height: 44px; }
-  .musicbar { grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
-  .musicbar .right { grid-row: 1; grid-column: 3; }
-  .musicbar .right .pbtn { width: 36px; height: 36px; }
+  /* the player bar sits above the tab bar */
+  .dock { bottom: var(--tabbar-h); left: 0; }
+  .player.mini { bottom: var(--tabbar-h); left: 0; }
   /* album pages: cover above the title */
   .d-hero[style*="grid-template-columns"] { grid-template-columns: 1fr !important; gap: 22px !important; padding-top: calc(36px + env(safe-area-inset-top)) !important; }
 
@@ -139,7 +136,6 @@
   .tabbar > a, .tabbar > button { flex-direction: row; gap: 8px; font-size: 13px; }
   .hero { min-height: 88vh; }
   .d-hero { padding-top: 40px; min-height: auto; }
-  .musicbar { left: 0; }
   .sheet { max-height: 92vh; }
 }
 
@@ -196,18 +192,4 @@
 .standalone .page-head, .standalone .auth { padding-top: env(safe-area-inset-top); }
 .lib-item a { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 
-/* ---------- mini player on phones: a bar above the tab bar ---------- */
-@media (max-width: 720px), (max-height: 500px) and (hover: none) {
-  .player.mini {
-    left: 8px; right: 8px; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px);
-    width: auto; height: 64px; aspect-ratio: auto; border-radius: 10px; background: rgb(var(--bg-rgb));
-  }
-  .player.mini video { inset: 0 auto 0 0; width: 114px; height: 64px; }
-  .player.mini .mini-ui { inset: 0 0 0 114px; opacity: 1 !important; background: none !important; }
-  .player.mini .mini-ui > * { visibility: visible !important; }
-  .player.mini .mini-expand { display: none; }
-  .player.mini .mini-info { left: 12px; right: 96px; top: 0; bottom: 0; align-content: center; }
-  .player.mini .mini-play { left: auto; right: 46px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; background: none; }
-  .player.mini .mini-close { right: 2px; top: 50%; transform: translateY(-50%); }
-  .player.mini .mini-bar { left: -114px; }
-}
+

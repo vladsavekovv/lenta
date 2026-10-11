@@ -25,6 +25,7 @@ FIELDS = {
     "episode": ["title", "release_date", "year", "rating", "runtime", "overview"],
     "album": ["title", "sort_title", "artist", "year", "genres", "overview"],
     "track": ["title", "artist"],
+    "book": ["title", "sort_title", "artist", "narrator", "series", "series_index", "year", "genres", "overview"],
     "photoalbum": ["title", "overview"],
     "photo": ["title"],
 }
@@ -32,7 +33,7 @@ TRAILER_CHOICES = 4             # the editor offers at most this many trailers
 
 ARTWORK = {
     "movie": ["poster", "backdrop", "logo"], "show": ["poster", "backdrop", "logo"], "season": ["poster"],
-    "episode": ["thumb"], "album": ["poster"], "photoalbum": ["poster"],
+    "episode": ["thumb"], "album": ["poster"], "book": ["poster"], "photoalbum": ["poster"],
 }
 LIST_FIELDS = {"genres", "studios", "directors", "writers", "creators"}
 TEXT_LIMITS = {"overview": 10000, "tagline": 500}
@@ -72,7 +73,7 @@ def get_metadata(item_id: int):
         "id": row["id"], "kind": kind, "fields": FIELDS.get(kind, ["title"]), "values": values,
         "locked": sorted(metadata.locked_fields(extra)), "artwork": art,
         "tmdb_id": row["tmdb_id"], "tmdb_kind": metadata.tmdb_kind_of(row) if row["tmdb_id"] else None,
-        "matched": bool(row["matched"]), "files": _files(item_id) if kind in ("movie", "episode", "track") else [],
+        "matched": bool(row["matched"]), "files": _files(item_id) if kind in ("movie", "episode", "track", "book") else [],
         "added_at": row["added_at"], "updated_at": row["updated_at"],
         "home_trailer": bool(extra.get("home_trailer")),
     }
@@ -90,6 +91,11 @@ def _clean(field: str, value):
         return [str(v).strip() for v in (value or []) if str(v).strip()][:30]
     if value in (None, ""):
         return None
+    if field == "series_index":
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Number in series must be a whole number")
     if field in ("year", "runtime"):
         try:
             v = int(value)
@@ -133,7 +139,12 @@ def save_metadata(item_id: int, body: MetadataBody):
             extra[field] = value or ([] if field in LIST_FIELDS else "")
         else:
             columns[field] = value
-    if "title" in columns and not (body.values.get("sort_title") or "").strip() and "sort_title" in allowed:
+    if kind == "book" and not (body.values.get("sort_title") or "").strip():
+        # books sort by series and number, so a series lists in reading order
+        t = columns.get("title") or row["title"]
+        columns["sort_title"] = metadata.sort_title(
+            f"{extra['series']} {int(extra['series_index']):04d}" if extra.get("series") and extra.get("series_index") else t)
+    elif "title" in columns and not (body.values.get("sort_title") or "").strip() and "sort_title" in allowed:
         columns["sort_title"] = metadata.sort_title(columns["title"])
     elif "sort_title" in columns:
         columns["sort_title"] = (columns["sort_title"] or metadata.sort_title(columns.get("title") or row["title"])).lower()
@@ -198,6 +209,27 @@ def artwork_choices(item_id: int, type: str):
             if c["ref"] not in seen:
                 seen.add(c["ref"])
                 choices.append({**c, "url": images.url(c["ref"])})
+    if row["kind"] == "book" and type == "poster":     # covers of the book online
+        from . import audiobooks
+        ex = jloads(row["extra"], {}) if row["extra"] else {}
+        seen = {current}
+        try:
+            found = audiobooks.search(ex.get("parsed_title") or row["title"], row["artist"],
+                                      ex.get("series"))
+        except audiobooks.SourceError as exc:
+            found = []
+            report.append({"source": "Google Books and Open Library", "note": f"didn't answer ({exc})"})
+        before = len(choices)
+        for c in found[:10]:
+            for url, src in ((c.get("cover_large"), "Open Library"), (c.get("cover"), "Google Books"
+                             if c["source"] == "google" else "Open Library")):
+                ref = images.web_ref(url) if url else None
+                if ref and ref not in seen:
+                    seen.add(ref)
+                    choices.append({"ref": ref, "url": images.url(ref), "source": f"{src}: {c['title']}"})
+        if found:
+            n = len(choices) - before
+            report.append({"source": "Google Books and Open Library", "count": n, "note": f"{n} cover{'' if n == 1 else 's'}"})
     if row["thumb"] and type in ("poster", "backdrop") and row["thumb"] != current:
         choices.append({"ref": row["thumb"], "url": images.url(row["thumb"]), "source": "Frame from the video"})
     return {"type": type, "choices": choices, "sources": report}
@@ -280,7 +312,7 @@ def trailer_choices(item_id: int):
     else:
         tmdb = metadata.TMDB()
         if not tmdb.enabled:
-            note = "Add a TMDB API key in Server admin › Settings to see trailers."
+            note = "Add a TMDB API key in Settings › Metadata › TMDB and language to see trailers."
         else:
             try:
                 kind = "movie" if metadata.tmdb_kind_of(row) == "movie" else "show"
@@ -345,6 +377,14 @@ def refresh_metadata(item_id: int):
     episodes refresh their show; a title without a match is searched for again."""
     row = _item(item_id)
     target = row
+    if row["kind"] == "book":
+        from . import audiobooks
+        ex = jloads(row["extra"], {}) if row["extra"] else {}
+        ok = audiobooks.match_book(item_id, ex.get("book_id"), ex.get("book_source") or "google") if ex.get(
+            "book_id") else audiobooks.match_book(item_id)
+        if not ok:
+            raise HTTPException(400, "No match found online. Use Fix match to pick the right book.")
+        return {"ok": True, "title": _item(item_id)["title"]}
     if row["kind"] in ("season", "episode"):
         with db() as con:
             show_id = row["parent_id"] if row["kind"] == "season" else con.execute(
@@ -354,7 +394,7 @@ def refresh_metadata(item_id: int):
         raise HTTPException(400, "Only movies and TV shows have online metadata")
     tmdb = metadata.TMDB()
     if not tmdb.enabled:
-        raise HTTPException(400, "Add a TMDB API key in Server admin › Settings first")
+        raise HTTPException(400, "Add a TMDB API key in Settings › Metadata › TMDB and language first")
     ok = metadata.match_item(target["id"], tmdb, tmdb_id=target["tmdb_id"],
                              tmdb_kind=metadata.tmdb_kind_of(target) if target["tmdb_id"] else None)
     if not ok:

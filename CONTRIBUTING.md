@@ -11,7 +11,7 @@ fonts under other licenses can only come in if their license allows it; list the
 
 Open an issue with the **Bug report** template and include:
 
-- Ubuntu version (`lsb_release -d`) and LENTA version (Server admin › Dashboard)
+- Ubuntu version (`lsb_release -d`) and LENTA version (Settings › Dashboard)
 - GPU and driver, if the problem is about playback or conversion
 - Browser or device, if the problem is in the web client or app
 - What you did, what you expected, what happened

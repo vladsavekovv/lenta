@@ -1,5 +1,5 @@
-// Blocks on a page you can fold, move and resize: the Settings page and the Server admin Dashboard and Settings.
-import { $, html, icon, mount, raw, toast } from './ui.js';
+// Blocks on a page you can fold, move and resize: every Settings page made of blocks (one saved arrangement per page).
+import { $, html, icon, mount, pageScrollBy, pageY, raw, toast } from './ui.js';
 import { onCleanup } from './extras.js';
 
 // ---- folding blocks: an arrow on each block's title folds it to the title and opens it again (for
@@ -99,7 +99,7 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
   };
   // the original arrangement: columns (3 on a wide window, 2 on a smaller one), each block in the shortest column
   const columnsLayout = () => {
-    const n = matchMedia('(max-width: 1399px)').matches ? 2 : 3;
+    const n = Math.max(1, Math.min(matchMedia('(max-width: 1399px)').matches ? 2 : 3, IDS.length));   // 1 block: full width
     const w = UNITS / n, items = {}, bottoms = new Array(n).fill(0);
     // blocks marked .wide (e.g. "Playing now") take the whole width, below everything before them
     IDS.forEach((id) => { items[id] = { x: 0, y: 0, w: el(id).classList.contains('wide') ? UNITS : w, h: null }; place(el(id), items[id]); });
@@ -143,7 +143,8 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
     }
     cols.classList.add('lay-free');
     const boxes = IDS.map((id) => {
-      const it = items[id] || { x: 0, y: 99999, w: 16, h: null };
+      // a block added since the layout was saved (a new feature) starts at the top left, where it's noticed
+      const it = items[id] || { x: 0, y: -1, w: UNITS / Math.max(1, Math.min(matchMedia('(max-width: 1399px)').matches ? 2 : 3, IDS.length)), h: null };
       const p = el(id);
       place(p, it);
       return { id, x: it.x, w: it.w, y: it.y, h: p.offsetHeight, fixed: it.h || null };
@@ -225,7 +226,7 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
     editing = true;
     cur.items = itemsNow();
     before = clone(cur);
-    view.classList.add('lay-editing');
+    view.classList.add('lay-editing'); cols.classList.add('editing');
     panels().forEach(tools);
     renderBar(); setButtons(); render();
   };
@@ -233,7 +234,7 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
     if (!keep) cur = clone(before);
     else if (!stored.items && JSON.stringify(cur.items) === JSON.stringify(before.items) && cur.log.length === stored.log.length) cur.items = null;
     editing = false;
-    view.classList.remove('lay-editing');
+    view.classList.remove('lay-editing'); cols.classList.remove('editing');
     view.querySelectorAll('.lay-tools, .lay-h, .lay-guide').forEach(e => e.remove());
     renderBar(); setButtons(); render();
   };
@@ -322,7 +323,7 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
     const items0 = fromBoxes(base);
     const me = base.find(b => b.id === id);
     const u = unit(), c0 = cols.getBoundingClientRect();
-    const x0 = e.clientX, y0 = e.clientY + window.scrollY;
+    const x0 = e.clientX, y0 = e.clientY + pageY();
     const h0 = p.offsetHeight;
     dragging = true;
     p.classList.add(handle ? 'lay-resizing' : 'lay-moving');
@@ -330,7 +331,7 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
     let last = base, lastEv = e;
     const update = (ev) => {
       lastEv = ev;
-      const dx = ev.clientX - x0, dy = ev.clientY + window.scrollY - y0;
+      const dx = ev.clientX - x0, dy = ev.clientY + pageY() - y0;
       const it = { ...items0[id] };
       const others = base.filter(b => b.id !== id);
       guide('v', null); guide('h', null);
@@ -365,7 +366,7 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
     const edge = setInterval(() => {
       const y = lastEv.clientY, zone = 70;
       const d = y < zone ? -Math.ceil((zone - y) / 4) : y > innerHeight - zone ? Math.ceil((y - innerHeight + zone) / 4) : 0;
-      if (d) { window.scrollBy(0, d); update(lastEv); }
+      if (d) { pageScrollBy(d); update(lastEv); }
     }, 30);
     const end = () => {
       clearInterval(edge);
@@ -388,5 +389,19 @@ export function blockLayout({ root, canvas, value, save, names = {} }) {
   return {
     refresh: () => { foldPanels(cols, closedAtStart); if (editing) panels().forEach(p => { if (!p.querySelector('.lay-tools')) tools(p); }); redraw(); },
     editing: () => editing,
+  };
+}
+
+/** Layouts are kept per page inside one preference: { pages: { <page>: { items, closed, log } } }. */
+export function pageLayout(raw, page) {
+  let all = {};
+  try { all = JSON.parse(raw || '{}') || {}; } catch { all = {}; }
+  const pagesObj = all.pages && typeof all.pages === 'object' ? all.pages : {};
+  return {
+    value: JSON.stringify(pagesObj[page] || {}),
+    merge: (value) => {
+      pagesObj[page] = JSON.parse(value);
+      return JSON.stringify({ pages: pagesObj });
+    },
   };
 }

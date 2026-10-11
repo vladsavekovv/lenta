@@ -347,7 +347,7 @@ _FIELDS = ("title", "original_title", "year", "release_date", "overview", "tagli
 
 # Fields an admin edited by hand are locked (extra.locked_fields) and never overwritten by a refresh.
 # Columns lock by their own name; "genres" and these extra keys can be locked too.
-EXTRA_LOCKABLE = ("edition", "studios", "directors", "writers", "creators")
+EXTRA_LOCKABLE = ("edition", "studios", "directors", "writers", "creators", "narrator", "series", "series_index")
 
 
 def locked_fields(extra) -> set[str]:

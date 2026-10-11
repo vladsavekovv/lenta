@@ -6,7 +6,7 @@ database and are edited from the admin dashboard; see db.SETTING_DEFAULTS.
 import os
 from pathlib import Path
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 APP_NAME = "LENTA Media Server"
 
 _ROOT = Path(__file__).resolve().parents[2]  # .../lenta
@@ -31,11 +31,11 @@ CACHE_DIR = DATA_DIR / "cache"        # TMDB downloads, resized images, converte
 VIDEO_EXT = {".mkv", ".mp4", ".m4v", ".avi", ".mov", ".wmv", ".ts", ".m2ts", ".webm",
              ".mpg", ".mpeg", ".flv", ".ogv", ".3gp", ".vob"}
 AUDIO_EXT = {".mp3", ".flac", ".m4a", ".aac", ".ogg", ".oga", ".opus", ".wav", ".wma",
-             ".ape", ".aiff", ".aif", ".alac", ".wv"}
+             ".ape", ".aiff", ".aif", ".alac", ".wv", ".m4b", ".mka"}
 PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 SUB_EXT = {".srt", ".vtt", ".ass", ".ssa"}
 
-LIBRARY_KINDS = {"movies", "shows", "music", "photos"}
+LIBRARY_KINDS = {"movies", "shows", "music", "audiobooks", "photos"}
 
 
 def ensure_dirs() -> None:

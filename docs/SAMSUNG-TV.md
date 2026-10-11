@@ -148,7 +148,7 @@ The script asks for the certificate's password. You can also set it with `CERT_P
   Connect again or type the address with the port, e.g. `192.168.1.20:8484`.
 
 **A film plays without sound or doesn't start**
-: LENTA converts what the TV can't play. If one film still fails, open Server admin › Activity while it plays
+: LENTA converts what the TV can't play. If one film still fails, open Settings › Dashboard › Playing now while it plays
   and look at what the server reports.
 
 **Docker can't download the tools**

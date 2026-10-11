@@ -241,7 +241,7 @@ def _ranged_file(request: Request, path: str, media_type: str, download_name: st
 def _guess_type(path: str) -> str:
     ext = os.path.splitext(path)[1].lower()
     return {".mkv": "video/x-matroska", ".m4v": "video/mp4", ".webm": "video/webm", ".flac": "audio/flac",
-            ".m4a": "audio/mp4", ".opus": "audio/ogg", ".ogg": "audio/ogg", ".mp3": "audio/mpeg",
+            ".m4a": "audio/mp4", ".m4b": "audio/mp4", ".opus": "audio/ogg", ".ogg": "audio/ogg", ".mp3": "audio/mpeg",
             ".wav": "audio/wav"}.get(ext) or mimetypes.guess_type(path)[0] or "application/octet-stream"
 
 
@@ -256,15 +256,21 @@ def stream_file(file_id: int, request: Request, download: int = 0, user: dict = 
 
 
 @router.get("/stream/track/{item_id}")
-def stream_track(item_id: int, request: Request, transcode_audio: int = 0, user: dict = Depends(auth.current_user)):
+def stream_track(item_id: int, request: Request, transcode_audio: int = 0, file: int = 0, start: float = 0,
+                 user: dict = Depends(auth.current_user)):
+    """A song, or one part of an audiobook (file=the part's id; start=seconds into it, only when converting)."""
     item = get_item(item_id, user)
     with db() as con:
-        row = con.execute("SELECT * FROM files WHERE item_id = ?", (item["id"],)).fetchone()
+        if file:
+            row = con.execute("SELECT * FROM files WHERE item_id = ? AND id = ?", (item["id"], file)).fetchone()
+        else:
+            row = con.execute("SELECT * FROM files WHERE item_id = ?", (item["id"],)).fetchone()
     if not row or not os.path.exists(row["path"]):
         raise HTTPException(410, "The file is missing from disk")
     if not transcode_audio:
         return _ranged_file(request, row["path"], _guess_type(row["path"]))
-    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error", "-nostdin", "-i", row["path"], "-vn", "-map", "0:a:0",
+    seek = ["-ss", f"{max(0.0, start):.2f}"] if start > 0 else []
+    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error", "-nostdin", *seek, "-i", row["path"], "-vn", "-map", "0:a:0",
            "-c:a", "libmp3lame", "-b:a", "256k", "-f", "mp3", "pipe:1"]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
@@ -365,10 +371,14 @@ def report_progress(body: ProgressBody, user: dict = Depends(auth.current_user))
                                 "updated": time.time()}
         for k in [k for k, v in now_playing.items() if time.time() - v["updated"] > 60]:
             now_playing.pop(k, None)
-    if item["kind"] not in ("movie", "episode") or not body.duration:
+    if item["kind"] not in ("movie", "episode", "book") or not body.duration:
         return {"ok": True}
     # Finished at 92 %, or inside the last two minutes (end credits) of anything longer than 20 minutes.
-    done = body.position / body.duration >= 0.92 or (body.duration > 1200 and body.duration - body.position < 120)
+    # A book has no credits: finished in its last half minute.
+    if item["kind"] == "book":
+        done = body.position / body.duration >= 0.97 and body.duration - body.position < 60
+    else:
+        done = body.position / body.duration >= 0.92 or (body.duration > 1200 and body.duration - body.position < 120)
     with db() as con:
         prev = con.execute("SELECT completed FROM watch_state WHERE user_id = ? AND item_id = ?",
                            (user["id"], item["id"])).fetchone()

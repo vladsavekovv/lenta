@@ -2,13 +2,13 @@
 import { api } from './api.js';
 import './hovercard.js';
 import { initCardTools } from './editor.js';
-import { $, html, icon, isTouch, KIND_ICON, mount, popMenu, raw, setArtStyle, setEpisodeArt, sheet, toast } from './ui.js';
+import { $, html, icon, isTouch, KIND_ICON, mount, onPageScroll, pageScroller, pageScrollTo, pageY, popMenu, raw, setArtStyle, setEpisodeArt, sheet, toast } from './ui.js';
 import { inAndroidApp, installAvailable, promptInstall } from './pwa.js';
 import { renderAuth, changePasswordDialog } from './auth.js';
 import { views } from './views.js';
-import { libraryMenu, renderAdmin } from './admin.js';
+import { libraryMenu } from './admin.js';
 import { openPlayer, closePlayer, expandPlayer, playerItem, playerMini, playerOpen } from './player.js';
-import { renderSettings } from './settings.js';
+import { ADMIN_TABS, renderSettingsPage } from './settings-shell.js';
 import { initTv, inTvApp, changeServer } from './tv.js';
 import { runCleanups } from './extras.js';
 
@@ -38,8 +38,9 @@ const routes = [
   [/^\/search$/, (m, q) => views.search(q)],
   [/^\/person$/, (m, q) => views.person(q.get('name'))],
   [/^\/mylist$/, () => views.mylist()],
-  [/^\/admin(?:\/(\w+))?$/, (m, q) => renderAdmin(m[1] || 'dashboard', q)],
-  [/^\/settings$/, () => renderSettings()],
+  // Server admin is part of Settings now; old addresses open the matching page
+  [/^\/admin(?:\/(\w+))?$/, (m, q) => { location.replace(`#/settings/${ADMIN_TABS[m[1] || 'dashboard'] || 'dashboard'}${q.toString() ? `?${q}` : ''}`); }],
+  [/^\/settings(?:\/([\w-]+))?$/, (m, q) => renderSettingsPage(m[1], q)],
 ];
 
 function parseHash() {
@@ -86,7 +87,7 @@ async function renderView(path, query) {
         mount(view, html`<div class="page"><div class="empty"><h3>This page didn't load</h3><p>${err.message}</p>
           <button class="btn" onclick="location.reload()">Reload</button></div></div>`);
       }
-      if (!samePage && !keepScroll) { window.scrollTo(0, 0); view.focus({ preventScroll: true }); }
+      if (!samePage && !keepScroll) { pageScrollTo(0); view.focus({ preventScroll: true }); }
       return;
     }
   }
@@ -114,19 +115,19 @@ let keepScroll = false;
 // Draw the page again (after editing details, refreshing metadata...) without losing your place: the page keeps
 // its scroll position, rows keep theirs, and a library loads as many pages as it had shown.
 export async function refreshView() {
-  const y = window.scrollY;
+  const y = pageY();
   const rows = [...document.querySelectorAll('.track')].map(t => t.scrollLeft);
   lastViewKey = null; keepScroll = true;
   try { await route(); } finally { keepScroll = false; }
   document.querySelectorAll('.track').forEach((t, i) => { if (rows[i]) t.scrollLeft = rows[i]; });
   if (!y) return;
-  const root = document.scrollingElement || document.documentElement;
+  const root = () => pageScroller() || document.scrollingElement || document.documentElement;
   for (let tries = 0; tries < 40; tries++) {          // more pictures load as the page is scrolled down
-    window.scrollTo(0, y);
-    if (root.scrollHeight >= y + window.innerHeight || !document.querySelector('#sentinel')) break;
+    pageScrollTo(y);
+    if (root().scrollHeight >= y + root().clientHeight || !document.querySelector('#sentinel')) break;
     await new Promise(r => setTimeout(r, 150));
   }
-  window.scrollTo(0, y);
+  pageScrollTo(y);
 }
 
 export function renderRail() {
@@ -153,8 +154,7 @@ export function renderRail() {
       ${link(`#/library/${l.id}`, path === `/library/${l.id}` ? 'active' : '', KIND_ICON[l.kind], l.name)}
       ${u.is_admin ? html`<button class="lib-more" data-lib-menu="${l.id}" aria-label="${l.name} options" title="Options · drag to reorder">${icon('dots')}</button>` : ''}</div>`)}</div>
     <div class="spacer"></div>
-    ${link('#/settings', active('/settings'), 'sliders', 'Settings')}
-    ${u.is_admin ? link('#/admin', active('/admin'), 'admin', 'Server admin') : ''}
+    ${link('#/settings', active('/settings'), 'admin', 'Settings')}
     <button class="navlike" id="account-btn" aria-label="Account" title="${u.username}">
       <span class="avatar" style="background:${u.color || '#F2B33D'}">${u.username[0].toUpperCase()}</span><span class="label">${u.username}</span></button>
     <div class="tabbar" role="tablist" aria-label="Main">
@@ -191,7 +191,7 @@ function librariesSheet() {
     ${state.libraries.length ? state.libraries.map(l => html`<div class="sheet-lib ${path === `/library/${l.id}` ? 'active' : ''}">
       <a href="#/library/${l.id}">${icon(KIND_ICON[l.kind])}<span>${l.name}</span></a>
       ${u.is_admin ? html`<button class="lib-more" data-lib-menu="${l.id}" aria-label="${l.name} options">${icon('dots')}</button>` : ''}</div>`)
-      : html`<p class="sheet-empty">No libraries yet.${u.is_admin ? ' Add one in Server admin › Libraries.' : ''}</p>`}</div>`, { title: 'Libraries' });
+      : html`<p class="sheet-empty">No libraries yet.${u.is_admin ? ' Add one in Settings › Libraries.' : ''}</p>`}</div>`, { title: 'Libraries' });
   sh.body.querySelectorAll('[data-lib-menu]').forEach(b => b.addEventListener('click', () => {
     const lib = state.libraries.find(l => l.id === Number(b.dataset.libMenu));
     sh.close();
@@ -203,7 +203,6 @@ function meSheet() {
   const u = state.user;
   const items = [
     { label: 'Settings', action: () => { location.hash = '#/settings'; } },
-    ...(u.is_admin ? [{ label: 'Server admin', action: () => { location.hash = '#/admin'; } }] : []),
     ...(installAvailable() ? [{ label: 'Install the LENTA app', action: promptInstall }] : []),
     ...(inAndroidApp() ? [{ label: 'Change server…', hint: location.host, action: () => window.LentaApp.changeServer() }] : []),
     ...(inTvApp() ? [{ label: 'Change server…', hint: location.host, action: changeServer }] : []),
@@ -224,7 +223,7 @@ async function saveLibraryOrder(ids) {
   if (parseHash().path === '/') refreshView();          // Home rows follow the library order
 }
 
-function moveLibrary(id, dir) {
+export function moveLibrary(id, dir) {
   const ids = state.libraries.map(l => l.id);
   const i = ids.indexOf(id), j = i + dir;
   if (i < 0 || j < 0 || j >= ids.length) return;
@@ -292,7 +291,7 @@ function setRailCollapsed(collapsed) {
   renderRail();
   $('#rail-toggle')?.focus({ preventScroll: true });
 }
-// Collapsed or open when LENTA opens: Settings › Look › Side menu (☰ or the \ key switches it for this visit).
+// Collapsed or open when LENTA opens: Settings › Appearance › Side menu (☰ or the \ key switches it for this visit).
 document.body.classList.add('rail-collapsed');
 export function applyMenuDefault(value) { document.body.classList.toggle('rail-collapsed', value !== 'open'); }
 document.addEventListener('keydown', (e) => {
@@ -367,8 +366,8 @@ window.addEventListener('lenta:signedout', () => {
 initTv();
 // the menu bar of some themes turns solid once the page is scrolled
 let scrolledNow = false;
-window.addEventListener('scroll', () => {
-  const on = window.scrollY > 8;
+onPageScroll(() => {
+  const on = pageY() > 8;
   if (on !== scrolledNow) { scrolledNow = on; document.documentElement.classList.toggle('scrolled', on); }
-}, { passive: true });
+});
 boot();

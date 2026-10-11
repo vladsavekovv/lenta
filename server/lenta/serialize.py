@@ -4,7 +4,7 @@ import json
 from . import images
 from .db import db, jloads
 
-TOP_KIND = {"movies": "movie", "shows": "show", "music": "album", "photos": "photoalbum"}
+TOP_KIND = {"movies": "movie", "shows": "show", "music": "album", "audiobooks": "book", "photos": "photoalbum"}
 
 
 def resolution_label(width: int | None, height: int | None) -> str:
@@ -97,6 +97,9 @@ def card(row, state: dict | None = None) -> dict:
         extra = jloads(r.get("extra"), {})
         out.update(width=extra.get("width"), height=extra.get("height"), taken=r.get("release_date"),
                    camera=extra.get("camera"))
+    if kind == "book":
+        extra = jloads(r.get("extra"), {})
+        out.update(series=extra.get("series"), series_index=extra.get("series_index"), narrator=extra.get("narrator"))
     if "cover_photo" in r and r["cover_photo"]:
         out["thumb"] = f"/api/photos/{r['cover_photo']}/thumb"
     for extra_key in ("show_id", "show_title", "child_count", "unwatched"):
@@ -130,7 +133,7 @@ def states_for(user_id: int, ids: list[int]) -> dict[int, dict]:
 
 def cards(rows, user_id: int) -> list[dict]:
     rows = [dict(r) for r in rows]
-    states = states_for(user_id, [r["id"] for r in rows if r["kind"] in ("movie", "episode")])
+    states = states_for(user_id, [r["id"] for r in rows if r["kind"] in ("movie", "episode", "book")])
     return [card(r, states.get(r["id"])) for r in rows]
 
 

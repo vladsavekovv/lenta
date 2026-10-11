@@ -29,7 +29,7 @@ function renderSetup(view, onSignedIn) {
     if ($('#sp').value !== $('#sp2').value) { err.textContent = 'The two passwords are different.'; return; }
     try {
       await api.post('/api/setup', { server_name: $('#sn').value, username: $('#su').value, password: $('#sp').value });
-      location.hash = '#/admin/libraries';
+      location.hash = '#/settings/libraries';
       await onSignedIn();
       toast('Server ready. Add a library to start scanning your media.');
     } catch (ex) { err.textContent = ex.message; }

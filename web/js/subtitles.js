@@ -89,7 +89,7 @@ export async function openSubtitleDialog(item, file) {
     <div class="sub-have" id="sd-have"></div>
     <h3 style="font:500 18px/1.2 var(--display);margin:0 0 12px">Find online</h3>
     <div id="sd-search">${online ? '' : html`<p style="color:var(--muted)">Online subtitles are off. An administrator can add an
-      OpenSubtitles API key in Server admin › Settings.</p>`}</div>
+      OpenSubtitles API key in Settings › Subtitles.</p>`}</div>
     <div class="foot"><button class="btn" data-close>Done</button></div>`, { wide: true });
   const renderHave = () => {
     const subs = file.subtitles || [];

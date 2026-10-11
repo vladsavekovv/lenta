@@ -10,10 +10,11 @@ const LABELS = {
   release_date: 'Originally available', year: 'Year', certification: 'Content rating', rating: 'Rating',
   runtime: 'Runtime (minutes)', studios: 'Studio', tagline: 'Tagline', overview: 'Summary', artist: 'Artist',
   genres: 'Genres', directors: 'Directors', writers: 'Writers', creators: 'Created by',
+  narrator: 'Narrator', series: 'Series', series_index: 'Number in series',
 };
 const TAG_FIELDS = ['genres', 'directors', 'writers', 'creators'];
 const ART_LABELS = { poster: 'Poster', backdrop: 'Background', logo: 'Logo', thumb: 'Thumbnail' };
-const SHORT = ['release_date', 'certification', 'rating', 'year', 'runtime'];
+const SHORT = ['release_date', 'certification', 'rating', 'year', 'runtime', 'series_index'];
 
 // ---- card tools ---------------------------------------------------------------------------
 export function initCardTools() {
@@ -79,11 +80,12 @@ export async function openEditor(id, done = refreshView) {
     let input;
     if (f === 'overview') input = html`<textarea class="input" data-f="${f}" rows="6">${v || ''}</textarea>`;
     else if (f === 'release_date') input = html`<input class="input" type="date" data-f="${f}" value="${v || ''}">`;
-    else if (f === 'year' || f === 'runtime') input = html`<input class="input" type="number" data-f="${f}" value="${v ?? ''}">`;
+    else if (f === 'year' || f === 'runtime' || f === 'series_index') input = html`<input class="input" type="number" data-f="${f}" value="${v ?? ''}">`;
     else if (f === 'rating') input = html`<input class="input" type="number" step="0.1" min="0" max="10" data-f="${f}" value="${v ?? ''}">`;
     else if (f === 'studios') input = html`<input class="input" data-f="${f}" data-list="1" value="${(v || []).join(', ')}">`;
     else input = html`<input class="input" data-f="${f}" value="${v ?? ''}">`;
-    return html`<div class="ed-field ${SHORT.includes(f) ? 'short' : ''}"><label>${LABELS[f] || f}</label>
+    const label = f === 'artist' && d.kind === 'book' ? 'Author' : (LABELS[f] || f);
+    return html`<div class="ed-field ${SHORT.includes(f) ? 'short' : ''}"><label>${label}</label>
       <div class="ed-row">${lockBtn(f)}${input}</div></div>`;
   }
 

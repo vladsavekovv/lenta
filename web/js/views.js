@@ -1,8 +1,8 @@
 // Browsing views: home, library, details, search, people, my list.
 import { api } from './api.js';
-import { state, refreshView } from './app.js';
-import { playTracks, currentTrackId } from './music.js';
-import { adminItemMenu } from './admin.js';
+import { state, refreshView, moveLibrary } from './app.js';
+import { playTracks, currentTrackId, playBook, currentBookId, bookPosition, jumpToChapter, musicPaused, toggleMusic } from './music.js';
+import { adminItemMenu, libraryMenu } from './admin.js';
 import { onCleanup, openTrailer, stageHtml, startExtras, startHomeTrailer, stopHomeTrailer, wireStage } from './extras.js';
 import { openSubtitleDialog } from './subtitles.js';
 import {
@@ -99,7 +99,7 @@ async function home() {
     mount(view(), html`<div class="page"><div class="empty"><h3>No libraries yet</h3>
       ${state.user.is_admin
         ? html`<p>Point LENTA at the folders that hold your movies, shows, music or photos and it will organise them here.</p>
-               <a class="btn primary" href="#/admin/libraries">Add a library</a>`
+               <a class="btn primary" href="#/settings/libraries">Add a library</a>`
         : html`<p>An administrator hasn't shared any libraries with you yet.</p>`}</div></div>`);
     return;
   }
@@ -107,7 +107,7 @@ async function home() {
   if (!data.rows.length) {
     mount(view(), html`<div class="page"><div class="empty"><h3>Your libraries are empty for now</h3>
       <p>If you just added a library, LENTA is still scanning it. Titles appear here as soon as they are read.</p>
-      ${state.user.is_admin ? html`<a class="btn" href="#/admin">See scan progress</a>` : ''}</div></div>`);
+      ${state.user.is_admin ? html`<a class="btn" href="#/settings/dashboard">See scan progress</a>` : ''}</div></div>`);
     return;
   }
   mount(view(), html`${hero(data.hero)}<div class="rows" ${data.hero ? '' : raw('style="padding-top:40px"')}>${data.rows.map(row)}</div>`);
@@ -159,6 +159,7 @@ function rotateBanner(first) {
 const SORTS = {
   video: [['added', 'Recently added'], ['title', 'Title'], ['year', 'Year'], ['rating', 'Rating'], ['release', 'Release date'], ['random', 'Shuffle']],
   music: [['added', 'Recently added'], ['title', 'Album'], ['year', 'Year']],
+  books: [['added', 'Recently added'], ['title', 'Series and title'], ['year', 'Year'], ['random', 'Shuffle']],
   photos: [['release', 'Newest first'], ['title', 'Name'], ['added', 'Recently added']],
 };
 
@@ -188,6 +189,7 @@ function factsLine(i) {
 
 // Detail view: a picture, the facts and the start of the description for each title.
 function detailRow(i, group) {
+  if (group === 'books') return bookRow(i);
   const href = itemHref(i);
   const art = group === 'music' ? i.poster : (wideArt() ? (i.backdrop || i.thumb || i.poster) : (i.poster || i.thumb));
   const watched = i.progress?.completed || (i.kind === 'show' && i.unwatched === 0 && i.child_count);
@@ -206,16 +208,22 @@ function detailRow(i, group) {
 
 // Table view: one line per title; click a column heading to sort by it.
 function tableHead(group, sort) {
-  const cols = group === 'music'
+  const cols = group === 'books'
+    ? [['title', 'Book'], [null, 'Author'], [null, 'Series'], [null, 'Length'], ['year', 'Year'], ['added', 'Added']]
+    : group === 'music'
     ? [['title', 'Album'], [null, 'Artist'], ['year', 'Year'], [null, 'Genre'], ['added', 'Added']]
     : [['title', 'Title'], ['year', 'Year'], [null, 'Length'], [null, 'Rated'], ['rating', 'Rating'], [null, 'Genres'], ['added', 'Added']];
   return cols.map(([key, label]) => html`<th ${key ? raw(`data-sort-by="${key}" class="sortable${key === sort ? ' on' : ''}"`) : ''}>${label}${key === sort ? ' ▾' : ''}</th>`);
 }
 function tableRow(i, group) {
   const href = itemHref(i);
-  const thumb = group === 'music' ? i.poster : (i.poster || i.thumb || i.backdrop);
+  const thumb = group === 'music' || group === 'books' ? i.poster : (i.poster || i.thumb || i.backdrop);
   const added = i.added_at ? new Date(i.added_at * 1000).toLocaleDateString() : '';
   const name = html`<td><a class="tt" href="${href}">${thumb ? html`<img loading="lazy" src="${img(thumb, 92)}" alt="">` : html`<span class="noimg"></span>`}<span>${i.title}</span></a></td>`;
+  if (group === 'books') {
+    return html`<tr>${name}<td>${i.artist || ''}</td><td>${i.series ? `${i.series}${i.series_index ? ` #${i.series_index}` : ''}` : ''}</td>
+      <td>${i.runtime ? fmtRuntime(i.runtime) : ''}</td><td>${i.year || ''}</td><td>${added}</td></tr>`;
+  }
   if (group === 'music') {
     return html`<tr>${name}<td>${i.artist || ''}</td><td>${i.year || ''}</td><td>${(i.genres || []).join(', ')}</td><td>${added}</td></tr>`;
   }
@@ -227,11 +235,11 @@ function tableRow(i, group) {
 async function library(id, q) {
   const lib = state.libraries.find(l => l.id === id);
   if (!lib) throw new Error('That library does not exist or is not shared with you.');
-  const group = lib.kind === 'music' ? 'music' : lib.kind === 'photos' ? 'photos' : 'video';
+  const group = lib.kind === 'music' ? 'music' : lib.kind === 'audiobooks' ? 'books' : lib.kind === 'photos' ? 'photos' : 'video';
   const sort = q.get('sort') || (group === 'photos' ? 'release' : 'added');
   const filter = q.get('filter') || '';
   const genre = q.get('genre') || '';
-  const style = lib.kind === 'music' ? 'square' : lib.kind === 'photos' ? 'landscape' : (wideArt() ? 'landscape' : 'poster');
+  const style = lib.kind === 'music' || lib.kind === 'audiobooks' ? 'square' : lib.kind === 'photos' ? 'landscape' : (wideArt() ? 'landscape' : 'poster');
   const mode = group === 'photos' ? 'grid' : (state.prefs?.library_view || 'grid');
   const zoom = Math.min(7, Math.max(1, Number(state.prefs?.library_zoom || 4)));
   const render = (items) => items.map(i => mode === 'detail' ? detailRow(i, group) : mode === 'table' ? tableRow(i, group)
@@ -243,7 +251,7 @@ async function library(id, q) {
     api.get(`/api/libraries/${id}/items?${params}&offset=0`),
     group === 'photos' ? Promise.resolve([]) : api.get(`/api/libraries/${id}/genres`),
   ]);
-  const noun = { movies: 'movie', shows: 'show', music: 'album', photos: 'album' }[lib.kind];
+  const noun = { movies: 'movie', shows: 'show', music: 'album', audiobooks: 'book', photos: 'album' }[lib.kind];
   mount(view(), html`<div class="page">
     <div class="page-head">
       <div><h1 class="page-title">${lib.name}</h1>
@@ -251,8 +259,9 @@ async function library(id, q) {
       <div class="toolbar">
         ${genres.length ? html`<select class="input" id="genre" aria-label="Genre"><option value="">All genres</option>
           ${genres.map(g => html`<option value="${g.name}" ${g.name === genre ? raw('selected') : ''}>${g.name}</option>`)}</select>` : ''}
-        ${group === 'video' ? html`<select class="input" id="filter" aria-label="Watch status">
-          ${[['', 'Everything'], ['unwatched', 'Unwatched'], ['in_progress', 'In progress'], ['watched', 'Watched']].map(([v, l]) =>
+        ${group === 'video' || group === 'books' ? html`<select class="input" id="filter" aria-label="${group === 'books' ? 'Listening status' : 'Watch status'}">
+          ${(group === 'books' ? [['', 'Everything'], ['unwatched', 'Not started'], ['in_progress', 'Listening'], ['watched', 'Finished']]
+            : [['', 'Everything'], ['unwatched', 'Unwatched'], ['in_progress', 'In progress'], ['watched', 'Watched']]).map(([v, l]) =>
             html`<option value="${v}" ${v === filter ? raw('selected') : ''}>${l}</option>`)}</select>` : ''}
         <select class="input" id="sort" aria-label="Sort">${SORTS[group].map(([v, l]) =>
           html`<option value="${v}" ${v === sort ? raw('selected') : ''}>${l}</option>`)}</select>
@@ -261,6 +270,7 @@ async function library(id, q) {
             aria-label="Size of the pictures" title="Bigger or smaller pictures (fewer or more per row)">` : ''}
           ${group !== 'photos' ? html`<button class="view-btn" id="view-btn" aria-label="Change the view" title="Grid, detail or table view">
             ${icon(mode === 'table' ? 'rows' : mode === 'detail' ? 'text' : 'grid')}${icon('chevron')}</button>` : ''}
+          ${state.user.is_admin ? html`<button class="view-btn" id="lib-menu-btn" aria-label="Library options" title="Scan, edit or change the type of this library">${icon('dots')}</button>` : ''}
         </div>
       </div>
     </div>
@@ -291,6 +301,7 @@ async function library(id, q) {
   $('#view-btn')?.addEventListener('click', (e) => popMenu(e.currentTarget, [['grid', 'Grid view'], ['detail', 'Detail view'], ['table', 'Table view']]
     .map(([v, l]) => ({ label: `${l}${v === mode ? '  ✓' : ''}`, action: async () => { if (v !== mode) { await savePref({ library_view: v }); refreshView(); } } }))));
   $$('[data-sort-by]').forEach(th => th.addEventListener('click', () => update('sort', th.dataset.sortBy)));
+  $('#lib-menu-btn')?.addEventListener('click', (e) => libraryMenu(e.currentTarget, lib, { move: (dir) => moveLibrary(lib.id, dir) }));
 
   let offset = first.items.length, loading = false;
   const grid = $('#grid');
@@ -313,6 +324,7 @@ async function item(id, q) {
   if (d.kind === 'track' && d.parent) { location.replace(`#/item/${d.parent.id}`); return; }
   if (d.kind === 'photo' && d.parent) { location.replace(`#/item/${d.parent.id}?photo=${d.id}`); return; }
   if (d.kind === 'album') return albumDetail(d);
+  if (d.kind === 'book') return bookDetail(d, q);
   if (d.kind === 'photoalbum') return photoAlbumDetail(d, q);
   return videoDetail(d, q);
 }
@@ -471,7 +483,7 @@ function videoDetail(d, q) {
           ${resumePct ? html`<div class="d-progress"><span class="bar"><i style="width:${resumePct.toFixed(1)}%"></i></span>
             ${fmtTime(p.duration - p.position)} left</div>` : ''}
           ${d.overview ? html`<p class="d-overview clamp" title="Show the full description">${d.overview}</p>`
-            : (d.matched ? '' : html`<p class="d-overview" style="opacity:.6">No description yet.${state.user.is_admin ? ' Add a TMDB key in Server admin › Settings or fix the match.' : ''}</p>`)}
+            : (d.matched ? '' : html`<p class="d-overview" style="opacity:.6">No description yet.${state.user.is_admin ? ' Add a TMDB key in Settings › Metadata › TMDB and language, or fix the match.' : ''}</p>`)}
           <div class="actions d-actions">
             ${play ? html`<a class="btn primary" id="play-btn" href="#/play/${play.item_id}">${icon('play')}${playLabel(play)}</a>` : ''}
             ${play?.action === 'resume' ? html`<a class="btn glass-btn" href="#/play/${play.item_id}?restart=1" title="From the start">${icon('restart')}<span class="lbl">From the start</span></a>` : ''}
@@ -486,10 +498,8 @@ function videoDetail(d, q) {
 
       ${isShow && season ? html`<section class="glass d-panel" id="episodes-section">
         <div class="d-panel-head">
-          ${seasons.length > 1 && seasons.length <= 12
-            ? html`<div class="seg" role="tablist">${seasons.map(s => html`<button type="button" role="tab" data-season="${s.season}" class="${s === season ? 'on' : ''}">${s.title}</button>`)}</div>`
-            : seasons.length > 1 ? html`<select class="input" id="season" aria-label="Season" style="width:auto">${seasons.map(s =>
-                html`<option value="${s.season}" ${s === season ? raw('selected') : ''}>${s.title} (${s.child_count})</option>`)}</select>`
+          ${seasons.length > 1
+            ? html`<div class="seg season-tabs" role="tablist">${seasons.map(s => html`<button type="button" role="tab" data-season="${s.season}" class="${s === season ? 'on' : ''}">${s.title}</button>`)}</div>`
             : html`<h2>${season.title}</h2>`}
           <button class="btn small glass-btn" id="season-watched"></button>
         </div>
@@ -634,6 +644,154 @@ function albumDetail(d) {
   });
 }
 
+// ---------------------------------------------------------------- audiobooks
+// Play and ⋮ on book pictures (library, rows, search): work everywhere without opening the book first.
+async function bookCardAction(e) {
+  const playEl = e.target.closest('[data-book-play]');
+  const menuEl = e.target.closest('[data-book-menu]');
+  if (!playEl && !menuEl) return;
+  if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault(); e.stopPropagation();
+  const id = Number((playEl || menuEl).dataset.bookPlay || (playEl || menuEl).dataset.bookMenu);
+  let d;
+  try { d = await api.get(`/api/items/${id}`); } catch (ex) { toast(ex.message, 'error'); return; }
+  const p = d.progress;
+  const at = p && !p.completed ? p.position || 0 : 0;
+  if (playEl) {
+    if (currentBookId() === id) toggleMusic(); else playBook(d, at);
+    return;
+  }
+  const playing = currentBookId() === id;
+  const items = [
+    { heading: d.title },
+    { label: playing ? (musicPaused() ? 'Resume' : 'Pause') : at > 5 ? `Continue (${fmtTime(at)})` : 'Play',
+      action: () => (playing ? toggleMusic() : playBook(d, at)) },
+  ];
+  if (at > 5) items.push({ label: 'Start from the beginning', action: () => playBook(d, 0) });
+  items.push(
+    { label: 'Open the book', action: () => { location.hash = `#/item/${id}`; } },
+    { label: d.in_watchlist ? 'Remove from My list' : 'Add to My list', action: async () => {
+      await api.post(`/api/items/${id}/watchlist`, { on: !d.in_watchlist });
+      toast(d.in_watchlist ? `Removed ${d.title} from My list` : `Added ${d.title} to My list`);
+    } },
+    { label: p?.completed ? 'Mark as not finished' : 'Mark as finished', action: async () => {
+      await api.post(`/api/items/${id}/watched`, { watched: !p?.completed }); refreshView();
+    } },
+  );
+  if (d.files?.length === 1) items.push({ label: 'Download the file', action: () => { location.href = `/api/stream/file/${d.files[0].id}?download=1`; } });
+  if (state.user.is_admin) items.push({ sep: true }, ...adminItemMenu(d));
+  popMenu(menuEl, items);
+}
+document.addEventListener('click', bookCardAction, true);
+document.addEventListener('keydown', bookCardAction, true);
+
+const hoursMin = (sec) => fmtRuntime(Math.max(1, Math.round((sec || 0) / 60)));
+function seriesLine(i) { return i.series ? `${i.series}${i.series_index ? ` · Book ${i.series_index}` : ''}` : ''; }
+
+function bookRow(i) {
+  const href = `#/item/${i.id}`;
+  const p = i.progress;
+  return html`<article class="drow square">
+    <a class="dthumb" href="${href}">${i.poster ? html`<img loading="lazy" src="${img(i.poster, 342)}" alt="">` : genPoster(i)}
+      ${p && !p.completed && p.duration ? html`<span class="progress"><i style="width:${Math.min(100, p.position / p.duration * 100).toFixed(1)}%"></i></span>` : ''}</a>
+    <div class="dinfo">
+      <a class="dt" href="${href}">${i.title}</a>
+      <div class="dmeta">${[seriesLine(i), i.artist, i.runtime ? fmtRuntime(i.runtime) : '', i.year].filter(Boolean).join(' · ')}${p?.completed ? html` · <span class="good">Finished</span>` : ''}</div>
+      ${i.narrator ? html`<div class="dgen">Read by ${i.narrator}</div>` : ''}
+      ${i.overview ? html`<p class="dover">${i.overview}</p>` : ''}
+    </div>
+  </article>`;
+}
+
+function bookDetail(d, q) {
+  const total = d.duration || 0;
+  const p = d.progress;
+  const at = p && !p.completed ? p.position || 0 : 0;
+  const ex = d.extra || {};
+  const series = ex.series ? `${ex.series}${ex.series_index ? ` · Book ${ex.series_index}` : ''}` : '';
+  const chapters = d.chapters || [];
+  const mine = () => currentBookId() === d.id;
+  const playLabel = () => {
+    if (mine()) return musicPaused() ? ['play', 'Resume'] : ['pause', 'Pause'];
+    if (at > 5) return ['play', `Continue · ${hoursMin(total - at)} left`];
+    return ['play', p?.completed ? 'Listen again' : 'Play'];
+  };
+  const [pi, pl] = playLabel();
+  mount(view(), html`${stageHtml(d.poster, { soft: true })}
+    <article class="detail book-detail">
+      <section class="d-hero bk-hero">
+        <div class="card square bk-cover"><div class="frame">
+          ${d.poster ? html`<img src="${img(d.poster, 500)}" alt="">` : genPoster(d)}</div></div>
+        <div class="d-head">
+          ${series ? html`<div class="bk-series">${series}</div>` : ''}
+          <h1 class="d-title bk-title">${d.title}</h1>
+          <div class="bk-by">${d.artist ? html`by <a href="#/search?q=${encodeURIComponent(d.artist)}">${d.artist}</a>` : ''}${ex.narrator ? html`<span class="bk-narr"> · read by ${ex.narrator}</span>` : ''}</div>
+          <div class="chips">${d.year ? html`<span class="chip-g">${d.year}</span>` : ''}
+            ${total ? html`<span class="chip-g">${hoursMin(total)}</span>` : ''}
+            ${chapters.length ? html`<span class="chip-g">${chapters.length} chapters</span>` : ''}
+            ${(d.genres || []).map(g => html`<span class="chip-g">${g}</span>`)}</div>
+          ${at > 5 ? html`<div class="bk-progress"><span class="progress"><i style="width:${Math.min(100, at / total * 100).toFixed(1)}%"></i></span>
+            <span>${fmtTime(at)} of ${fmtTime(total)}</span></div>` : ''}
+          <div class="actions" style="margin-top:10px">
+            <button class="btn primary" id="bk-play">${icon(pi)}<span>${pl}</span></button>
+            ${at > 5 ? html`<button class="btn glass-btn" id="bk-restart">${icon('restart')}Start over</button>` : ''}
+            <button class="btn glass-btn icon-btn ${d.in_watchlist ? 'on' : ''}" id="list-btn">${icon(d.in_watchlist ? 'check' : 'plus')}<span class="lbl">My list</span></button>
+            <button class="btn glass-btn icon-btn" id="more-btn" aria-label="More">${icon('dots')}</button>
+          </div>
+          ${d.overview ? html`<p class="d-overview bk-overview">${d.overview}</p>` : ''}
+        </div>
+      </section>
+      ${chapters.length ? html`<section class="glass d-panel"><h2>Chapters</h2><table class="tracks bk-chapters"><tbody>${chapters.map((c, n) => html`
+        <tr data-c="${n}" tabindex="0"><td class="no">${n + 1}</td><td>${c.title}</td>
+          <td class="dur">${fmtTime((chapters[n + 1]?.start ?? total) - c.start)}</td></tr>`)}</tbody></table></section>` : ''}
+      ${d.series_books?.length ? html`<div style="margin-top:34px">${row({ title: `${ex.series} series`, items: d.series_books })}</div>` : ''}
+      ${d.more_by_author?.length ? html`<div style="margin-top:34px">${row({ title: `More by ${d.artist}`, items: d.more_by_author })}</div>` : ''}
+    </article>`);
+  wireStage();
+  const btn = $('#bk-play');
+  const paint = () => {
+    if (!btn.isConnected) return;
+    const [ic, label] = playLabel();
+    mount(btn, html`${icon(ic)}<span>${label}</span>`);
+    const cur = mine() ? bookPosition() : at;
+    $$('.bk-chapters tr[data-c]').forEach((tr) => {
+      const n = Number(tr.dataset.c);
+      tr.classList.toggle('playing', mine() && cur >= chapters[n].start - 0.5 && cur < (chapters[n + 1]?.start ?? Infinity));
+    });
+  };
+  btn.addEventListener('click', () => {
+    if (mine()) toggleMusic(); else playBook(d, at);
+    setTimeout(paint, 150);
+  });
+  $('#bk-restart')?.addEventListener('click', () => { playBook(d, 0); setTimeout(paint, 150); });
+  view().querySelector('.bk-chapters')?.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr[data-c]');
+    if (!tr) return;
+    const n = Number(tr.dataset.c);
+    if (mine()) jumpToChapter(n); else playBook(d, chapters[n].start);
+    setTimeout(paint, 150);
+  });
+  const timer = setInterval(paint, 1000);
+  onCleanup(() => clearInterval(timer));
+  $('#list-btn').addEventListener('click', async (e) => {
+    const b = e.currentTarget, on = !b.classList.contains('on');
+    await api.post(`/api/items/${d.id}/watchlist`, { on });
+    b.classList.toggle('on', on);
+    mount(b, html`${icon(on ? 'check' : 'plus')}<span class="lbl">My list</span>`);
+    toast(on ? `Added ${d.title} to My list` : `Removed ${d.title} from My list`);
+  });
+  $('#more-btn').addEventListener('click', (e) => {
+    const items = [{
+      label: p?.completed ? 'Mark as not finished' : 'Mark as finished',
+      action: async () => { await api.post(`/api/items/${d.id}/watched`, { watched: !p?.completed }); refreshView(); },
+    }];
+    if (d.files?.length === 1) items.push({ label: 'Download the file', action: () => { location.href = `/api/stream/file/${d.files[0].id}?download=1`; } });
+    if (state.user.is_admin) items.push(...adminItemMenu(d));
+    popMenu(e.currentTarget, items);
+  });
+  if (q.get('play') && !mine()) { playBook(d, at); setTimeout(paint, 150); }
+}
+
 function photoAlbumDetail(d, q) {
   const cover = d.photos[0]?.full;
   mount(view(), html`${cover ? html`<div class="stage soft" id="stage" aria-hidden="true">
@@ -718,6 +876,7 @@ async function search(q) {
     if (mine !== seq) return;
     const video = r.titles.filter(t => t.kind === 'movie' || t.kind === 'show');
     const albums = r.titles.filter(t => t.kind === 'album');
+    const books = r.titles.filter(t => t.kind === 'book');
     const photoAlbums = r.titles.filter(t => t.kind === 'photoalbum');
     const nothing = !r.titles.length && !r.episodes.length && !r.tracks.length && !r.people.length;
     mount(out, html`
@@ -727,6 +886,7 @@ async function search(q) {
         <a class="person" href="#/person?name=${encodeURIComponent(p.name)}">${p.profile ? html`<img src="${img(p.profile, 185)}" alt="">` : html`<span class="ph">${p.name[0]}</span>`}
         <span><div class="n">${p.name}</div><div class="c">${p.count} title${p.count === 1 ? '' : 's'}</div></span></a>`)}</div>` : ''}
       ${r.episodes.length ? html`<h2 class="section-title" style="margin:0 0 14px">Episodes</h2><div class="grid landscape" style="margin-bottom:40px">${r.episodes.map(e => landscapeCard(e))}</div>` : ''}
+      ${books.length ? html`<h2 class="section-title" style="margin:0 0 14px">Audiobooks</h2><div class="grid square" style="margin-bottom:40px">${books.map(squareCard)}</div>` : ''}
       ${albums.length ? html`<h2 class="section-title" style="margin:0 0 14px">Albums</h2><div class="grid square" style="margin-bottom:40px">${albums.map(squareCard)}</div>` : ''}
       ${r.tracks.length ? html`<h2 class="section-title" style="margin:0 0 14px">Songs</h2><table class="tracks" style="margin-bottom:40px"><tbody>${r.tracks.map((t, i) => html`
         <tr data-t="${i}"><td class="no">${icon('play')}</td><td>${t.title}<div style="font-size:13px;color:var(--muted)">${t.artist} · ${t.album_title}</div></td><td class="dur"></td></tr>`)}</tbody></table>` : ''}
@@ -758,7 +918,7 @@ async function mylist() {
   const count = (n) => `${n} saved`;
   mount(view(), html`<div class="page mylist-page">
     <div class="page-head"><div><h1 class="page-title">My list</h1><div class="page-sub" id="ml-count">${count(items.length)}</div></div></div>
-    ${items.length ? html`<div class="grid ${wideArt() ? 'landscape' : 'poster'} no-preview" id="ml-grid">${items.map(i => i.kind === 'album' ? squareCard(i) : posterCard(i, { captioned: true }))}</div>`
+    ${items.length ? html`<div class="grid ${wideArt() ? 'landscape' : 'poster'} no-preview" id="ml-grid">${items.map(i => i.kind === 'album' || i.kind === 'book' ? squareCard(i) : posterCard(i, { captioned: true }))}</div>`
       : html`<div class="empty"><h3>Your list is empty</h3><p>Use the My list button on any movie or show to keep it here for later.</p></div>`}
     <div class="ml-bar" id="ml-bar" hidden>
       <span class="ml-n" id="ml-n"></span>

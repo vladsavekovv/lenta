@@ -3,7 +3,8 @@
 import { api } from './api.js';
 import { state } from './app.js';
 import { musicPlaying } from './music.js';
-import { $, html, icon, img, mount } from './ui.js';
+import { dockPlaying } from './dock.js';
+import { $, html, icon, img, mount, onPageScroll, pageY } from './ui.js';
 
 const cleanups = [];
 let pageToken = 0;
@@ -31,14 +32,14 @@ export function wireStage() {
   const onScroll = () => {
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
-      const dim = Math.min(1, window.scrollY / (window.innerHeight * 0.7));
+      const dim = Math.min(1, pageY() / (window.innerHeight * 0.7));
       st.style.setProperty('--dim', dim.toFixed(3));
       trailerBg?.visible(dim < 0.85);
     });
   };
-  window.addEventListener('scroll', onScroll, { passive: true });
+  const stop = onPageScroll(onScroll);
   onScroll();
-  onCleanup(() => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf); });
+  onCleanup(() => { stop(); cancelAnimationFrame(raf); });
 }
 
 // ---------------------------------------------------------------- YouTube helpers
@@ -128,7 +129,7 @@ function fader(get, set) {
 
 /** { el, play, pause, setMuted, fadeTo, time, destroy } — onState gets 1 playing, 2 paused, 0 ended (YouTube's codes). */
 export function trailerPlayer(key, { muted = true, controls = false, start = 0, onState, onTime, replace = true, onUnavailable, skipLead = true } = {}) {
-  // Settings › Media pages › Start trailers after: skip the green "approved for appropriate audiences" card
+  // Settings › Playback › Media pages › Start trailers after: skip the green "approved for appropriate audiences" card
   if (skipLead) start = Math.max(start, Number(state.prefs?.trailer_skip || 0));
   if (isFileTrailer(key)) {
     const v = document.createElement('video');
@@ -232,6 +233,7 @@ class ThemeMusic {
     }, 50);
   }
   play() {
+    if (mediaOn) return;                 // a film is playing: it has the sound
     if (this.userPaused) return;
     this.audio.play().then(() => { this.fade(this.target, 2600); this.render(); })
       .catch(() => this.render());          // autoplay blocked: the chip offers a play button
@@ -314,7 +316,7 @@ class BackgroundTrailer {
     if (!this.muted) theme?.play();
   }
   visible(on) {
-    if (!this.frame || !this.shown) return;
+    if (!this.frame || !this.shown || (on && mediaOn)) return;
     if (on) this.player.play(); else this.player.pause();
   }
   toggleSound() {
@@ -324,7 +326,7 @@ class BackgroundTrailer {
     this.renderPill();
   }
   pause() { this.player?.pause(); }
-  resume() { if (this.shown) this.player?.play(); }
+  resume() { if (this.shown && !mediaOn) this.player?.play(); }
   renderPill() {
     const host = $('#d-aside');
     if (!host) return;
@@ -428,8 +430,9 @@ class HomeTrailer {
   loudness(ms) { if (this.player && !this.muted && !this.stopped && this.playing) this.player.fadeTo(this.level(), ms); }
   sync() {
     if (!this.frame || !this.shown || this.stopped) return;
-    const play = this.inView && !document.hidden && !previewOn;
+    const play = this.inView && !document.hidden && !previewOn && !mediaOn;
     if (play) {
+      this.player.setMuted(this.muted || dockPlaying());    // the player bar has the sound: the banner plays muted
       if (!this.playing) {
         this.playing = true;
         this.player.play();                   // the volume is 0 here (faded out, or set to 0 below)
@@ -439,7 +442,7 @@ class HomeTrailer {
       this.playing = false;
       const p = this.player;
       // fade the sound out, then pause (straight away when muted, or when the tab is hidden: nothing to hear)
-      if (this.muted || document.hidden) { p.pause(); p.fadeTo(0, 0); }
+      if (this.muted || document.hidden || mediaOn) { p.pause(); p.fadeTo(0, 0); }   // a film starting: at once
       else p.fadeTo(0, 700).then((done) => { if (done && !this.playing && this.player === p) p.pause(); });
     }
     // 30 seconds limit (Settings): count only the time it really plays, fade the sound over the last
@@ -467,7 +470,7 @@ class HomeTrailer {
   setMuted(m) {
     this.muted = m;
     if (!m && this.player) this.player.fadeTo(0, 0);          // the sound fades in rather than jumping on
-    this.player?.setMuted(m);
+    this.player?.setMuted(m || dockPlaying());
     if (!m) this.loudness(600);
     this.renderPill();
   }
@@ -494,7 +497,7 @@ class HomeTrailer {
     this.hero.addEventListener('click', this.onOpen, true);
     this.start();
   }
-  pause() { this.player?.pause(); }
+  pause() { this.sync(); }               // (only while a film plays: see mediaOn)
   renderPill() {
     if (!this.pill) {
       this.pill = document.createElement('div');
@@ -550,7 +553,6 @@ export async function startHomeTrailer(item) {
   const why = (r) => console.info(`[LENTA banner] ${item?.title || ''}: ${r}`);   // F12 › Console says why nothing plays
   if (!item) return;
   if (mode === 'off') return why('trailers are off in Settings › Home screen');
-  if (miniPlaying()) return why('the mini player is playing');
   if (!item.home_trailer) return why('not ticked in Edit › General (picture only)');
   const hero = document.querySelector('.hero');
   const token = pageToken;
@@ -609,6 +611,23 @@ export async function startExtras(item, { onTrailer } = {}) {
   }
 }
 
-// Pressing Play: the film takes over the sound and the screen.
-window.addEventListener('lenta:playback', () => { theme?.pause(300); trailerBg?.pause(); homeTrailer?.pause(); });
+// Pressing Play: the film takes over the sound and the screen until the player closes (also as a mini
+// player). Nothing behind it may start again meanwhile: the Home banner looks "in view" again when the page
+// under the player scrolls back, a hover preview closing asks the others to resume, a click allows sound...
+let mediaOn = false;
+window.addEventListener('lenta:playback', () => {
+  mediaOn = true;
+  theme?.pause(300); trailerBg?.pause(); homeTrailer?.pause();
+});
+window.addEventListener('lenta:playback-ended', () => {
+  mediaOn = false;
+  homeTrailer?.sync();                      // the Home banner carries on if it's in view
+});
+// The video went into the player bar: the page may play its trailers again, muted while the bar plays.
+window.addEventListener('lenta:player-mini', () => {
+  mediaOn = false;
+  homeTrailer?.sync();
+});
+// Something in the player bar started, paused or stopped: the banner's sound follows (muted while it plays).
+window.addEventListener('lenta:dock', () => { homeTrailer?.sync(); });
 

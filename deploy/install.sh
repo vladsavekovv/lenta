@@ -225,9 +225,11 @@ systemctl daemon-reload
 systemctl enable lenta >/dev/null
 systemctl restart lenta
 
+HTTPS_PORT="${LENTA_HTTPS_PORT:-8443}"   # HTTPS runs next to HTTP; ports are changed in Server admin › Settings
 if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
-  echo "==> Opening port $PORT in the firewall"
+  echo "==> Opening ports $PORT (HTTP) and $HTTPS_PORT (HTTPS) in the firewall"
   ufw allow "$PORT/tcp" >/dev/null
+  ufw allow "$HTTPS_PORT/tcp" >/dev/null
 fi
 
 sleep 3
@@ -237,6 +239,8 @@ if systemctl is-active --quiet lenta; then
   echo
   echo "LENTA is running as user '$SERVICE_USER', with its data in $DATA."
   echo "LENTA is ready.  Open  http://$IP:${PORT_NOW:-8484}  in a browser to finish setup."
+  echo "HTTPS runs too:        https://$IP:$HTTPS_PORT  (LENTA's own certificate: the browser warns until you install it;"
+  echo "                       set up HTTPS in Settings › Network)"
   echo "Give '$SERVICE_USER' read access to your media, e.g.:  sudo setfacl -R -m u:$SERVICE_USER:rX -m d:u:$SERVICE_USER:rX /mnt/media"
   ENC="$(journalctl -u lenta -n 50 --no-pager 2>/dev/null | grep -o 'Transcoding with .*' | tail -1 || true)"
   if [[ -n "$ENC" ]]; then echo "$ENC"; fi

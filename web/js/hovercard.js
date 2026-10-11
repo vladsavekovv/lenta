@@ -4,8 +4,9 @@
 import { api } from './api.js';
 import { adminItemMenu } from './admin.js';
 import { refreshView, state } from './app.js';
-import { handTrailer, miniPlaying, previewTrailerPlaying, trailerPlayer, whenSoundAllowed } from './extras.js';
-import { fmtRuntime, html, icon, img, itemHref, mount, toast } from './ui.js';
+import { handTrailer, previewTrailerPlaying, trailerPlayer, whenSoundAllowed } from './extras.js';
+import { dockPlaying } from './dock.js';
+import { fmtRuntime, html, icon, img, itemHref, mount, onPageScroll, pageY, toast } from './ui.js';
 
 const KINDS = new Set(['movie', 'show', 'episode']);
 const OPEN_DELAY = 550, CLOSE_DELAY = 140;
@@ -49,7 +50,7 @@ function schedule(c) {
 
 function unschedule() { clearTimeout(openTimer); pending = null; }
 
-// ---- the trailer inside the preview (Settings › Look › Trailer in hover previews)
+// ---- the trailer inside the preview (Settings › Appearance › Trailer in hover previews)
 const TRAILER_DELAY = 0;          // the trailer is indexed on the server: load it straight away
 const trailers = new Map();        // id -> trailer {key, name} or null, so each title is looked up once
 let tr = null;                     // { timer, frame, stopListen, fallback, muted }
@@ -74,7 +75,7 @@ async function lookupTrailer(id) {
 
 function startTrailer(d, thisPop) {
   const mode = state.prefs?.hover_trailer || 'muted';
-  if (mode === 'off' || miniPlaying()) return;
+  if (mode === 'off') return;
   const mine = { muted: true, d, time: 0, timeAt: 0, playing: false };
   tr = mine;
   mine.timer = setTimeout(async () => {
@@ -101,9 +102,9 @@ function startTrailer(d, thisPop) {
       btn.type = 'button';
       const paint = () => { mount(btn, icon(mine.muted ? 'mute' : 'volume')); btn.title = mine.muted ? 'Turn sound on' : 'Mute'; };
       const setMuted = (m) => {
-        mine.muted = m;
-        mine.player.setMuted(m);
-        previewTrailerPlaying(true, { sound: !m });
+        mine.muted = m || dockPlaying();           // the player bar is playing: previews stay muted
+        mine.player.setMuted(mine.muted);
+        previewTrailerPlaying(true, { sound: !mine.muted });
         paint();
       };
       btn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); mine.soundWait?.(); setMuted(!mine.muted); });
@@ -111,7 +112,7 @@ function startTrailer(d, thisPop) {
       art.append(btn);
       previewTrailerPlaying(true, { sound: false });     // this one plays now; the banner waits
       // with sound: on now if the browser allows it, otherwise at your first click or key press
-      if (mode === 'sound') mine.soundWait = whenSoundAllowed(() => { if (tr === mine && mine.muted) setMuted(false); });
+      if (mode === 'sound' && !dockPlaying()) mine.soundWait = whenSoundAllowed(() => { if (tr === mine && mine.muted) setMuted(false); });
     };
     mine.onState = (st) => {
       mine.playing = st === 1;
@@ -220,12 +221,15 @@ async function setWatched(d, watched) {
   } catch (ex) { toast(ex.message, 'error'); }
 }
 
-function render(d, fallbackImg) {
+function render(d, fallbackImg, { resume = false } = {}) {
   const art = d.backdrop || d.thumb || d.show_backdrop;
   const src = art ? img(art, 780) : fallbackImg;
   const href = itemHref(d);
+  // Continue watching: the picture carries on from where you stopped (like the card itself), even while
+  // something else plays in the player bar; elsewhere it opens the title's page
+  const artHref = resume && d.play ? `#/play/${d.play.item_id}` : href;
   mount(pop, html`
-    <a class="hc-art" href="${href}" aria-label="${d.title} — more info">
+    <a class="hc-art" href="${artHref}" aria-label="${resume && d.play ? `${d.title} — continue` : `${d.title} — more info`}">
       ${src ? html`<img src="${src}" alt="">` : html`<div class="hc-noart"></div>`}
       ${d.logo ? html`<img class="hc-logo" src="${img(d.logo, 500)}" alt="">` : html`<div class="hc-title">${d.kind === 'episode' ? d.show_title || d.title : d.title}</div>`}
       ${d.progress && !d.progress.completed && d.progress.duration ? html`<div class="progress"><i style="width:${Math.min(100, d.progress.position / d.progress.duration * 100).toFixed(1)}%"></i></div>` : ''}
@@ -274,14 +278,14 @@ async function open(c) {
   const fallbackImg = c.querySelector('.frame img')?.src;
   let d;
   try { d = await preview(id); } catch { return; }
-  if (my !== token || !c.isConnected || cardUnderPointer() !== c || document.querySelector('.modal-back, .menu, #player-root .player')) return;
+  if (my !== token || !c.isConnected || cardUnderPointer() !== c || document.querySelector('.modal-back, .menu, #player-root .player:not(.mini)')) return;
   pop?.remove();
   pop = document.createElement('div');
   pop.className = 'hovercard';
   pop.addEventListener('pointerenter', () => clearTimeout(closeTimer));
   pop.addEventListener('pointerleave', () => { clearTimeout(closeTimer); closeTimer = setTimeout(hide, CLOSE_DELAY); });
   card = c;
-  render(d, fallbackImg);
+  render(d, fallbackImg, { resume: !!c.querySelector('.play-hint') });
   stopTrailer();
   startTrailer(d, pop);
   document.body.append(pop);
@@ -316,8 +320,8 @@ window.addEventListener('hashchange', () => {
   close();
 });
 let scrollY0 = 0;
-window.addEventListener('scroll', () => { if (pop && Math.abs(window.scrollY - scrollY0) > 60) close(); }, { passive: true });
-document.addEventListener('pointerover', () => { if (!pop) scrollY0 = window.scrollY; }, true);
+onPageScroll(() => { if (pop && Math.abs(pageY() - scrollY0) > 60) close(); });
+document.addEventListener('pointerover', () => { if (!pop) scrollY0 = pageY(); }, true);
 window.addEventListener('blur', close);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pop) close(); });
 window.addEventListener('lenta:playback', close);

@@ -90,7 +90,7 @@ class LibraryBody(BaseModel):
 
 def _validate_library(body: LibraryBody) -> list[str]:
     if body.kind not in LIBRARY_KINDS:
-        raise HTTPException(400, "Library type must be movies, shows, music or photos")
+        raise HTTPException(400, "Library type must be movies, shows, music, audiobooks or photos")
     if not body.name.strip():
         raise HTTPException(400, "Give the library a name")
     paths = []
@@ -118,7 +118,7 @@ def list_libraries():
                             (r["id"], TOP_KIND[r["kind"]])).fetchone()[0]
             files = con.execute("SELECT COUNT(*), COALESCE(SUM(size), 0) FROM files WHERE library_id = ?",
                                 (r["id"],)).fetchone()
-            unmatched = con.execute("SELECT COUNT(*) FROM items WHERE library_id = ? AND kind IN ('movie','show') "
+            unmatched = con.execute("SELECT COUNT(*) FROM items WHERE library_id = ? AND kind IN ('movie','show','book') "
                                     "AND matched = 0", (r["id"],)).fetchone()[0]
             cur = scanner.library_status(r["id"])
             if cur and cur.get("running"):
@@ -167,7 +167,16 @@ def update_library(library_id: int, body: LibraryBody):
         if not row:
             raise HTTPException(404, "Library not found")
         if row["kind"] != body.kind:
-            raise HTTPException(400, "A library's type can't change. Create a new library instead.")
+            # music <-> audiobooks: the same files read another way. Entries are made again from the files
+            # (watch progress and hand edits of this library start over); other changes need a new library.
+            if {row["kind"], body.kind} != {"music", "audiobooks"}:
+                raise HTTPException(400, "A library's type can't change. Create a new library instead.")
+            if scanner.library_status(library_id) and scanner.library_status(library_id).get("running"):
+                raise HTTPException(409, "The library is being scanned. Try again when the scan has finished.")
+            con.execute("DELETE FROM items WHERE library_id = ?", (library_id,))
+            con.execute("UPDATE libraries SET kind = ?, last_scan = NULL, scan_report = NULL WHERE id = ?",
+                        (body.kind, library_id))
+            log.info("Library %s changed from %s to %s; reading its files again", library_id, row["kind"], body.kind)
         con.execute("UPDATE libraries SET name = ?, paths = ? WHERE id = ?",
                     (body.name.strip(), json.dumps(paths), library_id))
     scanner.request_scan(library_id)
@@ -307,7 +316,7 @@ def delete_user(user_id: int, admin: dict = Depends(auth.admin_user)):
 
 # ---- settings -------------------------------------------------------------------
 
-EDITABLE = [k for k in SETTING_DEFAULTS if k != "jwt_secret"]
+EDITABLE = [k for k in SETTING_DEFAULTS if k != "jwt_secret" and not k.startswith("net_")]   # net_*: api_network.py
 
 
 @router.get("/settings")
@@ -474,7 +483,7 @@ def redetect_hardware():
 @router.get("/unmatched")
 def unmatched(library_id: int | None = None):
     with db() as con:
-        sql = "SELECT * FROM items WHERE kind IN ('movie','show') AND matched = 0"
+        sql = "SELECT * FROM items WHERE kind IN ('movie','show','book') AND matched = 0"
         params = []
         if library_id:
             sql += " AND library_id = ?"
@@ -494,9 +503,13 @@ _retry = {"running": False, "done": 0, "total": 0, "matched": 0}
 
 @router.post("/unmatched/retry")
 def retry_unmatched(library_id: int | None = None):
-    """Search again for every title without metadata (not ones fixed by hand), in the background."""
+    """Search again for every title without metadata (not ones fixed by hand), in the background.
+    Audiobooks need no key (Google Books / Open Library); films and shows need TMDB's."""
     tmdb = metadata.TMDB()
-    if not tmdb.enabled:
+    with db() as con:
+        books = con.execute("SELECT COUNT(*) FROM items WHERE kind = 'book' AND matched = 0 AND match_locked = 0 "
+                            "AND (? IS NULL OR library_id = ?)", (library_id, library_id)).fetchone()[0]
+    if not tmdb.enabled and not books:
         raise HTTPException(400, "Add a TMDB API key in Settings first")
     if _retry["running"]:
         return _retry
@@ -522,13 +535,15 @@ def retry_unmatched(library_id: int | None = None):
         with db() as con:
             for lib in libs:
                 scanner._cleanup(con, lib["id"])
-            ids = [r["id"] for r in con.execute(
-                "SELECT id FROM items WHERE kind IN ('movie','show') AND matched = 0 AND match_locked = 0 "
-                "AND (? IS NULL OR library_id = ?)", (library_id, library_id))]
+            ids = [(r["id"], r["kind"]) for r in con.execute(
+                "SELECT id, kind FROM items WHERE kind IN ('movie','show','book') AND matched = 0 AND match_locked = 0 "
+                "AND (? IS NULL OR library_id = ?)", (library_id, library_id))
+                if r["kind"] == "book" or tmdb.enabled]
         _retry["total"] = len(ids)
-        for n, item_id in enumerate(ids, 1):
+        from . import audiobooks
+        for n, (item_id, kind) in enumerate(ids, 1):
             try:
-                if metadata.match_item(item_id, tmdb):
+                if (audiobooks.match_book(item_id) if kind == "book" else metadata.match_item(item_id, tmdb)):
                     _retry["matched"] += 1
             except Exception as exc:
                 log.warning("Retry for item %s failed: %s", item_id, exc)
@@ -549,8 +564,20 @@ def retry_status():
 def match_search(item_id: int, query: str, year: int | None = None):
     with db() as con:
         item = con.execute("SELECT kind FROM items WHERE id = ?", (item_id,)).fetchone()
-    if not item or item["kind"] not in ("movie", "show"):
-        raise HTTPException(400, "Only movies and shows can be matched")
+    if not item or item["kind"] not in ("movie", "show", "book"):
+        raise HTTPException(400, "Only movies, shows and audiobooks can be matched")
+    if item["kind"] == "book":                 # Google Books / Open Library: "title" or "title by author"
+        from . import audiobooks
+        title, _, author = query.partition(" by ")
+        try:
+            found = audiobooks.search(title.strip(), author.strip() or None)
+        except audiobooks.SourceError as exc:
+            raise HTTPException(502, f"Google Books and Open Library didn't answer ({exc}). Check the server's internet connection.")
+        if year:
+            found.sort(key=lambda c: c.get("year") != year)
+        return [{"book_id": c["id"], "source": c["source"], "title": c["title"], "year": c.get("year"),
+                 "overview": c.get("description"), "authors": c.get("authors"),
+                 "poster": c.get("cover")} for c in found[:12]]
     tmdb = metadata.TMDB()
     if not tmdb.enabled:
         raise HTTPException(400, "Add a TMDB API key in Settings first")
@@ -563,11 +590,23 @@ def match_search(item_id: int, query: str, year: int | None = None):
 
 
 class MatchBody(BaseModel):
-    tmdb_id: int
+    tmdb_id: int | None = None
+    book_id: str | None = None
+    source: str = "google"
+    query: str | None = None
 
 
 @router.post("/items/{item_id}/match")
 def apply_match(item_id: int, body: MatchBody):
+    if body.book_id:
+        from . import audiobooks
+        if not audiobooks.match_book(item_id, body.book_id, body.source, body.query):
+            raise HTTPException(400, "Could not apply that match. See the server log for details.")
+        with db() as con:
+            con.execute("UPDATE items SET match_locked = 1 WHERE id = ?", (item_id,))
+        return {"ok": True}
+    if not body.tmdb_id:
+        raise HTTPException(400, "Choose a title")
     if not metadata.match_item(item_id, tmdb_id=body.tmdb_id):
         raise HTTPException(400, "Could not apply that match. See the server log for details.")
     with db() as con:

@@ -191,7 +191,16 @@ SETTING_DEFAULTS = {
     "fanart_api_key": "",                # Fanart.tv project API key (needed for Fanart.tv artwork)
     "fanart_client_key": "",             # Fanart.tv personal API key (optional: newer pictures sooner)
     "artwork_sources_movie": "",         # JSON order of artwork sources; empty = the defaults (artwork.py)
-    "artwork_sources_show": "",          # show the Wikipedia summary in the About panel
+    "artwork_sources_show": "",
+    # HTTP and HTTPS (Server admin › Settings › HTTP and HTTPS; listeners.py, certs.py)
+    "net_http_enabled": "1",
+    "net_http_port": "",                 # empty = LENTA_PORT from /etc/lenta/lenta.env (8484)
+    "net_https_enabled": "1",
+    "net_https_port": "8443",
+    "net_cert_mode": "auto",             # auto (LENTA's own) | upload | path (files on the server)
+    "net_cert_names": "",                # extra names/addresses for the automatic certificate
+    "net_cert_path_crt": "",
+    "net_cert_path_key": "",
 }
 
 _local = threading.local()

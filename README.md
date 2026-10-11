@@ -4,14 +4,14 @@
 
 <p align="center">
   <b>Your own streaming service at home.</b><br>
-  A free, self-hosted media server and web player for your movies, TV shows, music and photos.
+  A free, self-hosted media server and web player for your movies, TV shows, music, audiobooks and photos.
   Created with the idea to give us more power and flexibility than Plex and Jellyfin.
 </p>
 
 https://github.com/user-attachments/assets/fd15839a-c3be-4ab5-9f9b-38d438728136
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.1.0-8a5cf6">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.2.0-8a5cf6">
   <img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-24.04%20%7C%2026.04-E95420?logo=ubuntu&logoColor=white">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="Android" src="https://img.shields.io/badge/Android-8%2B-3DDC84?logo=android&logoColor=white">
@@ -36,7 +36,7 @@ can't play a file as it is, LENTA converts it on the fly, on your graphics card 
 
 No accounts, no subscriptions, no cloud, no tracking. Your media stays on your disks.
 
-Currently it supports only HTTP but HTTPs layer is being developed and will soon be released. 
+HTTP and HTTPS run side by side out of the box, with LENTA's own certificate or yours ([HTTPS guide](docs/INSTALL.md#https)).
 
 <p align="center">
   <img src="docs/images/home-banner.jpg" alt="LENTA home screen with the featured trailer banner" width="100%">
@@ -69,12 +69,20 @@ Currently it supports only HTTP but HTTPs layer is being developed and will soon
   </tr>
   <tr>
     <td width="50%" valign="top"><img src="docs/images/admin-settings.jpg" alt="Admin settings"><br><b>Server settings.</b> Scanning, hardware conversion, metadata, artwork, trailers and subtitles.</td>
-    <td width="50%"></td>
+    <td width="50%" valign="top"><img src="docs/images/settings-https.jpg" alt="HTTP and HTTPS settings"><br><b>HTTP and HTTPS.</b> Both run side by side on ports you choose. Use LENTA's own certificate, upload yours (PEM or PFX), or point at Let's Encrypt files. All from <i>Settings › Network</i>.</td>
   </tr>
 </table>
 
 <sub>Film posters, artwork and stills in these screenshots belong to their respective owners and are shown only
 to illustrate how LENTA displays your own library. They are not part of LENTA and not covered by its license.</sub>
+
+## 🆕 What's new in 1.2
+
+- **Audiobooks library type**, with book pages, chapters, series, narrators, online covers and descriptions. A Music library can be switched to Audiobooks.
+- **One Plex-style player bar** for everything: minimised videos, music and audiobooks, and the full-screen player's controls. It includes Playback settings, a Play queue for TV episodes and an upright volume bar.
+- **HTTPS** next to HTTP, set up entirely from *Settings › Network* (screenshot above).
+- **One Settings page** with a sidebar, for your own settings and the server's. Each page can be rearranged.
+- Plus many smaller fixes and improvements; see the [changelog](CHANGELOG.md).
 
 ## ✨ Features
 
@@ -83,9 +91,14 @@ to illustrate how LENTA displays your own library. They are not part of LENTA an
 - 🎞️ Banner trailers for the titles **you** pick: tick *Show the trailer in the Home banner* in a title's Edit dialog
   ([how](docs/USER-GUIDE.md#trailers-in-the-home-banner-tick-them-per-title); none are ticked at first)
 - ▶️ Hover previews that play the trailer and carry on to the exact frame on the title page
-- 🖥️ A full player: seek anywhere, audio and subtitle tracks, quality, next-episode autoplay, keyboard shortcuts
-- 🎵 Music with a player bar that keeps going while you browse; photo albums with a swipeable viewer
+- 🖥️ A Plex-style player: one player bar for films, episodes, music and audiobooks, with a preview picture on the time bar,
+  *Playback settings* (quality, speed, audio, subtitles and their colour, size, position and timing, auto play) and a *Play queue*
+- 🔽 Minimise any video into the player bar and keep browsing; the page's trailers play muted meanwhile
+- 🎵 Music with repeat, shuffle and a play queue; photo albums with a swipeable viewer
+- 🎧 Audiobooks: books found in any folder layout, chapters, speed, ±15/30 s, your place kept across devices,
+  covers and descriptions from Google Books and Open Library (no key needed)
 - 🎨 Six dark themes (one with a streaming-style menu bar on top), poster or landscape artwork, grid, detail and table views
+- ⚙️ One Settings page with a sidebar (yours and the server's), every page rearrangeable
 
 **Your library, done for you**
 - 🔍 Understands real-world file names, release names, collection folders and the Plex/Jellyfin layout
@@ -100,6 +113,8 @@ to illustrate how LENTA displays your own library. They are not part of LENTA an
 - ⚡ Direct play when the device can, light repackaging when it nearly can, full conversion when it must
 - 🚀 Hardware conversion on NVIDIA (NVENC), Intel Quick Sync and AMD/Intel VA-API, with HDR tone mapping
 - 📱 Phone and tablet layouts, an installable web app, a small **Android app (APK)** and a **Samsung TV app** with remote-control navigation
+- 🔐 HTTP and HTTPS side by side, switched and set up from the web page: LENTA's own certificate (renewed by itself)
+  or yours (upload PEM/PFX, or point at Let's Encrypt files on the server)
 - 👨‍👩‍👧 Several users, each with their own watch history, *My list* and library access
 
 **Easy to run**
@@ -122,8 +137,8 @@ Then:
 
 1. Let LENTA read your media: `sudo setfacl -R -m u:lenta:rX -m d:u:lenta:rX /path/to/media`
 2. Open `http://<server-address>:8484` and create the administrator account.
-3. Paste a free [TMDB API key](https://www.themoviedb.org/settings/api) in **Server admin › Settings**.
-4. Add your libraries in **Server admin › Libraries**.
+3. Paste a free [TMDB API key](https://www.themoviedb.org/settings/api) in **Settings › Metadata › TMDB and language**.
+4. Add your libraries in **Settings › Libraries › Manage libraries**.
 
 **👉 New to this? Follow the [step-by-step install guide](docs/INSTALL.md).** It covers requirements,
 permissions, NAS shares, graphics cards, phones, remote access, updates, backups and troubleshooting.
@@ -176,6 +191,6 @@ Bundled and downloaded third-party components keep their own licenses, listed in
 
 This product uses the TMDB API but is not endorsed or certified by TMDB. IMDb ratings come from the
 [IMDb Non-Commercial Datasets](https://developer.imdb.com/non-commercial-datasets/), which IMDb allows for
-personal, non-commercial use only: anyone using LENTA otherwise should switch IMDb ratings off (Server admin ›
-Settings › About panel extras). The same goes for each online service: its data stays under its own terms. LENTA is not affiliated with Netflix, Plex, Jellyfin, IMDb, TMDB, Apple or any of
+personal, non-commercial use only: anyone using LENTA otherwise should switch IMDb ratings off (Settings ›
+Metadata › About panel extras). The same goes for each online service: its data stays under its own terms. LENTA is not affiliated with Netflix, Plex, Jellyfin, IMDb, TMDB, Apple or any of
 the services it can connect to. You are responsible for the media you add to it.

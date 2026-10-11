@@ -3,34 +3,46 @@ import { api } from './api.js';
 import { openEditor, refreshMetadata } from './editor.js';
 import { state, loadLibraries, refreshView, renderRail, THEMES } from './app.js';
 import {
-  $, confirmDialog, fmtAgo, fmtBytes, fmtTime, html, icon, img, KIND_ICON, modal, mount, popMenu, raw, toast,
+  $, confirmDialog, esc, fmtAgo, fmtBytes, fmtTime, html, icon, img, KIND_ICON, modal, mount, popMenu, raw, toast,
 } from './ui.js';
-import { blockLayout, layoutBar, layoutButtons } from './layout.js';
+import { blockLayout, layoutBar, layoutButtons, pageLayout } from './layout.js';
 
 // The Dashboard and Settings tabs: blocks you can fold, move and resize (layout.js), a layout per page and user
-const layoutPref = (key) => ({
-  value: state.prefs?.[key] || '',
-  save: async (value) => { await api.put('/api/me/prefs', { [key]: value }); state.prefs[key] = value; },
-});
+const layoutPref = (key, page = null) => {
+  if (!page) return {
+    value: state.prefs?.[key] || '',
+    save: async (value) => { await api.put('/api/me/prefs', { [key]: value }); state.prefs[key] = value; },
+  };
+  const pl = pageLayout(state.prefs?.[key], page);          // one saved arrangement per Settings page
+  return {
+    value: pl.value,
+    save: async (value) => { const all = pageLayout(state.prefs?.[key], page).merge(value); await api.put('/api/me/prefs', { [key]: all }); state.prefs[key] = all; },
+  };
+};
 
-const TABS = [['dashboard', 'Dashboard'], ['libraries', 'Libraries'], ['users', 'Users'], ['metadata', 'Metadata'], ['settings', 'Settings'], ['logs', 'Logs']];
-const KIND_NAMES = { movies: 'Movies', shows: 'TV shows', music: 'Music', photos: 'Photos' };
+const KIND_NAMES = { movies: 'Movies', shows: 'TV shows', music: 'Music', audiobooks: 'Audiobooks', photos: 'Photos' };
 let pollTimer = null;
 
-export async function renderAdmin(tab, q = new URLSearchParams()) {
+// Settings pages made of the server settings blocks (one form; Save settings saves them all)
+const SETTINGS_PAGES = {
+  general: ['general'], network: ['http-and-https'], scanning: ['scanning'], 'metadata-sources': ['metadata'],
+  artwork: ['artwork-sources'], 'about-panel': ['about-panel-extras'], transcoding: ['transcoding'],
+  trailers: ['trailers', 'theme-music'], subtitles: ['online-subtitles'], previews: ['seek-bar-previews', 'intro-detection'],
+};
+
+/** An administrator's page inside Settings (settings-shell.js). */
+export async function renderAdminPage(page, body, q = new URLSearchParams()) {
   clearInterval(pollTimer);
-  const view = $('#view');
-  if (!state.user?.is_admin) { location.hash = '#/'; return; }
-  if (!TABS.some(([t]) => t === tab)) tab = 'dashboard';
-  mount(view, html`<div class="page">
-    <div class="page-head"><div><h1 class="page-title">Server admin</h1><div class="page-sub">${state.user.server_name}</div></div></div>
-    <nav class="tabs">${TABS.map(([t, l]) => html`<a href="#/admin/${t}" class="${t === tab ? 'active' : ''}">${l}</a>`)}</nav>
-    <div id="admin-body"></div></div>`);
-  const body = $('#admin-body');
-  await { dashboard, libraries, users, metadata, settings, logs }[tab](body, q);
-  // stop polling once the user leaves the page
-  const stop = () => { if (!location.hash.startsWith(`#/admin/${tab}`) && !(tab === 'dashboard' && location.hash === '#/admin')) { clearInterval(pollTimer); window.removeEventListener('hashchange', stop); } };
+  if (!state.user?.is_admin) { location.hash = '#/settings'; return; }
+  const here = location.hash.split('?')[0];
+  const stop = () => { if (location.hash.split('?')[0] !== here) { clearInterval(pollTimer); window.removeEventListener('hashchange', stop); } };
   window.addEventListener('hashchange', stop);
+  if (page === 'dashboard') return dashboard(body);
+  if (page === 'libraries') return libraries(body);
+  if (page === 'users') return users(body);
+  if (page === 'fix-matches') return metadata(body, q);
+  if (page === 'logs') return logs(body);
+  return settings(body, SETTINGS_PAGES[page] ? page : 'general');
 }
 
 // ---------------------------------------------------------------- dashboard
@@ -109,7 +121,7 @@ async function dashboard(body) {
     const live = body.querySelector('#dash-panels');
     if (!live) {
       mount(body, html`<div class="lay-head">${layoutButtons()}</div>${layoutBar()}${markup}`);
-      lay = blockLayout({ root: $('#view'), canvas: body.querySelector('#dash-panels'), ...layoutPref('admin_dashboard_layout') });
+      lay = blockLayout({ root: body, canvas: body.querySelector('#dash-panels'), ...layoutPref('admin_dashboard_layout') });
     } else {
       // every few seconds: new contents into the same blocks, so their place, size and folding stay
       const fresh = document.createElement('div');
@@ -140,16 +152,16 @@ async function libraries(body) {
         ${libs.map(l => html`<tr>
           <td><div style="display:flex;gap:10px;align-items:center;font-weight:600"><span style="width:20px;color:var(--accent)">${icon(KIND_ICON[l.kind])}</span>${l.name}</div><div class="sub">${KIND_NAMES[l.kind]}</div></td>
           <td>${l.paths.map(p => html`<div class="mono" style="word-break:break-all">${p}</div>`)}</td>
-          <td>${l.count} ${{ movies: 'movies', shows: 'shows', music: 'albums', photos: 'albums' }[l.kind]}<div class="sub">${l.files} files · ${fmtBytes(l.size)}</div>
-            ${l.unmatched ? html`<a class="pill accent" href="#/admin/metadata?library=${l.id}">${l.unmatched} without metadata</a>` : ''}</td>
+          <td>${l.count} ${{ movies: 'movies', shows: 'shows', music: 'albums', audiobooks: 'books', photos: 'albums' }[l.kind]}<div class="sub">${l.files} files · ${fmtBytes(l.size)}</div>
+            ${l.unmatched ? html`<a class="pill accent" href="#/settings/fix-matches?library=${l.id}">${l.unmatched} without metadata</a>` : ''}</td>
           <td>${l.status.state === 'scanning' ? html`<b style="color:var(--accent)">Scanning</b><div class="sub">${l.status.phase}${l.status.total ? ` · ${l.status.done} of ${l.status.total}` : ''}</div>`
             : l.status.state === 'queued' ? html`<b>Waiting</b><div class="sub">after this library's current scan</div>` : fmtAgo(l.last_scan)}
             ${l.report && l.report.ok === false ? html`<div class="scan-problem">Scan failed: ${l.report.error}</div>` : ''}
-            ${l.report && l.status.state === 'idle' && l.report.ok && !l.report.found ? html`<div class="scan-problem">No video files found in these folders</div>` : ''}
+            ${l.report && l.status.state === 'idle' && l.report.ok && !l.report.found ? html`<div class="scan-problem">No ${{ music: 'audio', audiobooks: 'audio', photos: 'photo' }[l.kind] || 'video'} files found in these folders</div>` : ''}
             ${(l.report?.problems || []).slice(0, 3).map(p => html`<div class="scan-problem">${p}</div>`)}</td>
           <td class="right"><button class="btn small" data-scan="${l.id}">Scan</button>
-            ${['movies', 'shows'].includes(l.kind) ? html`<button class="btn small" data-refresh="${l.id}" title="Fetch metadata again for every title">Refresh metadata</button>` : ''}
-            <button class="btn small icon" data-edit="${l.id}" aria-label="Edit">${icon('edit')}</button>
+            ${['movies', 'shows', 'audiobooks'].includes(l.kind) ? html`<button class="btn small" data-refresh="${l.id}" title="Fetch metadata again for every title">Refresh metadata</button>` : ''}
+            <button class="btn small icon" data-edit="${l.id}" aria-label="Edit" title="Edit: name, folders, type">${icon('edit')}</button>
             <button class="btn small icon danger" data-del="${l.id}" aria-label="Remove">${icon('trash')}</button></td></tr>`)}</tbody></table></div>`
       : html`<div class="empty"><h3>No libraries yet</h3><p>A library is a folder of one kind of media. Make one for movies, one for TV shows, and so on.
           LENTA scans it, matches titles online and keeps it up to date.</p></div>`}`);
@@ -172,12 +184,17 @@ async function libraries(body) {
   await draw();
 }
 
+// a music library can become an audiobook library and back (the same files, read another way)
+const AUDIO_KINDS = ['music', 'audiobooks'];
+const switchable = (from, to) => from === to || (AUDIO_KINDS.includes(from) && AUDIO_KINDS.includes(to));
+
 function libraryDialog(lib, done) {
   let paths = lib ? [...lib.paths] : [];
   const m = modal(html`<h2>${lib ? `Edit ${lib.name}` : 'Add library'}</h2>
     <form id="libform">
       <div class="field"><span class="label">Type</span><div class="kinds">${Object.entries(KIND_NAMES).map(([k, n]) => html`
-        <label>${icon(KIND_ICON[k])}<input type="radio" name="kind" value="${k}" ${(lib ? lib.kind === k : k === 'movies') ? raw('checked') : ''} ${lib ? raw('disabled') : ''}>${n}</label>`)}</div></div>
+        <label>${icon(KIND_ICON[k])}<input type="radio" name="kind" value="${k}" ${(lib ? lib.kind === k : k === 'movies') ? raw('checked') : ''} ${lib && !switchable(lib.kind, k) ? raw('disabled') : ''}>${n}</label>`)}</div>
+        ${lib && AUDIO_KINDS.includes(lib.kind) ? html`<span class="hint">Music and Audiobooks can be swapped: the files are read again the other way.</span>` : ''}</div>
       <div class="field"><label for="lname">Name</label><input class="input" id="lname" value="${lib?.name || ''}" placeholder="Movies" required></div>
       <div class="field"><span class="label">Folders</span><div class="chips" id="chips"></div>
         <div style="display:flex;gap:8px"><input class="input mono" id="lpath" placeholder="/mnt/media/movies"><button type="button" class="btn" id="browse">${icon('folder')}Browse</button></div>
@@ -202,6 +219,9 @@ function libraryDialog(lib, done) {
     e.preventDefault();
     addTyped();
     const kind = box.querySelector('input[name=kind]:checked').value;
+    if (lib && kind !== lib.kind && !(await confirmDialog(`Change ${lib.name} to ${KIND_NAMES[kind]}?`,
+      `Its files are read again as ${kind === 'audiobooks' ? 'audiobooks (books, authors, chapters)' : 'music (albums, artists, songs)'}. `
+      + 'Listening progress and changes made by hand in this library start over.', 'Change and scan'))) return;
     try {
       const payload = { name: box.querySelector('#lname').value, kind, paths };
       if (lib) await api.put(`/api/admin/libraries/${lib.id}`, payload);
@@ -303,20 +323,20 @@ async function metadata(body, q = new URLSearchParams()) {
   mount(body, html`
     ${settings.tmdb_api_key_set ? '' : html`<div class="panel" style="margin-bottom:22px;border-color:var(--accent)"><h3>Online metadata is off</h3>
       <p style="margin:0 0 14px;color:var(--muted)">Posters, descriptions and cast come from The Movie Database. Add a free TMDB API key in Settings to turn it on.</p>
-      <a class="btn small primary" href="#/admin/settings">Open settings</a></div>`}
+      <a class="btn small primary" href="#/settings/metadata-sources">Open settings</a></div>`}
     <h2 class="section-title" style="margin:0 0 6px">Titles without metadata${lib ? ` in ${lib.name}` : ''}</h2>
-    ${lib ? html`<p style="margin:0 0 10px"><a href="#/admin/metadata" style="color:var(--accent)">Show every library</a></p>` : ''}
+    ${lib ? html`<p style="margin:0 0 10px"><a href="#/settings/fix-matches" style="color:var(--accent)">Show every library</a></p>` : ''}
     <p style="color:var(--muted);margin:0 0 14px">LENTA tried every reading of these names it could think of — the file name, its folders,
       with and without the year, numbers written both ways, subtitles and editions dropped — and found no confident match.
-      Search for the right title to fix them.</p>
-    ${items.length && settings.tmdb_api_key_set ? html`<div class="actions" style="margin-bottom:18px">
+      Search for the right title to fix them. Audiobooks are looked up on Google Books and Open Library (no key needed).</p>
+    ${items.length && (settings.tmdb_api_key_set || items.some(i => i.kind === 'book')) ? html`<div class="actions" style="margin-bottom:18px">
       <button class="btn small" id="retry-all">${icon('refresh')}Search again for all</button><span id="retry-state" class="sub" style="color:var(--muted)"></span></div>` : ''}
     ${items.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>Title as read from the file</th><th>File</th><th></th></tr></thead><tbody>
-      ${items.map(i => html`<tr><td><b>${i.title}</b>${i.year ? ` (${i.year})` : ''}<div class="sub">${i.kind === 'show' ? 'TV show' : 'Movie'}</div>
+      ${items.map(i => html`<tr><td><b>${i.title}</b>${i.year ? ` (${i.year})` : ''}<div class="sub">${{ show: 'TV show', book: 'Audiobook' }[i.kind] || 'Movie'}</div>
         ${i.attempts?.length ? html`<details class="attempts"><summary>Tried ${i.attempts.length} searches</summary><ul>${i.attempts.map(a => html`<li>${a}</li>`)}</ul></details>` : ''}</td>
         <td class="mono" style="word-break:break-all;max-width:420px">${i.path || ''}</td>
         <td class="right"><button class="btn small" data-fix="${i.id}">Fix match</button><button class="btn small icon" data-edit="${i.id}" aria-label="Edit">${icon('edit')}</button></td></tr>`)}
-      </tbody></table></div>` : html`<div class="empty" style="padding-top:10px"><h3>Everything is matched</h3><p>Every movie and show has metadata.</p></div>`}`);
+      </tbody></table></div>` : html`<div class="empty" style="padding-top:10px"><h3>Everything is matched</h3><p>Every movie, show and audiobook has metadata.</p></div>`}`);
   $('#retry-all')?.addEventListener('click', async (e) => {
     e.target.disabled = true;
     try {
@@ -345,7 +365,7 @@ export async function libraryMenu(anchor, lib, { move }) {
   let full;
   try { full = (await api.get('/api/admin/libraries')).find(l => l.id === lib.id); } catch (ex) { toast(ex.message, 'error'); return; }
   if (!full) return;
-  const video = ['movies', 'shows'].includes(full.kind);
+  const video = ['movies', 'shows', 'audiobooks'].includes(full.kind);
   const idx = state.libraries.findIndex(l => l.id === lib.id);
   const busy = full.status.state !== 'idle';
   const items = [{ heading: full.name },
@@ -358,7 +378,7 @@ export async function libraryMenu(anchor, lib, { move }) {
       toast(`Refreshing metadata for ${full.name}. Fields you locked stay as they are.`);
     } });
     items.push({ label: 'Fix missing metadata…', hint: full.unmatched ? `${full.unmatched} missing` : 'none missing',
-      action: () => { location.hash = `#/admin/metadata?library=${lib.id}`; } });
+      action: () => { location.hash = `#/settings/fix-matches?library=${lib.id}`; } });
   }
   items.push({ label: 'Edit library…', action: () => libraryDialog(full, () => { refreshView(); }) });
   items.push({ sep: true },
@@ -376,49 +396,214 @@ export function adminItemMenu(d) {
 }
 
 function matchDialog(item, done) {
+  const book = item.kind === 'book';
+  const series = item.series || item.extra?.series;
+  const q0 = book ? [series && !item.title.toLowerCase().includes(series.toLowerCase()) ? `${series}: ${item.title}` : item.title,
+    item.artist].filter(Boolean).join(' by ') : item.title;
   const m = modal(html`<h2>Fix match</h2>
     <form id="mform" style="display:flex;gap:8px;margin-bottom:16px">
-      <input class="input" id="mq" value="${item.title}" aria-label="Title" style="flex:1">
+      <input class="input" id="mq" value="${q0}" aria-label="Title" style="flex:1">
       <input class="input" id="my" value="${item.year || ''}" aria-label="Year" placeholder="Year" style="width:90px">
       <button class="btn primary">${icon('search')}Search</button></form>
-    <div class="match-results" id="mres"><p style="color:var(--muted)">Search TMDB for the right ${item.kind === 'show' ? 'show' : 'movie'}.</p></div>
+    <div class="match-results" id="mres"><p style="color:var(--muted)">${book ? 'Search Google Books and Open Library for the right book. Write "title by author" to narrow it down.'
+      : `Search TMDB for the right ${item.kind === 'show' ? 'show' : 'movie'}.`}</p></div>
     <div class="foot"><button class="btn" data-close>Cancel</button></div>`, { wide: true });
   const box = m.box;
+  let query = '';
   const run = async () => {
     const res = box.querySelector('#mres');
     mount(res, html`<p style="color:var(--muted)">Searching…</p>`);
     try {
       const yr = box.querySelector('#my').value.trim();
-      const results = await api.get(`/api/admin/match?item_id=${item.id}&query=${encodeURIComponent(box.querySelector('#mq').value)}${yr ? `&year=${yr}` : ''}`);
-      mount(res, results.length ? results.map(r => html`<button class="match-result" data-tmdb="${r.tmdb_id}">
+      query = box.querySelector('#mq').value;
+      const results = await api.get(`/api/admin/match?item_id=${item.id}&query=${encodeURIComponent(query)}${yr ? `&year=${yr}` : ''}`);
+      mount(res, results.length ? results.map(r => html`<button class="match-result${book ? ' book' : ''}" ${book ? raw(`data-book="${esc(r.book_id)}" data-source="${esc(r.source)}"`) : raw(`data-tmdb="${r.tmdb_id}"`)}>
         ${r.poster ? html`<img src="${img(r.poster, 92)}" alt="">` : html`<span class="ph"></span>`}
-        <span><b>${r.title}</b>${r.year ? ` (${r.year})` : ''}<p class="clamp-3">${r.overview || ''}</p></span></button>`)
-        : html`<p style="color:var(--muted)">No results. Try the original title or remove the year.</p>`);
+        <span><b>${r.title}</b>${r.year ? ` (${r.year})` : ''}${r.authors?.length ? html`<div class="sub">${r.authors.join(', ')}${r.source === 'openlibrary' ? ' · Open Library' : ''}</div>` : ''}<p class="clamp-3">${r.overview || ''}</p></span></button>`)
+        : html`<p style="color:var(--muted)">No results. ${book ? 'Try the title alone, or the title in the book\'s language.' : 'Try the original title or remove the year.'}</p>`);
     } catch (ex) { mount(res, html`<p class="error-text">${ex.message}</p>`); }
   };
   box.querySelector('#mform').addEventListener('submit', (e) => { e.preventDefault(); run(); });
   box.querySelector('#mres').addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-tmdb]');
+    const b = e.target.closest('[data-tmdb], [data-book]');
     if (!b) return;
     b.disabled = true;
     try {
-      await api.post(`/api/admin/items/${item.id}/match`, { tmdb_id: Number(b.dataset.tmdb) });
+      await api.post(`/api/admin/items/${item.id}/match`, b.dataset.book
+        ? { book_id: b.dataset.book, source: b.dataset.source, query } : { tmdb_id: Number(b.dataset.tmdb) });
       m.close(); toast('Match applied'); done();
     } catch (ex) { toast(ex.message, 'error'); b.disabled = false; }
   });
   run();
 }
 
+// ---------------------------------------------------------------- HTTP and HTTPS
+const CERT_ACCEPT = '.pem,.crt,.cer,.der,.key,.pfx,.p12';
+
+function netDot(st) {
+  if (!st) return '';
+  const cls = st.state === 'running' ? 'ok' : st.state === 'error' ? 'bad' : 'off';
+  const txt = st.state === 'running' ? `on port ${st.port}` : st.state === 'error' ? (st.error || 'not working') : 'off';
+  return html`<span class="net-dot ${cls}"></span><span>${txt}</span>`;
+}
+
+function certSummary(c) {
+  if (!c) return '';
+  if (!c.ok && c.error) return html`<div class="net-cert bad">${c.error}</div>`;
+  return html`<div class="net-cert${c.expired ? ' bad' : c.days_left < 21 ? ' warn' : ''}">
+    <b>${c.subject}</b>${c.self_made ? '' : html` · issued by ${c.issuer}`} · valid until ${c.valid_until}${c.expired ? ' (expired)' : ` (${c.days_left} days)`}
+    <div class="sub">For: ${c.names.join(', ')}</div></div>`;
+}
+
+function netPanel(n) {
+  const st = n.status || {};
+  const cert = n.certificate || {};
+  const host = location.hostname;
+  const links = [];
+  if (st.http?.state === 'running') links.push(`http://${host}:${st.http.port}`);
+  if (st.https?.state === 'running') links.push(`https://${host}:${st.https.port}`);
+  const radio = (v, label, extra = '') => html`<label class="check net-mode"><input type="radio" name="net-mode" value="${v}" ${n.cert_mode === v ? raw('checked') : ''}><span>${label}${extra}</span></label>`;
+  return html`<div data-panel="http-and-https" class="panel"><h3>HTTP and HTTPS</h3>
+    ${n.managed ? '' : html`<p class="net-warn">This server was started without LENTA's listener manager, so changes here take effect after a restart.</p>`}
+    ${st.fallback ? html`<p class="net-warn">LENTA couldn't listen as set below, so it started plain HTTP on port ${st.http?.port} to let you fix it.</p>` : ''}
+    <div class="net-row">
+      <label class="check"><input type="checkbox" id="n-http" ${n.http_enabled ? raw('checked') : ''}><b>HTTP</b></label>
+      <input class="input net-port" id="n-http-port" type="number" min="1024" max="65535" value="${n.http_port}" aria-label="HTTP port">
+      <span class="net-state">${netDot(st.http)}</span></div>
+    <div class="net-row">
+      <label class="check"><input type="checkbox" id="n-https" ${n.https_enabled ? raw('checked') : ''}><b>HTTPS</b></label>
+      <input class="input net-port" id="n-https-port" type="number" min="1024" max="65535" value="${n.https_port}" aria-label="HTTPS port">
+      <span class="net-state">${netDot(st.https)}</span></div>
+    <span class="hint">Both can run at the same time on different ports. Keep at least one on. Ports 1024–65535.</span>
+    ${links.length ? html`<div class="net-links">Open LENTA at ${links.map((u, i) => html`${i ? ' · ' : ''}<a href="${u}">${u}</a>`)}</div>` : ''}
+
+    <div class="net-certs" id="n-cert-box">
+      <div class="art-col-head" style="margin:16px 0 6px">HTTPS certificate</div>
+      ${radio('auto', html`<b>Made by LENTA</b><small>Works at once. Browsers warn about it until you install LENTA's certificate on the device (once).</small>`)}
+      <div class="net-sub" data-for="auto">
+        ${cert.mode === 'auto' ? certSummary(cert) : ''}
+        <div class="field" style="margin:10px 0"><label for="n-names">Other names or addresses <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <input class="input" id="n-names" value="${n.cert_names}" placeholder="e.g. lenta.home, 203.0.113.7">
+          <span class="hint">This server's names and IP addresses (${n.addresses.join(', ') || 'local'}) are included by themselves.</span></div>
+        <div class="actions"><a class="btn small" href="/api/https/lenta-ca.crt" download="lenta-ca.crt">${icon('download')}Download LENTA's certificate</a>
+          <button type="button" class="btn small" id="n-regen">${icon('refresh')}Make a new one</button></div>
+        <span class="hint">Open the downloaded file on each phone, tablet or computer and install it as a trusted certificate (see the guide), and the browser warning is gone for good.</span>
+      </div>
+      ${radio('upload', html`<b>My own certificate — upload it</b><small>From Let's Encrypt, your company or a certificate seller: PEM, CRT + KEY, or a PFX/P12 file.</small>`)}
+      <div class="net-sub" data-for="upload">
+        ${cert.own ? html`<div class="sub" style="margin-bottom:6px">Uploaded:</div>${certSummary({ ...cert.own, ok: true })}` : ''}
+        <div class="net-upload">
+          <input type="file" id="n-files" accept="${CERT_ACCEPT}" multiple>
+          <input class="input" id="n-pass" type="password" autocomplete="new-password" placeholder="Password (only if the file has one)">
+          <button type="button" class="btn small" id="n-upload">Upload</button></div>
+        <span class="hint">Choose the certificate and its private key together (or one .pfx/.p12). Include the chain (fullchain) if you have it.</span>
+        <div class="sub" id="n-upload-result"></div>
+      </div>
+      ${radio('path', html`<b>My own certificate — files on this server</b><small>For certificates renewed on the server, e.g. by certbot. LENTA notices renewals by itself.</small>`)}
+      <div class="net-sub" data-for="path">
+        ${cert.mode === 'path' ? certSummary(cert) : ''}
+        <div class="field" style="margin:10px 0 6px"><label for="n-crt">Certificate file</label>
+          <input class="input mono" id="n-crt" value="${n.cert_path_crt}" placeholder="/etc/letsencrypt/live/example.com/fullchain.pem"></div>
+        <div class="field" style="margin:0 0 6px"><label for="n-key">Private key file</label>
+          <input class="input mono" id="n-key" value="${n.cert_path_key}" placeholder="/etc/letsencrypt/live/example.com/privkey.pem"></div>
+        <span class="hint">LENTA's service account must be able to read both files (see the guide).</span>
+      </div>
+      ${cert.mode !== 'auto' && !cert.ok && cert.error ? html`<p class="net-warn">${cert.error}</p>` : ''}
+    </div>
+    <span class="hint" style="display:block;margin-top:12px">Changes take effect a moment after <b>Save settings</b>, without restarting LENTA.
+      If this server has a firewall, open a new port there too (e.g. <code>sudo ufw allow 8443/tcp</code>).</span>
+  </div>`;
+}
+
+function netPayload(body) {
+  const q = (id) => body.querySelector(id);
+  return {
+    http_enabled: q('#n-http').checked, http_port: Number(q('#n-http-port').value),
+    https_enabled: q('#n-https').checked, https_port: Number(q('#n-https-port').value),
+    cert_mode: body.querySelector('[name="net-mode"]:checked')?.value || 'auto',
+    cert_names: q('#n-names').value.trim(),
+    cert_path_crt: q('#n-crt').value.trim(), cert_path_key: q('#n-key').value.trim(),
+  };
+}
+
+function netWire(body, n) {
+  const q = (id) => body.querySelector(id);
+  const showMode = () => {
+    const m = body.querySelector('[name="net-mode"]:checked')?.value || 'auto';
+    body.querySelectorAll('.net-sub').forEach(d => { d.hidden = d.dataset.for !== m; });
+    q('#n-cert-box').classList.toggle('dim', !q('#n-https').checked);
+  };
+  body.querySelectorAll('[name="net-mode"]').forEach(r => r.addEventListener('change', showMode));
+  // keep at least one on: unticking the last one ticks it back
+  [['#n-http', '#n-https'], ['#n-https', '#n-http']].forEach(([a, b]) => q(a).addEventListener('change', () => {
+    if (!q(a).checked && !q(b).checked) { q(a).checked = true; toast('Keep HTTP or HTTPS on, or nobody could reach LENTA', 'error'); }
+    showMode();
+  }));
+  showMode();
+  q('#n-regen').addEventListener('click', async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try { await api.post('/api/admin/network/regenerate'); toast('New certificate made'); await new Promise(r => setTimeout(r, 1500)); settings(body); }
+    catch (ex) { toast(ex.message, 'error'); b.disabled = false; }
+  });
+  q('#n-upload').addEventListener('click', async (e) => {
+    const b = e.currentTarget, out = q('#n-upload-result'), files = [...q('#n-files').files];
+    if (!files.length) return toast('Choose your certificate and key files first', 'error');
+    b.disabled = true; out.textContent = 'Checking…'; out.style.color = '';
+    try {
+      const enc = await Promise.all(files.map(f => f.arrayBuffer().then(buf => {
+        let bin = ''; const bytes = new Uint8Array(buf);
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return btoa(bin);
+      })));
+      const r = await api.post('/api/admin/network/certificate', { files: enc, password: q('#n-pass').value });
+      const c = r.certificate;
+      out.textContent = `Accepted: ${c.subject}, valid until ${c.valid_until}. Press Save settings to use it.`;
+      body.querySelector('[name="net-mode"][value="upload"]').checked = true;
+      q('#n-files').value = ''; q('#n-pass').value = '';
+      toast('Certificate checked and stored');
+    } catch (ex) { out.textContent = ex.message; out.style.color = 'var(--red)'; }
+    finally { b.disabled = false; }
+  });
+}
+
+/** After saving: if the address this page came from no longer works, show the new one. */
+function netMoved(n, w) {
+  const scheme = location.protocol.replace(':', '');
+  const port = Number(location.port) || (scheme === 'https' ? 443 : 80);
+  if (n.this && n.this.port && n.this.port !== port) return false;     // behind a proxy: its address doesn't change
+  const still = scheme === 'https' ? (w.https_enabled && w.https_port === port) : (w.http_enabled && w.http_port === port);
+  if (still) return false;
+  const same = scheme === 'https' ? (w.https_enabled && w.https_port) : (w.http_enabled && w.http_port);
+  const target = same ? `${scheme}://${location.hostname}:${same}`
+    : w.https_enabled ? `https://${location.hostname}:${w.https_port}` : `http://${location.hostname}:${w.http_port}`;
+  const url = `${target}/#/settings/network`;
+  modal(html`<h2>LENTA moved</h2>
+    <p>Saved. In a moment this address stops working and LENTA answers at:</p>
+    <p style="font-size:18px;margin:14px 0"><b>${target}</b></p>
+    ${target.startsWith('https') ? html`<p style="color:var(--muted);font-size:14px">With LENTA's own certificate the browser warns the first time (until you install it): choose to continue to the site.</p>` : ''}
+    ${target.split(':')[0] !== scheme ? html`<p style="color:var(--muted);font-size:14px">You'll sign in once there: HTTP and HTTPS each keep their own sign-in.</p>` : ''}
+    <div class="actions" style="margin-top:18px"><a class="btn primary" href="${url}">Go there</a><button type="button" class="btn" data-close>Stay here</button></div>`);
+  return true;
+}
+
 // ---------------------------------------------------------------- settings
-async function settings(body) {
+async function settings(body, page = 'general') {
   const s = await api.get('/api/admin/settings');
   const o = await api.get('/api/admin/overview');
   const art = await api.get('/api/admin/artwork-sources');
+  const net = await api.get('/api/admin/network').catch(() => null);
   const artOrder = { movie: art.movie, show: art.show };
   const hw = o.hardware;
   mount(body, html`<div class="lay-head">${layoutButtons()}</div>${layoutBar()}<form id="sform"><div class="panels" id="aset-panels">
     <div data-panel="general" class="panel"><h3>General</h3>
       <div class="field"><label for="s-name">Server name</label><input class="input" id="s-name" value="${s.server_name}" maxlength="40"></div>
+      <div class="field"><label for="s-theme">Default theme</label>
+        <select class="input" id="s-theme">${THEMES.map(t => html`<option value="${t.id}" ${t.id === s.default_theme ? raw('selected') : ''}>${t.name} — ${t.desc}</option>`)}</select>
+        <span class="hint">Used on the sign-in screen and for users who haven't picked one in their Settings.</span></div>
+      <label class="check"><input type="checkbox" id="s-users" ${s.show_users_on_login === '1' ? raw('checked') : ''}>Show profile pictures on the sign-in screen</label>
+    </div>
+
+    <div data-panel="scanning" class="panel"><h3>Scanning</h3>
       <div class="field"><label for="s-scan">Scan libraries every</label>
         <select class="input" id="s-scan">${[[0, 'Never — only when I press Scan'], [15, '15 minutes'], [60, 'Hour'], [360, '6 hours'], [1440, 'Day']].map(([v, l]) =>
           html`<option value="${v}" ${String(v) === s.scan_interval_minutes ? raw('selected') : ''}>${l}</option>`)}</select></div>
@@ -428,11 +613,9 @@ async function settings(body) {
           html`<option value="${v}" ${String(v) === (s.watch_interval || '60') ? raw('selected') : ''}>${l}</option>`)}</select>
         <span class="hint">A film or episode copied into a library folder (also on a NAS) is added with its poster and details shortly after the copy finishes.
           Only folder times are read, so this is light even for big libraries.</span></div>
-      <div class="field"><label for="s-theme">Default theme</label>
-        <select class="input" id="s-theme">${THEMES.map(t => html`<option value="${t.id}" ${t.id === s.default_theme ? raw('selected') : ''}>${t.name} — ${t.desc}</option>`)}</select>
-        <span class="hint">Used on the sign-in screen and for users who haven't picked one in their Settings.</span></div>
-      <label class="check"><input type="checkbox" id="s-users" ${s.show_users_on_login === '1' ? raw('checked') : ''}>Show profile pictures on the sign-in screen</label>
     </div>
+
+    ${net ? netPanel(net) : ''}
 
     <div data-panel="online-subtitles" class="panel"><h3>Online subtitles</h3>
       <p style="color:var(--muted);font-size:14px;margin:-6px 0 16px">From OpenSubtitles.com. Create a free account, then an API consumer at opensubtitles.com › API to get a key.
@@ -549,10 +732,17 @@ async function settings(body) {
       <button type="button" class="btn small" id="s-detect">${icon('refresh')}Detect hardware again</button>
     </div>
     </div>
+    <div id="aset-hidden" hidden></div>
     <div class="aset-save"><button class="btn primary">Save settings</button></div>
   </form>`);
-  blockLayout({ root: $('#view'), canvas: body.querySelector('#aset-panels'), ...layoutPref('admin_settings_layout') });
+  // only this page's blocks are shown and arranged; the others stay in the form (hidden) so Save keeps their values
+  const keep = SETTINGS_PAGES[page] || ['general'];
+  const stash = body.querySelector('#aset-hidden');
+  [...body.querySelectorAll('#aset-panels > .panel')].forEach(p => { if (!keep.includes(p.dataset.panel)) stash.append(p); });
+  blockLayout({ root: body, canvas: body.querySelector('#aset-panels'), ...layoutPref('admin_settings_layout', page) });
   const val = (id) => body.querySelector(id).value;
+  const netInitial = net ? netPayload(body) : null;
+  if (net) netWire(body, net);
   const payload = () => ({
     server_name: val('#s-name'), scan_interval_minutes: val('#s-scan'), watch_libraries: body.querySelector('#s-watch').checked ? '1' : '0', watch_interval: val('#s-watch-int'),
     show_users_on_login: body.querySelector('#s-users').checked ? '1' : '0',
@@ -577,6 +767,9 @@ async function settings(body) {
     try {
       const p = payload();
       const keyAdded = p.tmdb_api_key && !s.tmdb_api_key_set;
+      const n = net ? netPayload(body) : null;
+      const netChanged = n && JSON.stringify(n) !== JSON.stringify(netInitial);
+      if (netChanged) await api.put('/api/admin/network', n);       // checked first: a refusal saves nothing
       await api.put('/api/admin/settings', p);
       state.user.server_name = p.server_name;
       state.server = { ...(state.server || {}), theme: p.default_theme };
@@ -587,7 +780,9 @@ async function settings(body) {
         await api.post('/api/admin/scan');
         toast('Fetching metadata for your libraries');
       }
-      settings(body);
+      if (netChanged && netMoved(net, n)) return;                 // this page's address is gone: say where to go
+      if (netChanged) { toast('HTTP and HTTPS are being updated'); await new Promise(r => setTimeout(r, 1800)); }
+      settings(body, page);
     } catch (ex) { toast(ex.message, 'error'); }
   });
   const osUser = body.querySelector('#s-os-user');

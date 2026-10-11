@@ -5,7 +5,7 @@ import { changePasswordDialog } from './auth.js';
 import { ensureLanguages, languageOptions } from './subtitles.js';
 import { $, html, icon, modal, mount, raw, setArtStyle, setEpisodeArt, toast } from './ui.js';
 import { inAndroidApp, installAvailable, installHelp, isAndroid, onInstallChange, promptInstall } from './pwa.js';
-import { blockLayout, layoutBar, layoutButtons } from './layout.js';
+import { blockLayout, layoutBar, layoutButtons, pageLayout } from './layout.js';
 
 // Colours for the theme previews (kept here so a card can show a theme that isn't active).
 const PREVIEW = {
@@ -17,18 +17,22 @@ const PREVIEW = {
   aurora: { bg: '#0B0D1C', card: '#1A1E40', text: '#ECEEFF', accent: 'linear-gradient(100deg,#A895FF,#63D8F2)', glow: 'rgb(168 149 255 / .35)', r: '10px' },
 };
 
-export async function renderSettings() {
+// Settings › My settings pages and the blocks each one shows
+const PAGE_PANELS = { appearance: ['look'], home: ['home'], audio: ['audio'], intros: ['intros'], 'media-pages': ['media'],
+  app: ['app'], account: ['account'] };
+let pending = null;      // unsaved changes, kept while you move between the My settings pages
+
+export async function renderSettings(target = $('#view'), page = 'appearance') {
   await ensureLanguages();
   const saved = { ...state.prefs };
-  const draft = { ...state.prefs };
+  const draft = pending || { ...state.prefs };
+  pending = draft;
   const f = state.features || {};
-  const view = $('#view');
+  const view = target;
   const body = view;
   const videoLibs = (state.libraries || []).filter(l => l.kind === 'movies' || l.kind === 'shows');
   const bannerLibs = (draft.home_banner_libraries || '').split(',').filter(Boolean);
-  mount(view, html`<div class="page"><div class="page-head"><div><h1 class="page-title">Settings</h1>
-      <div class="page-sub">For ${state.user.username} on this server</div></div>
-      ${layoutButtons()}</div>
+  mount(view, html`<div class="lay-head">${layoutButtons()}</div>
     ${layoutBar()}
     <div class="settings"><div class="settings-cols">
       <section class="panel" data-panel="look"><h3>Look</h3><p class="lead">All six themes are dark. The change shows at once; save to keep it.</p>
@@ -75,14 +79,14 @@ export async function renderSettings() {
           Download missing subtitles automatically when I press Play</label>
         <p style="color:var(--muted);font-size:14px;margin:6px 0 0 28px">${f.subtitles_online
           ? 'Searches OpenSubtitles in your subtitle language, preferring an exact match for your file.'
-          : 'Needs online subtitles, which an administrator turns on in Server admin › Settings.'}</p>
+          : 'Needs online subtitles, which an administrator turns on in Settings › Subtitles.'}</p>
       </section>
 
       <section class="panel" data-panel="intros"><h3>TV show intros</h3>
         <div class="row-field"><label for="p-intro">When an episode's intro starts</label>
           <select class="input" id="p-intro">${[['button', 'Show a Skip intro button'], ['auto', 'Skip it automatically'], ['off', 'Off — play the intro']].map(([v, l]) =>
             html`<option value="${v}" ${v === (draft.intro_skip || 'button') ? raw('selected') : ''}>${l}</option>`)}</select></div>
-        <p style="color:var(--muted);font-size:14px;margin:0">LENTA finds each season's intro by comparing the episodes' sound${f.intro_detection === false ? '. An administrator has switched intro detection off in Server admin › Settings.' : '.'}
+        <p style="color:var(--muted);font-size:14px;margin:0">LENTA finds each season's intro by comparing the episodes' sound${f.intro_detection === false ? '. An administrator has switched intro detection off in Settings › Previews and intros.' : '.'}
           With <i>Skip it automatically</i> you can still press <b>Watch intro</b> to go back.</p>
       </section>
 
@@ -126,7 +130,7 @@ export async function renderSettings() {
         <div class="row-field" style="margin-left:28px"><label for="p-vol">Theme music volume</label>
           <input class="range" type="range" id="p-vol" min="0.05" max="1" step="0.05" value="${draft.theme_music_volume}"></div>
         <p style="color:var(--muted);font-size:14px;margin:0">Uses a theme file stored with the movie (theme.mp3) when there is one${f.theme_music_online ? ', otherwise a soundtrack preview from Apple Music' : ''}.
-          ${f.trailers ? '' : ' Trailers need a TMDB key in Server admin › Settings.'}</p>
+          ${f.trailers ? '' : ' Trailers need a TMDB key in Settings › Metadata › TMDB and language.'}</p>
       </section>
 
       <section class="panel" data-panel="app"><h3>LENTA app</h3>
@@ -144,8 +148,12 @@ export async function renderSettings() {
       <section class="panel" data-panel="account"><h3>Account</h3>
         <button class="btn" id="p-pass">Change password</button></section>
       </div>
+      <div id="p-hidden" hidden></div>
       <div class="save-bar"><button class="btn primary" id="p-save" disabled>Save changes</button><span class="note" id="p-note"></span></div>
-    </div></div>`);
+    </div>`);
+  // only this page's blocks are shown; the others stay (hidden) so every control keeps working
+  const keep = PAGE_PANELS[page] || ['look'];
+  [...view.querySelectorAll('.settings-cols > .panel')].forEach(p => { if (!keep.includes(p.dataset.panel)) view.querySelector('#p-hidden').append(p); });
 
   const saveBtn = $('#p-save');
   const dirty = () => {
@@ -177,7 +185,7 @@ export async function renderSettings() {
       return;
     }
     mount(box, html`<button type="button" class="btn" id="p-make-default">Use ${name} on the sign-in screen</button>
-      <span class="note">Server default now: ${cur}. It's used on the sign-in screen and for new users (also in Server admin › Settings).</span>`);
+      <span class="note">Server default now: ${cur}. It's used on the sign-in screen and for new users (also in Settings › General).</span>`);
     $('#p-make-default').addEventListener('click', async () => {
       try {
         await api.put('/api/admin/settings', { default_theme: draft.theme });
@@ -212,11 +220,13 @@ export async function renderSettings() {
   }));
   libTicks('data-banner-lib', 'home_banner_libraries', 'the banner');
   sectionOrder(body, draft, dirty);
-  blockLayout({ root: view, canvas: view.querySelector('.settings-cols'), value: draft.settings_layout,
+  const pl = pageLayout(state.prefs.settings_layout, page);       // one saved arrangement per page
+  blockLayout({ root: view, canvas: view.querySelector('.settings-cols'), value: pl.value,
     names: { look: 'Look', audio: 'Audio and subtitles', intros: 'TV show intros', home: 'Home screen', media: 'Media pages', app: 'LENTA app', account: 'Account' },
     save: async (value) => {
-      await api.put('/api/me/prefs', { settings_layout: value });
-      state.prefs.settings_layout = value; draft.settings_layout = value; saved.settings_layout = value;   // not an unsaved setting
+      const all = pageLayout(state.prefs.settings_layout, page).merge(value);
+      await api.put('/api/me/prefs', { settings_layout: all });
+      state.prefs.settings_layout = all; draft.settings_layout = all; saved.settings_layout = all;   // not an unsaved setting
     } });
   bind('#p-music', 'theme_music', el => (el.checked ? '1' : '0'));
   bind('#p-home-30', 'home_trailer_30', el => (el.checked ? '1' : '0'));
@@ -249,8 +259,12 @@ export async function renderSettings() {
       toast('Settings saved');
     } catch (ex) { toast(ex.message, 'error'); saveBtn.disabled = false; }
   });
-  // Leaving without saving: put the saved theme back.
-  const restore = () => { if (location.hash !== '#/settings') { applyTheme(state.prefs.theme); window.removeEventListener('hashchange', restore); } };
+  // Leaving Settings without saving: put the saved theme back and forget the changes.
+  const restore = () => {
+    if (!location.hash.startsWith('#/settings')) { pending = null; applyTheme(state.prefs.theme); }
+    window.removeEventListener('hashchange', restore);
+  };
+  dirty();                 // changes made on another page and not saved yet
   window.addEventListener('hashchange', restore);
 }
 

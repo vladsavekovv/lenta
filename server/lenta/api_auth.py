@@ -35,7 +35,7 @@ def validate_new_user(username: str, password: str) -> str:
 
 
 def _set_cookie(response: Response, request: Request, user_id: int) -> None:
-    response.set_cookie(auth.COOKIE, auth.issue_token(user_id), max_age=auth.TOKEN_DAYS * 86400, httponly=True,
+    response.set_cookie(auth.cookie_name(request), auth.issue_token(user_id), max_age=auth.TOKEN_DAYS * 86400, httponly=True,
                         samesite="lax", secure=request.url.scheme == "https", path="/")
 
 
@@ -79,8 +79,8 @@ def login(body: Credentials, request: Request, response: Response):
 
 
 @router.post("/auth/logout")
-def logout(response: Response):
-    response.delete_cookie(auth.COOKIE, path="/")
+def logout(request: Request, response: Response):
+    response.delete_cookie(auth.cookie_name(request), path="/", secure=request.url.scheme == "https")
     return {"ok": True}
 
 

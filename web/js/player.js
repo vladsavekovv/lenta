@@ -1,9 +1,10 @@
 // Video player: direct play or HLS (hls.js), custom controls, subtitles, audio tracks, quality, up next.
 import { api } from './api.js';
 import { pauseMusic } from './music.js';
+import { dockMount, dockRefresh, dockRegister, dockUnmount, dockUpdate } from './dock.js';
 import { state } from './app.js';
 import { langName, subtitleSearch } from './subtitles.js';
-import { $, channels, fmtTime, html, icon, isTouch, mount, toast } from './ui.js';
+import { $, channels, fmtTime, html, icon, img, isTouch, mount, popMenu, toast } from './ui.js';
 
 const sameLang = (a, b) => !!a && !!b && (a === b || a.split('-')[0] === b.split('-')[0]);
 
@@ -41,7 +42,7 @@ function capabilities(forceHls) {
 
 // ---------------------------------------------------------------- open / close
 export async function openPlayer(itemId, opts = {}) {
-  if (P) teardown('stopped');
+  if (P) teardown('stopped', { quiet: true });      // another film replaces this one: still playing
   pauseMusic();
   window.dispatchEvent(new CustomEvent('lenta:playback'));
   const root = $('#player-root');
@@ -62,40 +63,16 @@ export async function openPlayer(itemId, opts = {}) {
         <button class="pbtn" data-a="back10" aria-label="Back 10 seconds">${icon('replay10')}</button>
         <button class="pbtn huge" data-a="toggle" id="pplay2" aria-label="Play">${icon('play')}</button>
         <button class="pbtn" data-a="fwd10" aria-label="Forward 10 seconds">${icon('fwd10')}</button></div>` : ''}
-      <div class="top"><button class="pbtn" data-a="close" aria-label="Back">${icon('back')}</button>
+      <div class="top">
         <button class="pbtn" data-a="minimize" aria-label="Minimize player" title="Minimize: keep watching while you browse">${icon('chevron')}</button>
-        <div><a class="t" id="pt" data-a="details" href="#" title="Open the title's page (keeps playing in the mini player)"></a>
-          <a class="s" id="ps" data-a="details" href="#"></a></div></div>
+        <span class="grow"></span>
+        <button class="pbtn hide-sm" data-a="stats" aria-label="Playback info" title="Playback info">${icon('stats')}</button>
+        <button class="pbtn" data-a="fullscreen" id="pfs" aria-label="Full screen" title="Full screen">${icon('fullscreen')}</button></div>
       <div class="center" id="pc"><div class="spinner"></div></div>
-      <div class="bottom">
-        <div class="seek" id="pseek" role="slider" aria-label="Seek" tabindex="0">
-          <div class="rail-bar"><div class="buf" id="pbuf"></div><div class="done" id="pdone"></div></div>
-          <div class="knob" id="pknob"></div><div class="tip" id="ptip"><div class="thumb" id="pthumb" hidden></div><span id="ptipt"></span></div></div>
-        <div class="controls">
-          <button class="pbtn big" data-a="toggle" id="pplay" aria-label="Play">${icon('play')}</button>
-          <button class="pbtn" data-a="back10" aria-label="Back 10 seconds">${icon('replay10')}</button>
-          <button class="pbtn" data-a="fwd10" aria-label="Forward 10 seconds">${icon('fwd10')}</button>
-          <button class="pbtn" data-a="mute" id="pmute" aria-label="Mute">${icon('volume')}</button>
-          <input class="volume" type="range" min="0" max="1" step="0.05" id="pvol" aria-label="Volume">
-          <span class="time" id="ptime">0:00 / 0:00</span>
-          <span class="grow"></span>
-          <button class="pbtn" data-a="next" id="pnext" aria-label="Next episode" hidden>${icon('skipnext')}</button>
-          <button class="pbtn" data-a="tracks" aria-label="Audio and subtitles">${icon('subs')}</button>
-          <button class="pbtn" data-a="quality" aria-label="Quality">${icon('gear')}</button>
-          <button class="pbtn hide-sm" data-a="stats" aria-label="Playback info">${icon('stats')}</button>
-          <button class="pbtn" data-a="fullscreen" id="pfs" aria-label="Full screen">${icon('fullscreen')}</button>
-        </div>
-      </div>
+      <div class="bottom" id="pdock"></div>
     </div>
     <div id="ppanel-root"></div><div id="pstats-root"></div><div id="pupnext-root"></div>
     <button type="button" class="skip-intro" id="pskip" hidden></button>
-    <div class="mini-ui" id="pmini">
-      <button class="pbtn mini-expand" data-a="expand" aria-label="Back to full screen" title="Full screen">${icon('expand')}</button>
-      <button class="pbtn mini-close" data-a="close" aria-label="Stop and close" title="Close">${icon('close')}</button>
-      <button class="pbtn mini-play" data-a="toggle" id="pmplay" aria-label="Play">${icon('play')}</button>
-      <div class="mini-info"><b id="pmt"></b><span id="pms"></span></div>
-      <div class="mini-bar"><div id="pmdone"></div></div>
-    </div>
   </div>`);
   const video = $('#pv');
   P.video = video;
@@ -103,8 +80,9 @@ export async function openPlayer(itemId, opts = {}) {
   if (!document.fullscreenEnabled && !document.webkitFullscreenEnabled) $('#pfs').hidden = true;
   video.volume = Number(store.get('volume', '1'));
   video.muted = store.get('muted', '0') === '1';
-  $('#pvol').value = video.volume;
   wire();
+  P.dock = dockMount($('#pdock'), VIDEO);
+  applySubStyle();      // the controls: the same bar as the one at the bottom of the screen
   document.documentElement.classList.add('player-open');      // the page behind can't scroll (no scrollbar)
   if (opts.mini) minimizePlayer({ navigate: false });
 
@@ -162,7 +140,7 @@ async function autoDownload(file, language) {
   } catch { /* playback goes on without them */ }
 }
 
-// ---- mini player (like Plex): the video goes on in a corner while you browse ----------------------------
+// ---- mini player (like Plex): the video goes on in the bar at the bottom while you browse ----------------------------
 export const playerMini = () => !!P?.mini;
 export const playerItem = () => P?.itemId ?? null;
 
@@ -177,7 +155,8 @@ export function minimizePlayer({ navigate = true } = {}) {
   clearTimeout(P.idleTimer);
   document.body.classList.add('mini-player');
   document.documentElement.classList.remove('player-open');   // browsing again: the page scrolls
-  syncMiniPlay();
+  dockRefresh();
+  window.dispatchEvent(new CustomEvent('lenta:player-mini'));  // pages may play trailers again (muted)
   if (navigate) {                              // back to the page you came from (or Home)
     if (P.returnTo === 'back') history.back();
     else location.hash = P.returnTo || '#/';
@@ -198,15 +177,62 @@ export function expandPlayer({ navigate = true } = {}) {
   P.root.querySelector('.player').classList.remove('mini');
   document.body.classList.remove('mini-player');
   document.documentElement.classList.add('player-open');
+  dockRefresh();
+  window.dispatchEvent(new CustomEvent('lenta:playback'));     // full screen again: everything else is quiet
   P.returnTo = 'back';
   if (navigate && location.hash !== `#/play/${P.itemId}`) location.hash = `#/play/${P.itemId}`;   // the router sees it is open
   poke();
 }
 
-function syncMiniPlay() {
-  const b = $('#pmplay');
-  if (b && P) mount(b, icon(P.video.paused ? 'play' : 'pause'));
-}
+// The minimised video in the bar at the bottom (dock.js), the same bar as music and audiobooks.
+const VIDEO = {
+  id: 'video',
+  visible: () => !!P?.mini,
+  info: () => ({ title: P.info?.title || P.detail?.title || '', sub: P.info?.subtitle || '', href: `#/item/${P.itemId}`,
+    video: true, artLabel: 'Back to full screen' }),
+  titleClick: (full) => { if (full) openDetails(); else location.hash = `#/item/${P.itemId}`; },
+  state() {
+    const v = P.video, pos = position();
+    let buf = pos;
+    try {
+      const b = v.buffered;
+      for (let i = 0; i < b.length; i++) if (b.start(i) <= v.currentTime + 1 && b.end(i) > v.currentTime) buf = b.end(i) + (P.mode === 'direct' ? 0 : P.offset);
+    } catch { /* nothing buffered */ }
+    return { pos, dur: duration(), buf, paused: v.paused, volume: v.volume, muted: v.muted };
+  },
+  caps: () => ({ back: 10, fwd: 30, prev: true, prevLabel: 'Back to the start', next: !!P.info?.next_id, nextLabel: 'Next episode',
+    settings: true, settingsLabel: 'Playback settings', list: P.detail?.kind === 'episode', listLabel: 'Play queue',
+    settingsOn: P.panel === 'settings', listOn: P.panel === 'queue' }),
+  list(anchor, full) { if (!full) expandPlayer(); if (P.panel !== 'queue') openPanel('queue'); else closePanel(); },
+  toggle: () => (P.video.paused ? P.video.play().catch(() => {}) : P.video.pause()),
+  seek: (t) => seekTo(t),
+  skip: (s) => seekTo(position() + s),
+  prev: () => seekTo(0),
+  next: () => playNext(),
+  stop: (full) => (full ? closePlayer() : closePlayer({ navigate: false })),
+  artClick: () => expandPlayer(),
+  more(anchor, full) {
+    const big = () => { if (!full) expandPlayer(); };
+    popMenu(anchor, [{ heading: P.info?.title || '' },
+      full ? { label: 'Minimize player', action: () => minimizePlayer() } : { label: 'Full screen player', action: () => expandPlayer() },
+      { label: "Go to the title's page", action: () => openDetails() },
+      { label: 'Playback settings…', action: () => { big(); openPanel('settings'); } },
+      ...(P.detail?.kind === 'episode' ? [{ label: 'Play queue…', action: () => { big(); openPanel('queue'); } }] : []),
+      ...(full ? [{ label: P.stats ? 'Hide playback info' : 'Playback info', action: () => act('stats') }] : []),
+      { sep: true }, { label: 'Stop', action: () => (full ? closePlayer() : closePlayer({ navigate: false })) }]);
+  },
+  settings(anchor, full) { if (!full) expandPlayer(); if (P.panel !== 'settings') openPanel('settings'); else closePanel(); },
+  thumb: (t, box) => showTrick(t, box),
+  setVolume(v) {
+    P.video.volume = v; P.video.muted = v === 0;
+    store.set('volume', v); store.set('muted', P.video.muted ? '1' : '0');
+  },
+  setMuted(m) { P.video.muted = m; store.set('muted', m ? '1' : '0'); },
+};
+dockRegister(VIDEO, { priority: 2 });
+
+// music or an audiobook starts: a minimised video makes way (one thing plays at a time)
+window.addEventListener('lenta:music-start', () => { if (P?.mini) closePlayer({ navigate: false }); });
 
 export function closePlayer({ navigate = true } = {}) {
   if (!P) return;
@@ -282,15 +308,14 @@ async function loadTrick(fileId, tries = 0) {
   if (tries < 20) P.trickTimer = setTimeout(() => loadTrick(fileId, tries + 1), 30000);
 }
 
-function showTrick(sec) {
-  const box = $('#pthumb');
+function showTrick(sec, box = $('#pthumb')) {
   const t = P?.trick;
   if (!box) return;
   if (!t) { box.hidden = true; return; }
   const per = t.cols * t.rows;
   const i = Math.max(0, Math.min(t.count - 1, Math.floor(sec / t.interval)));
   const sheet = Math.floor(i / per), n = i % per;
-  const w = Math.min(240, Math.round(window.innerWidth * 0.36)), k = w / t.width, h = Math.round(t.height * k);
+  const w = box.classList.contains('dk-thumb') ? (box.closest('.dock-full') ? 240 : 192) : Math.min(240, Math.round(window.innerWidth * 0.36)), k = w / t.width, h = Math.round(t.height * k);
   const url = `/api/files/${t.fileId}/trickplay/${sheet}.jpg`;
   if (!t.loaded.has(sheet)) {                      // fetch the sheet (and the next one) once
     t.loaded.add(sheet);
@@ -308,8 +333,9 @@ function showTrick(sec) {
 // Android app: keep the screen on while a video plays
 function keepAwake(on) { try { window.LentaApp?.keepScreenOn(on); } catch { /* not in the app */ } }
 
-function teardown(reason) {
+function teardown(reason, { quiet = false } = {}) {
   if (!P) return;
+  dockUnmount(P.dock);
   keepAwake(false);
   report(reason);
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -327,6 +353,8 @@ function teardown(reason) {
   document.body.classList.remove('mini-player');
   document.documentElement.classList.remove('player-open');
   P = null;
+  dockRefresh();
+  if (!quiet) window.dispatchEvent(new CustomEvent('lenta:playback-ended'));
 }
 
 // ---------------------------------------------------------------- loading streams
@@ -348,11 +376,7 @@ async function load(position, { keepPaused = false } = {}) {
   P.sessionId = info.session_id;
   P.offset = info.offset || 0;
   P.mode = info.mode;
-  $('#pt').textContent = info.title;
-  $('#ps').textContent = info.subtitle || '';
-  $('#pmt').textContent = info.title;
-  $('#pms').textContent = info.subtitle || '';
-  $('#pnext').hidden = !info.next_id;
+  dockUpdate();
   const video = P.video;
   if (P.hls) { P.hls.destroy(); P.hls = null; }
   if (info.mode === 'direct') {
@@ -403,6 +427,7 @@ async function load(position, { keepPaused = false } = {}) {
   } else {
     return showMessage('This browser cannot play streams', 'Use a current version of Chrome, Edge, Firefox or Safari.');
   }
+  if (P.speed) { video.defaultPlaybackRate = P.speed; video.playbackRate = P.speed; }
   if (!keepPaused) video.play().catch(() => { /* autoplay blocked: user presses play */ });
   if (P.stats) renderStats();
 }
@@ -446,15 +471,6 @@ function showMessage(title, text, retry = false) {
 function updateTime() {
   if (!P?.info) return;
   const pos = position(), dur = duration();
-  const pct = dur ? Math.min(100, pos / dur * 100) : 0;
-  $('#pdone').style.width = `${pct}%`;
-  $('#pknob').style.left = `${pct}%`;
-  const b = P.video.buffered;
-  let bufEnd = pos;
-  for (let i = 0; i < b.length; i++) if (b.start(i) <= P.video.currentTime + 1 && b.end(i) > P.video.currentTime) bufEnd = b.end(i) + (P.mode === 'direct' ? 0 : P.offset);
-  $('#pbuf').style.width = `${dur ? Math.min(100, bufEnd / dur * 100) : 0}%`;
-  $('#ptime').textContent = `${fmtTime(pos)} / ${fmtTime(dur)}`;
-  if (P.mini) $('#pmdone').style.width = `${pct}%`;
   renderSubs(pos);
   upNext(pos, dur);
   if (Date.now() - P.lastReport > 10000 && !P.video.paused) report('playing');
@@ -482,7 +498,7 @@ function poke() {
   el.classList.remove('idle');
   clearTimeout(P.idleTimer);
   P.idleTimer = setTimeout(() => {
-    if (P && !P.video.paused && !P.panel && !P.dragging) el.classList.add('idle');
+    if (P && !P.video.paused && !P.panel && !P.dragging && !el.querySelector('.top:hover, .bottom:hover') && !document.querySelector('.menu')) el.classList.add('idle');
   }, 3000);
 }
 
@@ -563,13 +579,135 @@ const currentFile = () => (P.detail?.files || []).find(f => f.id === P.fileId);
 function closePanel() {
   P.panel = null;
   $('#ppanel-root').innerHTML = '';
+  dockUpdate();
+}
+
+// ---- Playback settings (Plex style): one panel, a label and a value per line; values open a menu
+const SPEEDS = [[0.5, '0.5×'], [0.75, '0.75×'], [1, 'Normal'], [1.25, '1.25×'], [1.5, '1.5×'], [1.75, '1.75×'], [2, '2×']];
+const SUB_SIZES = [['small', 'Small', 0.75], ['normal', 'Normal', 1], ['large', 'Large', 1.3], ['huge', 'Huge', 1.65]];
+const SUB_COLORS = [['white', 'White', '#ffffff'], ['yellow', 'Yellow', '#ffe14d'], ['cyan', 'Cyan', '#7ee8ff'], ['green', 'Green', '#9dff8a']];
+const SUB_POS = [['bottom', 'Bottom'], ['top', 'Top']];
+const autoplayOn = () => store.get('autoplay', '1') === '1';
+
+function applySubStyle() {
+  const layer = $('#psub');
+  if (!layer) return;
+  const size = SUB_SIZES.find(x => x[0] === store.get('subSize', 'normal')) || SUB_SIZES[1];
+  const color = SUB_COLORS.find(x => x[0] === store.get('subColor', 'white')) || SUB_COLORS[0];
+  layer.style.setProperty('--sub-scale', size[2]);
+  layer.style.setProperty('--sub-color', color[2]);
+  layer.classList.toggle('top', store.get('subPos', 'bottom') === 'top');
+}
+
+function qualityLabel(v) {
+  const f = currentFile();
+  if (v === 'original') {
+    const bits = [f?.bitrate ? `${(f.bitrate / 1e6).toFixed(1)} Mbps` : '', f?.resolution ? `${f.resolution}${/^(720|1080|1440)p|4K$/.test(f.resolution) ? ' HD' : ''}` : ''].filter(Boolean);
+    return `Original${bits.length ? ` (${bits.join(', ')})` : ''}`;
+  }
+  return (QUALITIES.find(q => q[0] === v) || [v, v])[1];
+}
+const audioLabel = (a) => (a ? `${langName(a.lang || a.language)} (${(a.codec || '').toUpperCase()} ${channels(a.channels)})${a.title ? ` · ${a.title}` : ''}` : 'None');
+const subLabel = (s) => (s ? `${langName(s.lang || s.language)} (${s.image ? 'picture' : (s.codec || (s.external ? 'file' : 'text')).toUpperCase()})${s.forced ? ' forced' : ''}${s.downloaded ? ' · online' : ''}` : 'None');
+
+function settingsPanel(root) {
+  const file = currentFile();
+  const audio = file?.audio || [];
+  const curAudio = audio.find(a => a.index === (P.info?.audio_index ?? audio[0]?.index)) || audio[0];
+  const sub = (file?.subtitles || []).find(s => s.key === P.subtitleKey);
+  const textSub = sub && !P.burnedKey;
+  const dd = (key, label, disabled = false) => html`<button type="button" class="pset-dd" data-ps="${key}" ${disabled ? 'disabled' : ''}>${label}<span class="caret">▾</span></button>`;
+  const speed = (SPEEDS.find(x => x[0] === (P.video.playbackRate || 1)) || [1, `${P.video.playbackRate}×`])[1];
+  const rows = [
+    ['Quality', dd('quality', qualityLabel(P.quality))],
+    ['Playback speed', dd('speed', speed)],
+    ['Audio stream', audio.length > 1 ? dd('audio', audioLabel(curAudio)) : html`<span class="pset-static">${audioLabel(curAudio)}</span>`],
+    ['Subtitles', dd('subs', subLabel(sub))],
+    ['Subtitle color', dd('subColor', (SUB_COLORS.find(x => x[0] === store.get('subColor', 'white')) || SUB_COLORS[0])[1], !textSub), !textSub],
+    ['Subtitle position', dd('subPos', (SUB_POS.find(x => x[0] === store.get('subPos', 'bottom')) || SUB_POS[0])[1], !textSub), !textSub],
+    ['Subtitle size', dd('subSize', (SUB_SIZES.find(x => x[0] === store.get('subSize', 'normal')) || SUB_SIZES[1])[1], !textSub), !textSub],
+    ['Subtitles offset', html`<span class="pset-offset"><button type="button" data-delay="-0.25" ${textSub ? '' : 'disabled'} title="Earlier (G)">−</button>
+      <b id="psubdelay">${fmtDelay(P.subDelay)}</b><button type="button" data-delay="0.25" ${textSub ? '' : 'disabled'} title="Later (H)">+</button>
+      <button type="button" data-delay="reset" ${textSub ? '' : 'disabled'} title="Reset">⟲</button></span>`, !textSub],
+    ['Auto play', html`<input type="checkbox" class="pset-check" id="pautoplay" ${autoplayOn() ? 'checked' : ''} aria-label="Play the next episode by itself">`],
+  ];
+  mount(root, html`<div class="ppanel pset" role="dialog" aria-label="Playback settings">
+    <h3>Playback settings</h3>
+    <div class="pset-grid">${rows.map(([l, v, off]) => html`<div class="pset-l ${off ? 'off' : ''}">${l}</div><div class="pset-v">${v}</div>`)}</div>
+  </div>`);
+  root.querySelector('#pautoplay').addEventListener('change', (e) => store.set('autoplay', e.target.checked ? '1' : '0'));
+}
+
+function settingsMenu(kind, anchor) {
+  const file = currentFile();
+  const redraw = () => { if (P?.panel === 'settings') settingsPanel($('#ppanel-root')); };
+  const tick = (on, label) => `${label}${on ? '  ✓' : ''}`;
+  let items = [];
+  if (kind === 'quality') {
+    items = QUALITIES.map(([v]) => ({ label: tick(v === P.quality, qualityLabel(v)), action: () => {
+      P.quality = v; store.set('quality', v); load(position(), { keepPaused: P.video.paused }).then(redraw);
+    } }));
+  } else if (kind === 'speed') {
+    items = SPEEDS.map(([v, l]) => ({ label: tick(v === (P.video.playbackRate || 1), l), action: () => {
+      P.speed = v; P.video.playbackRate = v; P.video.defaultPlaybackRate = v; redraw();
+    } }));
+  } else if (kind === 'audio') {
+    const cur = P.info?.audio_index ?? file?.audio[0]?.index;
+    items = (file?.audio || []).map(a => ({ label: tick(a.index === cur, audioLabel(a)), action: () => {
+      P.audioIndex = a.index === file.audio[0]?.index ? null : a.index;
+      load(position(), { keepPaused: P.video.paused }).then(redraw);
+    } }));
+  } else if (kind === 'subs') {
+    items = [{ label: tick(!P.subtitleKey, 'None'), action: () => selectSubtitle(null).then(redraw) },
+      ...(file?.subtitles || []).map(s => ({ label: tick(s.key === P.subtitleKey, `${subLabel(s)}${s.title && !s.downloaded ? ` · ${s.title.slice(0, 40)}` : ''}`),
+        action: () => selectSubtitle(s.key).then(redraw) })),
+      ...(state.features?.subtitles_online ? [{ sep: true }, { label: 'Search online…', action: () => { P.panel = null; openPanel('subsearch'); } }] : [])];
+  } else {
+    const list = { subColor: SUB_COLORS, subPos: SUB_POS, subSize: SUB_SIZES }[kind];
+    const cur = store.get(kind, list[0 + (kind === 'subSize')][0]);
+    items = list.map(([v, l]) => ({ label: tick(v === cur, l), action: () => { store.set(kind, v); applySubStyle(); redraw(); } }));
+  }
+  popMenu(anchor, items);
+}
+
+// ---- Play queue: this episode and the ones after it (Plex style)
+async function queuePanel(root) {
+  mount(root, html`<div class="ppanel pqueue"><div class="pq-head"><div><h3>Play Queue</h3><div class="pq-n">…</div></div></div><div class="pq-list"></div></div>`);
+  const d = P.detail;
+  let items = [d];
+  if (d?.kind === 'episode' && d.show_id) {
+    try {
+      P.queue = P.queue && P.queue.show === d.show_id ? P.queue : { show: d.show_id, data: await api.get(`/api/items/${d.show_id}`) };
+      const seasons = P.queue.data.seasons || [];
+      const all = seasons.filter(s => (d.season === 0 ? s.season === 0 : s.season !== 0)).flatMap(s => s.episodes.map(e => ({ ...e, season: s.season })));
+      const at = all.findIndex(e => e.id === d.id);
+      items = at >= 0 ? all.slice(at, at + 100) : [d];
+    } catch { /* just this one */ }
+  }
+  if (!P || P.panel !== 'queue') return;
+  const show = d?.show_title || P.queue?.data?.title || d?.title || '';
+  root.querySelector('.pq-n').textContent = `${items.length} item${items.length === 1 ? '' : 's'}`;
+  mount(root.querySelector('.pq-list'), items.map((e, i) => {
+    const pic = e.thumb || e.backdrop || e.poster;
+    const mins = e.runtime ? `${e.runtime}min` : '';
+    return html`<button type="button" class="pq-item ${i === 0 ? 'now' : ''}" data-queue="${e.id}">
+      <span class="pq-mark">${i === 0 ? '•••' : ''}</span>
+      <span class="pq-pic">${pic ? html`<img loading="lazy" src="${img(pic, 300)}" alt="">` : ''}</span>
+      <span class="pq-text"><b>${e.kind === 'episode' ? show : e.title}</b><span>${e.kind === 'episode' ? `S${e.season} · E${e.index ?? '?'} — ${e.title}` : (e.year || '')}</span></span>
+      <span class="pq-dur">${mins}</span></button>`;
+  }));
 }
 
 function openPanel(kind) {
   if (P.panel === kind) return closePanel();
+  if (kind === 'tracks' || kind === 'quality') kind = 'settings';
+  if (P.panel === kind) return closePanel();
   P.panel = kind;
   const file = currentFile();
   const root = $('#ppanel-root');
+  dockUpdate();
+  if (kind === 'settings') { settingsPanel(root); return; }
+  if (kind === 'queue') { queuePanel(root); return; }
   if (kind === 'subsearch') {
     mount(root, html`<div class="ppanel wide"><div><h4>Find subtitles online</h4><div id="psubsearch"></div>
       <button class="opt" data-a="tracks" style="margin-top:8px">${icon('back')} Back to tracks</button></div></div>`);
@@ -624,6 +762,7 @@ function renderStats() {
 // ---------------------------------------------------------------- up next
 function upNext(pos, dur) {
   const root = $('#pupnext-root');
+  if (!autoplayOn()) { if (root.innerHTML) root.innerHTML = ''; return; }
   const nextId = P.info?.next_id;
   const remaining = dur - pos;
   if (!nextId || P.upNextDismissed || dur < 120 || remaining > 25) {
@@ -694,6 +833,15 @@ function wire() {
       closePanel();
       return load(position(), { keepPaused: v.paused });
     }
+    const ps = e.target.closest('[data-ps]');
+    if (ps) { settingsMenu(ps.dataset.ps, ps); return; }
+    const qi = e.target.closest('[data-queue]');
+    if (qi) {
+      const id = Number(qi.dataset.queue);
+      closePanel();
+      if (id !== P.itemId) { report('stopped'); openPlayer(id, { returnTo: P.returnTo }); }
+      return;
+    }
     const delay = e.target.closest('[data-delay]');
     if (delay) { setSubDelay(delay.dataset.delay === 'reset' ? 0 : P.subDelay + Number(delay.dataset.delay)); return; }
     const sub = e.target.closest('[data-sub]');
@@ -738,7 +886,7 @@ function wire() {
   });
   el.addEventListener('touchstart', (e) => { if (!e.target.closest('.chrome button, .seek, .ppanel')) return; poke(); }, { passive: true });
 
-  const playIcons = (name) => ['#pplay', '#pplay2', '#pmplay'].forEach(id => { const b = $(id); if (b) mount(b, icon(name)); });
+  const playIcons = (name) => ['#pplay2'].forEach(id => { const b = $(id); if (b) mount(b, icon(name)); });
   v.addEventListener('play', () => { playIcons('pause'); poke(); keepAwake(true); });
   v.addEventListener('pause', () => { playIcons('play'); el.classList.remove('idle'); report('paused'); keepAwake(false); });
   v.addEventListener('waiting', () => showSpinner(true));
@@ -746,14 +894,10 @@ function wire() {
   v.addEventListener('playing', () => showSpinner(false));
   v.addEventListener('seeked', () => showSpinner(false));
   v.addEventListener('canplay', () => showSpinner(false));
-  v.addEventListener('volumechange', () => {
-    mount($('#pmute'), icon(v.muted || v.volume === 0 ? 'mute' : 'volume'));
-    $('#pvol').value = v.muted ? 0 : v.volume;
-  });
   v.addEventListener('ended', () => {
     if (P.mode !== 'direct' && P.offset + v.duration < duration() - 5) return;  // stream gap, not the real end
     report('stopped');
-    if (P.info?.next_id && !P.upNextDismissed) playNext();
+    if (P.info?.next_id && !P.upNextDismissed && autoplayOn()) playNext();
     else closePlayer();
   });
   v.addEventListener('error', () => {
@@ -765,36 +909,6 @@ function wire() {
     }
     showMessage("This video can't play", 'The browser could not decode the stream.', true);
   });
-  $('#pvol').addEventListener('input', (e) => {
-    v.volume = Number(e.target.value); v.muted = v.volume === 0;
-    store.set('volume', v.volume); store.set('muted', v.muted ? '1' : '0');
-  });
-
-  // seek bar
-  const seek = $('#pseek');
-  const frac = (e) => { const r = seek.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); };
-  seek.addEventListener('pointermove', (e) => {
-    const tip = $('#ptip');
-    $('#ptipt').textContent = fmtTime(frac(e) * duration());
-    showTrick(frac(e) * duration());
-    const r = seek.getBoundingClientRect(), half = (tip.offsetWidth || 0) / 2;   // keep the picture on screen
-    tip.style.left = `${Math.max(half, Math.min(r.width - half, frac(e) * r.width))}px`;
-    if (P.dragging) { $('#pdone').style.width = `${frac(e) * 100}%`; $('#pknob').style.left = `${frac(e) * 100}%`; }
-  });
-  seek.addEventListener('pointerdown', (e) => {
-    P.dragging = true; seek.classList.add('dragging'); seek.setPointerCapture(e.pointerId);
-    cancelAnimationFrame(P.raf);
-  });
-  seek.addEventListener('pointerup', (e) => {
-    P.dragging = false; seek.classList.remove('dragging');
-    seekTo(frac(e) * duration());
-    P.raf = requestAnimationFrame(loop);
-  });
-  seek.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight') { seekTo(position() + 10); e.preventDefault(); e.stopPropagation(); }
-    if (e.key === 'ArrowLeft') { seekTo(position() - 10); e.preventDefault(); e.stopPropagation(); }
-  });
-
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('fullscreenchange', onFs);
   P.raf = requestAnimationFrame(loop);

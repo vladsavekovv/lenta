@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import (about, api_admin, api_auth, api_editor, api_extras, api_library, api_playback, api_prefs, api_subtitles, logs,
+from . import (about, api_admin, api_auth, api_editor, api_extras, api_library, api_network, api_playback, api_prefs, api_subtitles, logs,
                intros, scanner, trailers, transcode, trickplay, watcher)
 from .config import APP_NAME, VERSION, WEB_DIR, ensure_dirs
 from .db import get_setting, init_db
@@ -72,6 +72,8 @@ app.include_router(api_subtitles.router)
 app.include_router(api_extras.router)
 app.include_router(about.router)
 app.include_router(api_editor.router)
+app.include_router(api_network.router)
+app.include_router(api_network.public)
 app.include_router(trickplay.router)
 app.include_router(intros.router)
 

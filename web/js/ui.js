@@ -19,6 +19,30 @@ export function html(strings, ...vals) {
 }
 export function mount(el, content) { el.innerHTML = renderVal(content); return el; }
 export const $ = (sel, root = document) => root.querySelector(sel);
+
+// ---- page scrolling ----
+// While the player bar is shown (desktop), the page scrolls inside <body>, which ends above the bar, so the
+// scroll bar stops there too (like Plex). Otherwise the window scrolls. Use these instead of window.scrollY.
+const DOCK_SCROLL = '(min-width: 721px)';
+export const pageScroller = () => (document.documentElement.classList.contains('dock-on') && matchMedia(DOCK_SCROLL).matches ? document.body : null);
+export const pageY = () => { const b = pageScroller(); return b ? b.scrollTop : window.scrollY; };
+export function pageScrollTo(y) { const b = pageScroller(); if (b) b.scrollTop = y; else window.scrollTo(0, y); }
+export function pageScrollBy(dy) { const b = pageScroller(); if (b) b.scrollTop += dy; else window.scrollBy(0, dy); }
+/** fn on every page scroll (window or body); returns a function that stops listening */
+export function onPageScroll(fn) {
+  const o = { passive: true };
+  window.addEventListener('scroll', fn, o);
+  document.body.addEventListener('scroll', fn, o);
+  return () => { window.removeEventListener('scroll', fn, o); document.body.removeEventListener('scroll', fn, o); };
+}
+/** The player bar appeared or went: move the scrolling between window and body, keeping your place. */
+export function setDockScroll(on) {
+  const html = document.documentElement;
+  if (html.classList.contains('dock-on') === on) return;
+  const y = pageY();
+  html.classList.toggle('dock-on', on);
+  pageScrollTo(y);
+}
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 // ---- icons (24px stroke) ----
@@ -43,6 +67,14 @@ const P = {
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   rew: '<path d="M11 6L4 12l7 6zM20 6l-7 6 7 6z" fill="currentColor"/>',
   replay10: '<path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif" font-weight="700">10</text>',
+  replay15: '<path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif" font-weight="700">15</text>',
+  fwd30: '<path d="M20 12a8 8 0 1 1-3-6.2"/><path d="M20 4v4h-4"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif" font-weight="700">30</text>',
+  book: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 21.5A2.5 2.5 0 0 1 6.5 19H20v3H6.5"/><path d="M12 7v6M9.5 10.5h5"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none"/>',
+  repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  repeat1: '<path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/><text x="12" y="15" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif" font-weight="700">1</text>',
+  queue: '<path d="M3 6h13M3 12h13M3 18h9"/><path d="M18 14v7l4-3.5z" fill="currentColor"/>',
+  chapters: '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
   fwd10: '<path d="M20 12a8 8 0 1 1-3-6.2"/><path d="M20 4v4h-4"/><text x="12" y="15.5" font-size="7" text-anchor="middle" fill="currentColor" stroke="none" font-family="sans-serif" font-weight="700">10</text>',
   skipnext: '<path d="M5 5l10 7-10 7z" fill="currentColor"/><path d="M19 5v14"/>',
   skipprev: '<path d="M19 5L9 12l10 7z" fill="currentColor"/><path d="M5 5v14"/>',
@@ -60,6 +92,13 @@ const P = {
   refresh: '<path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  palette: '<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-.5-.2-.8-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4-4-7.4-9-7.4z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7" r="1.2" fill="currentColor"/><circle cx="15" cy="7.5" r="1.2" fill="currentColor"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.6-5.3 6.5-5.3s5.7 1.8 6.5 5.3M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.9c2 .7 3.2 2.4 3.6 5.1"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
+  doc: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',
+  cpu: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
+  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
   restart: '<path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4"/>',
   film: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/>',
   note: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
@@ -84,7 +123,7 @@ const P = {
   cloud: '<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 9.5z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
 };
 export const icon = (name) => raw(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`);
-export const KIND_ICON = { movies: 'movies', shows: 'shows', music: 'music', photos: 'photos' };
+export const KIND_ICON = { movies: 'movies', shows: 'shows', music: 'music', audiobooks: 'book', photos: 'photos' };
 
 // ---- formatting ----
 export function fmtTime(sec) {
@@ -141,7 +180,7 @@ export function genPoster(item) {
 // turns this on at sign-in and handles the clicks.
 let cardTools = false;
 export function setCardTools(on) { cardTools = on; }
-const TOOL_KINDS = new Set(['movie', 'show', 'season', 'episode', 'album', 'photoalbum']);
+const TOOL_KINDS = new Set(['movie', 'show', 'season', 'episode', 'album', 'book', 'photoalbum']);
 const MENU_KINDS = new Set(['movie', 'show', 'season', 'episode']);
 function tools(item) {
   if (!cardTools || !TOOL_KINDS.has(item.kind)) return '';
@@ -174,7 +213,7 @@ function badge(item) {
   return '';
 }
 
-// ---- picture style: wide (Netflix style, the default) or the original posters (Settings › Look)
+// ---- picture style: wide (Netflix style, the default) or the original posters (Settings › Appearance)
 let artStyle = 'wide';
 export function setArtStyle(style) { artStyle = style === 'poster' ? 'poster' : 'wide'; }
 export const wideArt = () => artStyle === 'wide';
@@ -216,6 +255,7 @@ export function posterCard(item, opts = {}) {
 export function landscapeCard(item, opts = {}) {
   let art = item.thumb || item.backdrop || item.show_backdrop;
   if (item.kind === 'movie' || item.kind === 'show') art = item.backdrop || item.thumb;
+  if (item.kind === 'book') return bookWideCard(item, opts);
   const showArt = item.kind === 'episode' && episodeArt === 'show' && item.show_backdrop;
   if (showArt) art = item.show_backdrop;
   const src = art ? img(art, 500) : null;
@@ -241,10 +281,36 @@ export function landscapeCard(item, opts = {}) {
 
 export function squareCard(item) {
   const src = item.poster ? img(item.poster, 342) : null;
-  return html`<div class="card square" data-id="${item.id}" data-kind="${item.kind}">
+  const book = item.kind === 'book';
+  const sub = book ? [item.series ? `${item.series}${item.series_index ? ` #${item.series_index}` : ''}` : '', item.artist].filter(Boolean).join(' · ')
+    : `${item.artist || ''}${item.year ? ` · ${item.year}` : ''}`;
+  return html`<div class="card square${book ? ' book' : ''}" data-id="${item.id}" data-kind="${item.kind}">
     <a class="frame-link" href="#/item/${item.id}" title="${item.title}">
-      <div class="frame">${src ? html`<img loading="lazy" src="${src}" alt="">` : genPoster(item)}${tools(item)}</div></a>
-    <div class="caption"><a class="t" href="#/item/${item.id}">${item.title}</a><div class="s">${item.artist || ''}${item.year ? ` · ${item.year}` : ''}</div></div>
+      <div class="frame">${src ? html`<img loading="lazy" src="${src}" alt="">` : genPoster(item)}${book ? html`${progressBar(item)}${bookTools(item)}` : tools(item)}</div></a>
+    <div class="caption"><a class="t" href="#/item/${item.id}">${item.title}</a><div class="s">${sub}</div></div>
+  </div>`;
+}
+
+// On a book's picture: a round Play button (resumes where you stopped) and ⋮ bottom right for the book's menu.
+function bookTools(item) {
+  const resume = item.progress && !item.progress.completed && item.progress.position > 5;
+  return html`<span class="bk-tools">
+    <span class="bk-play" role="button" tabindex="0" data-book-play="${item.id}" title="${resume ? 'Continue listening' : 'Play'}" aria-label="${resume ? 'Continue' : 'Play'} ${item.title}">${icon('play')}</span>
+    <span class="bk-more" role="button" tabindex="0" data-book-menu="${item.id}" title="More" aria-label="More for ${item.title}">${icon('dots')}</span>
+  </span>`;
+}
+
+// An audiobook in a wide row (Continue watching): the square cover on a blurred copy of itself.
+function bookWideCard(item, opts = {}) {
+  const src = item.poster ? img(item.poster, 342) : null;
+  const href = `#/item/${item.id}${opts.play ? '?play=1' : ''}`;
+  const left = item.progress && item.progress.duration ? Math.max(0, item.progress.duration - item.progress.position) : 0;
+  const sub = left ? `${fmtTime(left)} left` : (item.artist || '');
+  return html`<div class="card landscape book-wide" data-id="${item.id}" data-kind="book">
+    <a class="frame-link" href="${href}" title="${opts.play ? `Listen to ${item.title}` : item.title}">
+      <div class="frame">${src ? html`<img class="bw-blur" loading="lazy" src="${src}" alt=""><img class="bw-cover" loading="lazy" src="${src}" alt="">` : genPoster({ title: item.title, year: '' })}
+        ${progressBar(item)}${opts.play ? html`<div class="play-hint">${icon('play')}</div>` : tools(item)}</div></a>
+    <div class="caption"><a class="t" href="#/item/${item.id}">${opts.label ? html`<span style="color:var(--accent)">${opts.label} · </span>` : ''}${item.title}</a><div class="s">${sub}</div></div>
   </div>`;
 }
 
@@ -277,7 +343,7 @@ export function rankCard(item, n) {
 export function cardFor(item, style, index = 0) {
   if (style === 'top10') return rankCard(item, index + 1);
   if (style === 'continue') return landscapeCard(item, { play: true, label: item.continue === 'next' ? 'Next' : null });
-  if (item.kind === 'album') return squareCard(item);
+  if (item.kind === 'album' || item.kind === 'book') return style === 'landscape' && item.kind === 'book' ? bookWideCard(item) : squareCard(item);
   if (style === 'landscape' && WIDE_KINDS.has(item.kind)) return wideCard(item);
   if (item.kind === 'photoalbum' || item.kind === 'episode' || style === 'landscape') return landscapeCard(item);
   return posterCard(item);
@@ -287,7 +353,7 @@ export function rowStyle(row) {
   if (row.style === 'continue') return 'landscape';
   if (row.style) return row.style;
   const k = row.items[0]?.kind;
-  if (k === 'album') return 'square';
+  if (k === 'album' || k === 'book') return 'square';
   if (k === 'photoalbum' || k === 'episode') return 'landscape';
   return wideArt() ? 'landscape' : 'poster';
 }

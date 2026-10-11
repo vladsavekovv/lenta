@@ -16,7 +16,7 @@ from .db import db, get_setting, jloads
 
 log = logs.get("watcher")
 SETTLE = 45                    # seconds a changed folder must stay unchanged (copy finished) before it is scanned
-EXT = {"movies": VIDEO_EXT, "shows": VIDEO_EXT, "music": AUDIO_EXT, "photos": PHOTO_EXT}
+EXT = {"movies": VIDEO_EXT, "shows": VIDEO_EXT, "music": AUDIO_EXT, "audiobooks": AUDIO_EXT, "photos": PHOTO_EXT}
 
 state = {"running": False, "last_check": None, "last_took": 0.0, "folders": 0, "waiting": 0, "scanned": 0}
 _snap: dict[int, dict[str, float]] = {}        # library id -> {folder: mtime}

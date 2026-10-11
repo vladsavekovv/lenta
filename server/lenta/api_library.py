@@ -78,7 +78,7 @@ def library_items(library_id: int, sort: str = "added", genre: str | None = None
         where.append("(i.title LIKE :q OR i.artist LIKE :q)")
         params["q"] = f"%{q.strip()}%"
     if filter in ("unwatched", "watched", "in_progress"):
-        if kind == "movie":
+        if kind in ("movie", "book"):
             done = "i.id IN (SELECT item_id FROM watch_state WHERE user_id = :uid AND completed = 1)"
             progress = ("i.id IN (SELECT item_id FROM watch_state WHERE user_id = :uid AND completed = 0 "
                         "AND position > 0)")
@@ -164,7 +164,7 @@ def continue_watching(user: dict, limit: int = 20) -> list[dict]:
     with db() as con:
         progress = con.execute(
             f"SELECT i.id, i.kind, w.updated_at FROM watch_state w JOIN items i ON i.id = w.item_id "
-            f"WHERE w.user_id = :uid AND w.completed = 0 AND w.position > 15 AND i.kind IN ('movie','episode') "
+            f"WHERE w.user_id = :uid AND w.completed = 0 AND w.position > 15 AND i.kind IN ('movie','episode','book') "
             f"AND {where} ORDER BY w.updated_at DESC LIMIT 40", params).fetchall()
         shows = con.execute(
             f"SELECT se.parent_id AS show_id, MAX(w.updated_at) AS last FROM watch_state w "
@@ -193,7 +193,7 @@ def continue_watching(user: dict, limit: int = 20) -> list[dict]:
     entries.sort(reverse=True)
     entries = entries[:limit]
     eps = _episode_cards([e[1] for e in entries if e[2] == "episode"], user["id"])
-    movie_ids = [e[1] for e in entries if e[2] == "movie"]
+    movie_ids = [e[1] for e in entries if e[2] in ("movie", "book")]
     with db() as con:
         movies = {r["id"]: r for r in con.execute(
             f"SELECT * FROM items WHERE id IN ({','.join('?' * len(movie_ids))})", movie_ids)} if movie_ids else {}
@@ -290,7 +290,8 @@ def _section_specs(user: dict, libs: list[dict], con) -> list[dict]:
                   for g in genres]
     for l in libs:
         if l["kind"] not in ("movies", "shows"):
-            title = "Recently added music" if l["kind"] == "music" else f"Latest in {l['name']}"
+            title = {"music": "Recently added music", "audiobooks": f"Recently added to {l['name']}"}.get(
+                l["kind"], f"Latest in {l['name']}")
             specs.append({"id": f"recent-{l['id']}", "type": "recent", "title": title, "libs": [l["id"]]})
     return specs
 
@@ -564,6 +565,27 @@ def item_detail(item_id: int, user: dict = Depends(auth.current_user)):
                                f"AND i.kind = 'album' AND i.artist = ? AND i.id != ? ORDER BY i.year DESC",
                                (item["library_id"], item["artist"], item_id)).fetchall()
             out["more_by_artist"] = cards(more, uid)
+        elif kind == "book":
+            from . import audiobooks
+            ps = audiobooks.parts(con, item_id)
+            out["parts"] = [{"file_id": p["id"], "start": p["start"], "duration": p["duration"] or 0} for p in ps]
+            out["duration"] = sum(p["duration"] or 0 for p in ps)
+            out["files"] = _files(item_id)
+            ex = out["extra"]
+            out["chapters"] = ex.pop("chapters", None) or []
+            for k in ("file_chapters", "file_titles", "local_cover", "match_attempts"):
+                ex.pop(k, None)
+            if ex.get("series"):
+                rows = con.execute("SELECT * FROM items WHERE library_id = ? AND kind = 'book' "
+                                   "AND json_extract(extra, '$.series') = ? ORDER BY sort_title",
+                                   (item["library_id"], ex["series"])).fetchall()
+                out["series_books"] = cards(rows, uid) if len(rows) > 1 else []
+            if item["artist"]:
+                rows = con.execute("SELECT * FROM items WHERE library_id = ? AND kind = 'book' AND artist = ? "
+                                   "AND id != ? AND COALESCE(json_extract(extra, '$.series'), '') != ? "
+                                   "ORDER BY year DESC, sort_title LIMIT 24",
+                                   (item["library_id"], item["artist"], item_id, ex.get("series") or "")).fetchall()
+                out["more_by_author"] = cards(rows, uid)
         elif kind == "photoalbum":
             photos = con.execute("SELECT * FROM items WHERE parent_id = ? ORDER BY sort_title", (item_id,)).fetchall()
             out["photos"] = cards(photos, uid)
@@ -621,7 +643,7 @@ class WatchedBody(BaseModel):
 def set_watched(item_id: int, body: WatchedBody, user: dict = Depends(auth.current_user)):
     item = get_item(item_id, user)
     with db() as con:
-        if item["kind"] in ("movie", "episode"):
+        if item["kind"] in ("movie", "episode", "book"):
             ids = [item_id]
         elif item["kind"] == "season":
             ids = [r["id"] for r in con.execute("SELECT id FROM items WHERE parent_id = ?", (item_id,))]
@@ -673,7 +695,7 @@ def search(q: str, user: dict = Depends(auth.current_user)):
     params = {**params, "q": f"%{q}%", "start": f"{q}%", "uid": user["id"]}
     with db() as con:
         titles = con.execute(
-            f"SELECT {_top_columns('show')} FROM items i WHERE {where} AND i.kind IN ('movie','show','album','photoalbum') "
+            f"SELECT {_top_columns('show')} FROM items i WHERE {where} AND i.kind IN ('movie','show','album','book','photoalbum') "
             f"AND (i.title LIKE :q OR i.original_title LIKE :q OR i.artist LIKE :q) "
             f"ORDER BY (i.title LIKE :start) DESC, i.rating DESC NULLS LAST LIMIT 40", params).fetchall()
         episodes = con.execute(f"{EPISODE_JOIN} WHERE e.kind = 'episode' AND e.title LIKE :q AND "

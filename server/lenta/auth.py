@@ -10,6 +10,11 @@ from fastapi import Depends, HTTPException, Request
 from .db import db, get_setting, set_setting
 
 COOKIE = "lenta_token"
+COOKIE_HTTPS = "lenta_token_s"     # its own name on HTTPS: a Secure cookie must not block signing in over HTTP
+
+
+def cookie_name(request: Request) -> str:
+    return COOKIE_HTTPS if request.url.scheme == "https" else COOKIE
 TOKEN_DAYS = 30
 _ITERATIONS = 240_000
 AVATAR_COLORS = ["#F2B33D", "#E86A5A", "#6FB7A8", "#8C7BE0", "#D98AC0", "#7FA6E8", "#C9C25B"]
@@ -47,8 +52,9 @@ def _token_from_request(request: Request) -> str | None:
     header = request.headers.get("authorization", "")
     if header.lower().startswith("bearer "):
         return header[7:].strip()
-    if request.cookies.get(COOKIE):
-        return request.cookies[COOKIE]
+    token = request.cookies.get(cookie_name(request))
+    if token:
+        return token
     # Lets external players (VLC, mpv) open a stream URL directly.
     return request.query_params.get("token")
 

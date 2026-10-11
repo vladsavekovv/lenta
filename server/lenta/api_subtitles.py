@@ -47,7 +47,7 @@ def _client() -> opensubtitles.OpenSubtitles:
     client = opensubtitles.OpenSubtitles()
     if not client.enabled:
         raise HTTPException(400, "Online subtitles are off. An administrator can add an OpenSubtitles API key "
-                                 "in Server admin › Settings.")
+                                 "in Settings › Subtitles.")
     return client
 
 
