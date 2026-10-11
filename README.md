@@ -39,6 +39,10 @@ No accounts, no subscriptions, no cloud, no tracking. Your media stays on your d
 HTTP and HTTPS run side by side out of the box, with LENTA's own certificate or yours ([HTTPS guide](docs/INSTALL.md#https)).
 
 <p align="center">
+<img width="1913" height="986" alt="lenta_https" src="https://github.com/user-attachments/assets/66f32757-1aa3-4a61-b9fc-f378b2a9aad2" />
+</p>
+
+<p align="center">
   <img src="docs/images/home-banner.jpg" alt="LENTA home screen with the featured trailer banner" width="100%">
 </p>
 
