@@ -6,7 +6,7 @@ database and are edited from the admin dashboard; see db.SETTING_DEFAULTS.
 import os
 from pathlib import Path
 
-VERSION = "1.2.0"
+VERSION = "1.8.17"
 APP_NAME = "LENTA Media Server"
 
 _ROOT = Path(__file__).resolve().parents[2]  # .../lenta
@@ -35,7 +35,8 @@ AUDIO_EXT = {".mp3", ".flac", ".m4a", ".aac", ".ogg", ".oga", ".opus", ".wav", "
 PHOTO_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 SUB_EXT = {".srt", ".vtt", ".ass", ".ssa"}
 
-LIBRARY_KINDS = {"movies", "shows", "music", "audiobooks", "photos"}
+LIBRARY_KINDS = {"movies", "shows", "music", "audiobooks", "photos", "livetv"}
+FOLDERLESS_KINDS = {"livetv"}        # live TV comes from tuners and playlists, not folders
 
 
 def ensure_dirs() -> None:

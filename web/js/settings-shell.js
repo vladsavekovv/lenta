@@ -41,6 +41,7 @@ export const NAV = [
     { id: 'trailers', label: 'Trailers and theme music', icon: 'film' },
     { id: 'subtitles', label: 'Subtitles', icon: 'subs' },
     { id: 'previews', label: 'Previews and intros', icon: 'image' },
+    { id: 'livetv', label: 'Live TV', icon: 'live' },
   ] },
   { title: 'Advanced', admin: true, items: [
     { id: 'logs', label: 'Logs', icon: 'doc' },
@@ -70,10 +71,10 @@ const opened = new Set();
 let navTop = 0;                         // the sidebar's scroll position, kept between pages
 let reopenRail = false;                 // the main side menu was open when Settings opened: open it again on leaving
 
-// Settings has its own menu, so the main side menu folds to icons while you're here (not with Redline's
-// menu bar on top); it opens again when you leave, as it was.
+// Settings has its own menu, so the main side menu folds to icons while you're here (not for the themes
+// with the menu bar on top); it opens again when you leave, as it was.
 function foldMainMenu() {
-  if (document.documentElement.dataset.theme === 'redline' || document.body.classList.contains('rail-collapsed')) return;
+  if (document.documentElement.classList.contains('topnav') || document.body.classList.contains('rail-collapsed')) return;
   document.body.classList.add('rail-collapsed');
   renderRail();
   reopenRail = true;

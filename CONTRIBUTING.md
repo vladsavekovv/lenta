@@ -100,6 +100,11 @@ sudo apt install python3-cryptography
 python3 android/build_apk.py --out web/download/lenta.apk
 ```
 
+The app's code is in `android/app_code.py` (Dalvik instructions). Before writing the APK, the build runs
+`android/verify_code.py`, which checks every method the way Android's verifier does (register types, method
+arguments, results); a mistake stops the build instead of making the app close at start. You can run it alone:
+`python3 android/verify_code.py`.
+
 It is signed with `android/lenta-release.pem`. **That key is private and is not in this repository.**
 
 - If the key file is missing, the first build creates a new key and certificate there automatically.

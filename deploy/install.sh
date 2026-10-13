@@ -121,7 +121,8 @@ else
   CREATED_USERS="${CREATED_USERS:+$CREATED_USERS }$SERVICE_USER"
 fi
 SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
-# GPU device access (/dev/dri, /dev/nvidia*) through the groups your drivers already set up.
+# GPU device access (/dev/dri, /dev/nvidia*) and USB TV tuners (/dev/dvb, owned by the 'video'
+# group on Ubuntu) through the groups your drivers already set up. No driver is installed here.
 for g in video render; do
   if getent group "$g" >/dev/null; then usermod -aG "$g" "$SERVICE_USER"; fi
 done
@@ -131,7 +132,7 @@ mkdir -p "$PREFIX" "$CONF"
 rsync -a --delete --exclude '__pycache__' "$SRC/server/" "$PREFIX/server/"
 rsync -a --delete "$SRC/web/" "$PREFIX/web/"
 rsync -a --delete "$SRC/deploy/" "$PREFIX/deploy/"
-chmod 755 "$PREFIX"/deploy/*.sh
+chmod 755 "$PREFIX"/deploy/*.sh "$PREFIX"/deploy/*.py
 cp "$SRC/README.md" "$PREFIX/README.md"
 if [[ -d "$SRC/docs" ]]; then rsync -a --delete "$SRC/docs/" "$PREFIX/docs/"; fi
 # Samsung TV app: its files, a ready package and its installer, downloadable from the server

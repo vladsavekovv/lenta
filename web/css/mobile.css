@@ -44,7 +44,7 @@
 .sheet-empty { color: var(--muted); padding: 10px 14px 20px; }
 
 /* Phones, upright or on their side (a sideways phone is wide but short): bottom tab bar layout. */
-@media (max-width: 720px), (max-height: 500px) and (hover: none) {
+@media (max-width: 720px), (max-height: 500px) and (hover: none), (max-height: 500px) and (any-pointer: coarse) {
   :root { --tabbar-h: calc(60px + env(safe-area-inset-bottom)); --gutter: 16px; }
   .app { grid-template-columns: 1fr !important; }
 
@@ -131,7 +131,7 @@
   .grid.zoomable .card .t, .grid.zoomable .card .sub { font-size: 13px; }
 }
 
-@media (max-height: 500px) and (hover: none) and (min-width: 721px) {
+@media (max-height: 500px) and (hover: none) and (min-width: 721px), (max-height: 500px) and (any-pointer: coarse) and (min-width: 721px) {
   :root { --tabbar-h: calc(48px + env(safe-area-inset-bottom)); }
   .tabbar > a, .tabbar > button { flex-direction: row; gap: 8px; font-size: 13px; }
   .hero { min-height: 88vh; }
@@ -140,7 +140,7 @@
 }
 
 /* ---------- touch screens ---------- */
-@media (hover: none), (pointer: coarse) {
+@media (hover: none), (pointer: coarse), (any-pointer: coarse) and (max-width: 1024px) {
   .btn, .input, select.input { min-height: 44px; }
 }
 

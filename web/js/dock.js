@@ -81,11 +81,12 @@ function render(v) {
   }
   const back = caps.back || 10, fwd = caps.fwd || 30;
   mount(el, html`
+    ${st.live ? html`<div class="dk-live-rail"></div>` : html`
     <div class="dk-seek" role="slider" tabindex="0" aria-label="Time" aria-valuemin="0" aria-valuemax="${Math.round(st.dur || 0)}">
       <div class="dk-rail"><div class="dk-buf"></div><div class="dk-done"></div></div>
       <span class="dk-knob"></span>
       <div class="dk-tip"><div class="dk-thumb" hidden></div><span class="dk-tipt"></span></div>
-    </div>
+    </div>`}
     <div class="dk-left">
       ${v.full ? '' : html`<button type="button" class="dk-art ${info.video ? 'is-video' : ''}" data-dk="art" aria-label="${info.artLabel || 'Open'}" title="${info.artLabel || 'Open'}">
         ${info.video ? '' : info.art ? html`<img class="dk-art-bg" src="${info.art}" alt=""><img class="dk-art-img" src="${info.art}" alt="">` : html`<span class="dk-art-ph">${icon(info.placeholder || 'music')}</span>`}
@@ -94,15 +95,15 @@ function render(v) {
       <div class="dk-meta">
         <a class="dk-t" data-dk="title" href="${info.href || '#'}" title="${info.title}">${info.title}</a>
         <div class="dk-s" title="${info.sub || ''}">${info.sub || ''}</div>
-        <div class="dk-time">${fmtTime(st.pos)} / ${fmtTime(st.dur)}</div>
+        <div class="dk-time">${st.live ? html`<span class="dk-live">LIVE</span>` : html`${fmtTime(st.pos)} / ${fmtTime(st.dur)}`}</div>
       </div>
     </div>
     <div class="dk-center">
-      ${btn('prev', 'skipprev', caps.prevLabel || 'Previous', { disabled: !caps.prev, cls: 'dk-hide-sm' })}
-      ${btn('back', back === 15 ? 'replay15' : 'replay10', `Back ${back} seconds`, { cls: 'dk-hide-xs' })}
+      ${caps.live ? '' : html`${btn('prev', 'skipprev', caps.prevLabel || 'Previous', { disabled: !caps.prev, cls: 'dk-hide-sm' })}
+      ${btn('back', back === 15 ? 'replay15' : 'replay10', `Back ${back} seconds`, { cls: 'dk-hide-xs' })}`}
       <button type="button" class="dk-btn dk-play" data-dk="toggle" aria-label="${st.paused ? 'Play' : 'Pause'}" title="${st.paused ? 'Play' : 'Pause'}">${icon(st.paused ? 'play' : 'pause')}</button>
-      ${btn('fwd', fwd === 30 ? 'fwd30' : 'fwd10', `Forward ${fwd} seconds`, { cls: 'dk-hide-xs' })}
-      ${btn('next', 'skipnext', caps.nextLabel || 'Next', { disabled: !caps.next, cls: 'dk-hide-sm' })}
+      ${caps.live ? '' : html`${btn('fwd', fwd === 30 ? 'fwd30' : 'fwd10', `Forward ${fwd} seconds`, { cls: 'dk-hide-xs' })}
+      ${btn('next', 'skipnext', caps.nextLabel || 'Next', { disabled: !caps.next, cls: 'dk-hide-sm' })}`}
       ${btn('stop', 'stop', 'Stop', { cls: 'dk-stop' })}
     </div>
     <div class="dk-right">
@@ -134,7 +135,7 @@ function tick() {
     if (done) done.style.width = `${pct}%`;
     if (knob) knob.style.left = `${pct}%`;
     if (buf) buf.style.width = `${st.dur && st.buf ? Math.min(100, st.buf / st.dur * 100) : 0}%`;
-    if (time) time.textContent = `${fmtTime(pos)} / ${fmtTime(st.dur)}`;
+    if (time && !st.live) time.textContent = `${fmtTime(pos)} / ${fmtTime(st.dur)}`;
     if (st.paused !== v.lastPaused) {
       if (v === barView) announce();
       v.lastPaused = st.paused;
@@ -158,6 +159,12 @@ function tick() {
 function wire(v) {
   const el = v.el;
   const seek = el.querySelector('.dk-seek');
+  if (seek) wireSeek(v, el, seek);
+  wireRest(v, el);
+}
+
+// Live has no seek bar at all, so everything that drags along it is wired only when there is one.
+function wireSeek(v, el, seek) {
   const frac = (e) => { const r = seek.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); };
   const tip = (f) => {
     const t = el.querySelector('.dk-tip'), r = seek.getBoundingClientRect();
@@ -185,6 +192,9 @@ function wire(v) {
     if (e.key === 'ArrowRight') { v.adapter().skip(10); e.preventDefault(); e.stopPropagation(); }
     if (e.key === 'ArrowLeft') { v.adapter().skip(-10); e.preventDefault(); e.stopPropagation(); }
   });
+}
+
+function wireRest(v, el) {
   // volume: the thin upright bar at the right end (like Plex): click or drag up and down, or use the wheel
   const vb = el.querySelector('.dk-vbar');
   const vfrac = (e) => { const r = vb.getBoundingClientRect(); return Math.max(0, Math.min(1, (r.bottom - e.clientY) / r.height)); };

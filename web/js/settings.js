@@ -13,7 +13,8 @@ const PREVIEW = {
   noir: { bg: '#121214', card: '#26262A', text: '#EEEEEF', accent: '#F2F2F2', glow: 'rgb(255 255 255 / .12)', r: '1px' },
   abyss: { bg: '#08151A', card: '#152B33', text: '#E3F2F4', accent: '#5CD6C8', glow: 'rgb(92 214 200 / .25)', r: '8px' },
   velvet: { bg: '#170C0F', card: '#2D191F', text: '#F5EAEC', accent: '#EC5A5F', glow: 'rgb(236 90 95 / .3)', r: '3px' },
-  redline: { bg: '#141414', card: '#2F2F2F', text: '#FFFFFF', accent: '#E50914', glow: 'rgb(229 9 20 / .3)', r: '4px' },
+  netflix: { bg: '#141414', card: '#2F2F2F', text: '#FFFFFF', accent: '#E50914', glow: 'rgb(229 9 20 / .3)', r: '4px' },
+  hbo: { bg: '#000000', card: '#141020', text: '#FFFFFF', accent: '#71B8F2', glow: 'rgb(0 43 231 / .45)', r: '8px' },
   aurora: { bg: '#0B0D1C', card: '#1A1E40', text: '#ECEEFF', accent: 'linear-gradient(100deg,#A895FF,#63D8F2)', glow: 'rgb(168 149 255 / .35)', r: '10px' },
 };
 
@@ -35,7 +36,7 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
   mount(view, html`<div class="lay-head">${layoutButtons()}</div>
     ${layoutBar()}
     <div class="settings"><div class="settings-cols">
-      <section class="panel" data-panel="look"><h3>Look</h3><p class="lead">All six themes are dark. The change shows at once; save to keep it.</p>
+      <section class="panel" data-panel="look"><h3>Look</h3><p class="lead">All seven themes are dark. The change shows at once; save to keep it.</p>
         <div class="theme-grid">${THEMES.map(t => {
           const c = PREVIEW[t.id];
           return html`<button type="button" class="theme-card ${draft.theme === t.id ? 'on' : ''}" data-theme-id="${t.id}" aria-pressed="${draft.theme === t.id}">
@@ -268,7 +269,64 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
 // ---- Settings › Home screen › Sections -----------------------------------------------------------------
 // Every Home row: drag by the handle (mouse or touch) or move with the arrows (TV remote); edit to rename,
 // pick libraries or delete; New section adds your own. Kept in draft.home_sections / draft.home_row_order.
-const RULE_NAMES = { recent: 'Recently added', top: 'Highest rated (Top 10)', shuffle: 'Shuffled, a new mix every day', genre: 'One genre' };
+const RULE_NAMES = { recent: 'Recently added', top: 'Highest rated (Top 10)', shuffle: 'Shuffled, a new mix every day',
+  genre: 'One genre', channels: 'Channels' };
+
+// The channels to choose from, fetched once the first picker opens — a tuner can carry a couple of
+// hundred, which is not worth loading for someone who never opens Settings › Home screen.
+let channelList = null;
+async function allChannels() {
+  if (!channelList) channelList = (await api.get('/api/livetv/channels')).channels || [];
+  return channelList;
+}
+
+// The second dialog: every channel with a tick beside it. Answers with the chosen ids, or null if the
+// person backed out, so that backing out leaves the section's existing choice alone.
+function pickChannels(chosen) {
+  return new Promise(async (resolve) => {
+    let list;
+    try { list = await allChannels(); } catch { toast('Could not load the channel list', 'error'); resolve(null); return; }
+    if (!list.length) { toast('No channels yet - scan a tuner or add a playlist first.'); resolve(null); return; }
+    const set = new Set(chosen);
+    let answered = false;
+    const m = modal(html`<h2>Channels in this section</h2>
+      <p class="lead">Ticked channels appear in the section, in the order your provider numbers them.</p>
+      <form id="chan-form">
+        <div class="chan-head">
+          <input class="input" id="chan-q" type="search" placeholder="Search channels" autocomplete="off">
+          <button type="button" class="btn small" data-all>All</button>
+          <button type="button" class="btn small" data-none>None</button>
+        </div>
+        <div class="chan-list" id="chan-list">${list.map(c => html`<label class="chan-row" data-name="${(c.name || '').toLowerCase()}">
+          <input type="checkbox" data-chan="${c.id}" ${set.has(c.id) ? raw('checked') : ''}>
+          <img src="/api/livetv/channels/${c.id}/logo" alt="" loading="lazy">
+          <span class="chan-no">${c.number ?? ''}</span>
+          <span class="chan-name">${c.name}</span></label>`)}</div>
+        <div class="foot"><span class="chan-count" id="chan-count"></span>
+          <button type="button" class="btn" data-close>Cancel</button>
+          <button class="btn primary">Done</button></div>
+      </form>`, { wide: true, onClose: () => { if (!answered) resolve(null); } });
+    const box = m.box;
+    const ticks = () => [...box.querySelectorAll('[data-chan]')];
+    const shown = () => ticks().filter(t => !t.closest('.chan-row').hidden);
+    const count = () => { box.querySelector('#chan-count').textContent = `${ticks().filter(t => t.checked).length} chosen`; };
+    count();
+    box.addEventListener('change', count);
+    box.querySelector('#chan-q').addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      box.querySelectorAll('.chan-row').forEach(r => { r.hidden = !!q && !r.dataset.name.includes(q); });
+    });
+    // All and None act on what the search is showing, so they stay useful once it is narrowed down.
+    box.querySelector('[data-all]').addEventListener('click', () => { shown().forEach(t => { t.checked = true; }); count(); });
+    box.querySelector('[data-none]').addEventListener('click', () => { shown().forEach(t => { t.checked = false; }); count(); });
+    box.querySelector('#chan-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      answered = true;                       // answer before closing: onClose would otherwise answer null
+      resolve(ticks().filter(t => t.checked).map(t => Number(t.dataset.chan)));
+      m.close();
+    });
+  });
+}
 
 async function sectionOrder(body, draft, dirty) {
   const list = body.querySelector('#p-sections');
@@ -289,7 +347,13 @@ async function sectionOrder(body, draft, dirty) {
     const names = libs.filter(l => set.has(l.id)).map(l => l.name);
     return names.length ? names.join(', ') : 'No libraries';
   };
-  const describe = (x) => [x.custom ? RULE_NAMES[x.rule] + (x.rule === 'genre' && x.genre ? `: ${x.genre}` : '') : '', libNames(x.libs)].filter(Boolean).join(' · ');
+  const describe = (x) => {
+    if (x.custom && x.rule === 'channels') {
+      const n = (x.channels || []).length;
+      return `Channels · ${n} chosen`;
+    }
+    return [x.custom ? RULE_NAMES[x.rule] + (x.rule === 'genre' && x.genre ? `: ${x.genre}` : '') : '', libNames(x.libs)].filter(Boolean).join(' · ');
+  };
   const store = () => {
     draft.home_sections = JSON.stringify(cfg);
     draft.home_row_order = JSON.stringify([...list.querySelectorAll('li[data-sec]')].map(li => li.dataset.sec));
@@ -320,7 +384,10 @@ async function sectionOrder(body, draft, dirty) {
         ${custom ? html`<div class="field"><label for="sec-rule">Shows</label><select class="input" id="sec-rule">
             ${Object.entries(RULE_NAMES).map(([k, v]) => html`<option value="${k}" ${k === x.rule ? raw('selected') : ''}>${v}</option>`)}</select></div>
           <div class="field" id="sec-genre-f" ${x.rule === 'genre' ? '' : raw('hidden')}><label for="sec-genre">Genre</label><select class="input" id="sec-genre">
-            ${genres.map(g => html`<option ${g === x.genre ? raw('selected') : ''}>${g}</option>`)}</select></div>`
+            ${genres.map(g => html`<option ${g === x.genre ? raw('selected') : ''}>${g}</option>`)}</select></div>
+          <div class="field" id="sec-chan-f" ${x.rule === 'channels' ? '' : raw('hidden')}><label>Channels</label>
+            <div class="chan-pickrow"><button type="button" class="btn" id="sec-chan">Choose channels</button>
+              <span class="hint" id="sec-chan-n"></span></div></div>`
           : x.type === 'genre' ? html`<p class="hint" style="margin:-4px 0 14px;color:var(--muted);font-size:14px">Shows ${x.genre} titles from these libraries.</p>` : ''}
         <div class="field"><label>Fill it from</label><div class="lib-checks">${libs.map(l => html`<label class="check"><input type="checkbox" data-sec-lib="${l.id}" ${x.libs.includes(l.id) ? raw('checked') : ''}>${l.name}</label>`)}</div></div>
         <p class="error-text" id="sec-err"></p>
@@ -330,7 +397,35 @@ async function sectionOrder(body, draft, dirty) {
           <button type="button" class="btn" data-close>Cancel</button><button class="btn primary">${isNew ? 'Add section' : 'Apply'}</button></div>
       </form>`);
     const box = m.box;
-    box.querySelector('#sec-rule')?.addEventListener('change', (e) => { box.querySelector('#sec-genre-f').hidden = e.target.value !== 'genre'; });
+    x.channels = [...(x.channels || [])];
+    const liveLibs = new Set(libs.filter(l => l.kind === 'livetv').map(l => l.id));
+    const rule = box.querySelector('#sec-rule');
+    const chanCount = () => {
+      const n = x.channels.length;
+      box.querySelector('#sec-chan-n').textContent = n ? `${n} channel${n === 1 ? '' : 's'} chosen` : 'None chosen yet';
+    };
+    // Showing a live channel needs a live TV library in the section, so the option appears with one and
+    // goes away without one - rather than offering a choice that would quietly produce an empty row.
+    const syncRule = () => {
+      const live = [...box.querySelectorAll('[data-sec-lib]')].some(c => c.checked && liveLibs.has(Number(c.dataset.secLib)));
+      const opt = rule?.querySelector('option[value="channels"]');
+      if (opt) {
+        opt.hidden = !live;
+        opt.disabled = !live;
+        if (!live && rule.value === 'channels') rule.value = 'recent';
+      }
+      if (!rule) return;
+      box.querySelector('#sec-genre-f').hidden = rule.value !== 'genre';
+      box.querySelector('#sec-chan-f').hidden = rule.value !== 'channels';
+      chanCount();
+    };
+    rule?.addEventListener('change', syncRule);
+    box.querySelectorAll('[data-sec-lib]').forEach(c => c.addEventListener('change', syncRule));
+    box.querySelector('#sec-chan')?.addEventListener('click', async () => {
+      const got = await pickChannels(x.channels);
+      if (got) { x.channels = got; chanCount(); }
+    });
+    if (custom) syncRule();
     box.querySelector('#sec-reset')?.addEventListener('click', () => {
       delete cfg.titles[x.id]; delete cfg.libs[x.id];
       Object.assign(x, { title: x.default_title, libs: [...(x.default_libs || x.libs)], renamed: false, libs_changed: false });
@@ -359,7 +454,11 @@ async function sectionOrder(body, draft, dirty) {
         x.rule = box.querySelector('#sec-rule').value;
         x.genre = x.rule === 'genre' ? box.querySelector('#sec-genre').value : '';
         if (x.rule === 'genre' && !x.genre) { err.textContent = 'There are no genres yet.'; return; }
-        const c = { id: x.id, title: x.title, libs: x.libs, rule: x.rule, genre: x.genre };
+        if (x.rule !== 'channels') x.channels = [];
+        if (x.rule === 'channels' && !x.channels.length) {
+          err.textContent = 'Choose at least one channel for this section.'; return;
+        }
+        const c = { id: x.id, title: x.title, libs: x.libs, rule: x.rule, genre: x.genre, channels: x.channels };
         const at = cfg.custom.findIndex(c2 => c2.id === x.id);
         if (at >= 0) cfg.custom[at] = c; else cfg.custom.push(c);
         if (isNew) sections.unshift(x);         // new sections start at the top; move them where you like
@@ -374,7 +473,8 @@ async function sectionOrder(body, draft, dirty) {
 
   body.querySelector('#p-sections-new').addEventListener('click', () => {
     const video = libs.filter(l => l.kind === 'movies' || l.kind === 'shows').map(l => l.id);
-    edit({ id: `c-${Date.now().toString(36)}`, title: '', custom: true, rule: 'recent', genre: '', libs: video.length ? video : libs.map(l => l.id) }, true);
+    edit({ id: `c-${Date.now().toString(36)}`, title: '', custom: true, rule: 'recent', genre: '', channels: [],
+      libs: video.length ? video : libs.map(l => l.id) }, true);
   });
   body.querySelector('#p-sections-hidden').addEventListener('click', (e) => {
     const b = e.target.closest('[data-restore]');

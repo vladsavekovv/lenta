@@ -114,7 +114,7 @@ def _start_worker(library_id: int) -> None:
 def request_scan(library_id: int | None = None, refresh_metadata: bool = False) -> None:
     """Queue one library (or all of them) for scanning in the background. Each library has its own queue."""
     with db() as con:
-        ids = [r["id"] for r in con.execute("SELECT id FROM libraries ORDER BY position, id")] \
+        ids = [r["id"] for r in con.execute("SELECT id FROM libraries WHERE kind NOT IN ('livetv') ORDER BY position, id")] \
             if library_id is None else [library_id]
     with _queue_lock:
         for lid in ids:

@@ -5,14 +5,19 @@ What the app does (it is a full-screen window onto your LENTA server):
                 Download manager; Back goes back in LENTA; full-screen video; file picker for artwork uploads.
   Client        keeps LENTA pages in the app and opens other sites (IMDb, Wikipedia…) in the browser;
                 shows the "can't reach the server" page when the server doesn't answer.
-  Chrome        full-screen video (landscape) and the file picker.
+  Chrome        full-screen video (landscape), no grey default video picture, and the file picker.
   Bridge        window.LentaApp for pages: setServer (only from the app's own setup page), server(),
-                changeServer(), keepScreenOn(on), version().
+                changeServer(), keepScreenOn(on), audioPlaying(on), setColors(argb), fullscreen(on), version().
   Ui            runs Bridge requests on the main thread.
+
+HTTPS: LENTA's own certificate (issued by "LENTA local CA") is accepted for the saved server's address (and on
+the setup page while you connect); any other certificate problem shows the setup page with an explanation.
+Music and audiobooks keep playing with the screen off (a partial wake lock while they play). When LENTA
+moves to another port or to https on the same machine, the app remembers the new address by itself.
 """
 from dexwriter import ACC_PUBLIC, ACC_VOLATILE, ClassDef, Field, Method
 
-VERSION = "1.0.1"
+VERSION = "1.1.4"
 PKG = "app.lenta"
 MA, CL, CH, BR, UI = "Lapp/lenta/MainActivity;", "Lapp/lenta/Client;", "Lapp/lenta/Chrome;", "Lapp/lenta/Bridge;", "Lapp/lenta/Ui;"
 ACT = "Landroid/app/Activity;"
@@ -26,6 +31,11 @@ FCP = "Landroid/webkit/WebChromeClient$FileChooserParams;"
 REQ = "Landroid/webkit/WebResourceRequest;"
 DMR = "Landroid/app/DownloadManager$Request;"
 SP = "Landroid/content/SharedPreferences;"
+WL = "Landroid/os/PowerManager$WakeLock;"
+SSLE = "Landroid/net/http/SslError;"
+SSLH = "Landroid/webkit/SslErrorHandler;"
+SSLC = "Landroid/net/http/SslCertificate;"
+DN = "Landroid/net/http/SslCertificate$DName;"
 SPE = "Landroid/content/SharedPreferences$Editor;"
 SETUP = "file:///android_asset/setup.html"
 BG = 0xFF0A0A0C                   # LENTA's near-black
@@ -34,6 +44,11 @@ FILE_REQUEST = 7
 F_WEB, F_CUSTOM, F_CB, F_FILE, F_HOST, F_SETUP = (f"{MA}->web:{WV}", f"{MA}->custom:Landroid/view/View;",
                                                   f"{MA}->customCb:{CVC}", f"{MA}->fileCb:{VCB}",
                                                   f"{MA}->host:{STR}", f"{MA}->onSetup:Z")
+F_WL = f"{MA}->wl:{WL}"
+LP = "Landroid/view/WindowManager$LayoutParams;"
+F_VIDEO, F_PIP, F_FULL = f"{MA}->videoOn:Z", f"{MA}->wasPip:Z", f"{MA}->full:Z"
+PIPB = "Landroid/app/PictureInPictureParams$Builder;"
+UI_INIT = f"{UI}-><init>({MA}IZI)V"
 
 
 def L(name):
@@ -57,7 +72,8 @@ def ctor_with_activity(cls, super_):
 def classes() -> list[ClassDef]:
     main = ClassDef(MA, ACT, interfaces=["Landroid/webkit/DownloadListener;"], fields=[
         Field("web", WV), Field("custom", "Landroid/view/View;"), Field("customCb", CVC), Field("fileCb", VCB),
-        Field("host", STR), Field("onSetup", "Z", ACC_PUBLIC | ACC_VOLATILE)], methods=[
+        Field("host", STR), Field("onSetup", "Z", ACC_PUBLIC | ACC_VOLATILE), Field("wl", WL),
+        Field("videoOn", "Z"), Field("wasPip", "Z"), Field("full", "Z")], methods=[
         Method("<init>", "()V", regs=1, code=[
             ("invoke-direct", ["v0"], f"{ACT}-><init>()V"), ("return-void",)]),
 
@@ -139,6 +155,7 @@ def classes() -> list[ClassDef]:
 
         # keepOn: keep the screen awake while a video plays
         Method("keepOn", "(Z)V", regs=4, code=[
+            ("iput-boolean", "v3", "v2", F_VIDEO),     # a video is playing (Home then shrinks it to picture-in-picture)
             ("invoke-virtual", ["v2"], f"{ACT}->getWindow()Landroid/view/Window;"),
             ("move-result-object", "v0"),
             ("const/16", "v1", 128),                 # WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
@@ -147,6 +164,180 @@ def classes() -> list[ClassDef]:
             ("return-void",),
             L("off"),
             ("invoke-virtual", ["v0", "v1"], "Landroid/view/Window;->clearFlags(I)V"),
+            ("return-void",)]),
+
+        # audio: music or an audiobook is playing — keep the CPU awake so it goes on with the screen off
+        Method("audio", "(Z)V", regs=5, code=[
+            ("iget-object", "v0", "v3", F_WL),
+            ("if-nez", "v0", "have"),
+            ("const-string", "v1", "power"),          # Context.POWER_SERVICE
+            ("invoke-virtual", ["v3", "v1"], f"{ACT}->getSystemService({STR}){OBJ}"),
+            ("move-result-object", "v1"),
+            ("check-cast", "v1", "Landroid/os/PowerManager;"),
+            ("const/4", "v2", 1),                     # PARTIAL_WAKE_LOCK
+            ("const-string", "v0", "lenta:audio"),
+            ("invoke-virtual", ["v1", "v2", "v0"], f"Landroid/os/PowerManager;->newWakeLock(I{STR}){WL}"),
+            ("move-result-object", "v0"),
+            ("const/4", "v2", 0),
+            ("invoke-virtual", ["v0", "v2"], f"{WL}->setReferenceCounted(Z)V"),
+            ("iput-object", "v0", "v3", F_WL),
+            L("have"),
+            ("invoke-virtual", ["v0"], f"{WL}->isHeld()Z"),
+            ("move-result", "v1"),
+            ("if-eqz", "v4", "off"),
+            ("if-nez", "v1", "end"),
+            ("invoke-virtual", ["v0"], f"{WL}->acquire()V"),
+            ("return-void",),
+            L("off"),
+            ("if-eqz", "v1", "end"),
+            ("invoke-virtual", ["v0"], f"{WL}->release()V"),
+            L("end"),
+            ("return-void",)]),
+
+        # colors: the status and navigation bars take the colour of the theme in use
+        Method("colors", "(I)V", regs=4, code=[
+            ("invoke-virtual", ["v2"], f"{ACT}->getWindow()Landroid/view/Window;"),
+            ("move-result-object", "v0"),
+            ("invoke-virtual", ["v0", "v3"], "Landroid/view/Window;->setStatusBarColor(I)V"),
+            ("invoke-virtual", ["v0", "v3"], "Landroid/view/Window;->setNavigationBarColor(I)V"),
+            ("iget-object", "v1", "v2", F_WEB),
+            ("invoke-virtual", ["v1", "v3"], f"{WV}->setBackgroundColor(I)V"),
+            ("return-void",)]),
+
+        # Home (or another app) while a video plays: it goes on in a small window (picture-in-picture)
+        Method("onUserLeaveHint", "()V", regs=5, code=[
+            ("invoke-super", ["v4"], f"{ACT}->onUserLeaveHint()V"),
+            ("iget-boolean", "v0", "v4", F_VIDEO),
+            ("if-eqz", "v0", "end"),
+            ("new-instance", "v0", PIPB),
+            ("invoke-direct", ["v0"], f"{PIPB}-><init>()V"),
+            ("new-instance", "v1", "Landroid/util/Rational;"),
+            ("const/16", "v2", 16),
+            ("const/16", "v3", 9),
+            ("invoke-direct", ["v1", "v2", "v3"], "Landroid/util/Rational;-><init>(II)V"),
+            ("invoke-virtual", ["v0", "v1"], f"{PIPB}->setAspectRatio(Landroid/util/Rational;){PIPB}"),
+            ("move-result-object", "v0"),
+            ("invoke-virtual", ["v0"], f"{PIPB}->build()Landroid/app/PictureInPictureParams;"),
+            ("move-result-object", "v0"),
+            ("invoke-virtual", ["v4", "v0"], f"{ACT}->enterPictureInPictureMode(Landroid/app/PictureInPictureParams;)Z"),
+            L("end"),
+            ("return-void",)]),
+
+        # the page learns about picture-in-picture: it shows only the video while the window is small
+        Method("onPictureInPictureModeChanged", "(ZLandroid/content/res/Configuration;)V", regs=6, code=[
+            ("invoke-super", ["v3", "v4", "v5"], f"{ACT}->onPictureInPictureModeChanged(ZLandroid/content/res/Configuration;)V"),
+            ("const-string", "v0", "document.documentElement.classList.remove('pip')"),
+            ("if-eqz", "v4", "js"),
+            ("const/4", "v1", 1),
+            ("iput-boolean", "v1", "v3", F_PIP),
+            ("const-string", "v0", "document.documentElement.classList.add('pip')"),
+            L("js"),
+            ("iget-object", "v1", "v3", F_WEB),
+            ("const/4", "v2", 0),
+            ("invoke-virtual", ["v1", "v0", "v2"], f"{WV}->evaluateJavascript({STR}{VCB})V"),
+            ("return-void",)]),
+
+        # back in the app (also from picture-in-picture): nothing to stop
+        Method("onResume", "()V", regs=2, code=[
+            ("invoke-super", ["v1"], f"{ACT}->onResume()V"),
+            ("const/4", "v0", 0),
+            ("iput-boolean", "v0", "v1", F_PIP),
+            ("iget-boolean", "v0", "v1", F_FULL),
+            ("if-eqz", "v0", "end"),
+            ("invoke-virtual", ["v1"], f"{MA}->applyFull()V"),      # back from the small window: bars hidden again
+            L("end"),
+            ("return-void",)]),
+
+        # the video player asks for the whole screen: sideways, status and navigation bars hidden.
+        # Native, so it needs no tap first (a web page's own full-screen request does).
+        Method("setFull", "(Z)V", regs=3, code=[
+            ("iget-boolean", "v0", "v1", F_FULL),
+            ("if-ne", "v0", "v2", "change"),
+            ("return-void",),                         # already so: nothing to do
+            L("change"),
+            ("iput-boolean", "v2", "v1", F_FULL),
+            ("invoke-virtual", ["v1"], f"{MA}->applyFull()V"),
+            ("return-void",)]),
+        Method("applyFull", "()V", regs=5, code=[
+            ("invoke-virtual", ["v4"], f"{ACT}->getWindow()Landroid/view/Window;"),
+            ("move-result-object", "v1"),
+            ("invoke-virtual", ["v1"], "Landroid/view/Window;->getDecorView()Landroid/view/View;"),
+            ("move-result-object", "v2"),
+            # the picture may use the strip beside the camera (Android 9+), so a video sideways has no black band
+            ("sget", "v0", "Landroid/os/Build$VERSION;->SDK_INT:I"),
+            ("const/16", "v3", 28),
+            ("if-lt", "v0", "v3", "nocut"),
+            ("iget-boolean", "v0", "v4", F_FULL),
+            ("if-eqz", "v0", "cutoff"),
+            ("sget", "v0", "Landroid/os/Build$VERSION;->SDK_INT:I"),
+            ("const/16", "v3", 30),
+            ("if-lt", "v0", "v3", "cutshort"),
+            ("const/4", "v0", 3),                     # ALWAYS (Android 11+): every edge, camera strip included
+            ("goto", "cutset"),
+            L("cutshort"),
+            ("const/4", "v0", 1),                     # SHORT_EDGES (Android 9 and 10)
+            ("goto", "cutset"),
+            L("cutoff"),
+            ("const/4", "v0", 0),                     # DEFAULT: back to the usual safe area
+            L("cutset"),
+            ("invoke-virtual", ["v1"], f"Landroid/view/Window;->getAttributes(){LP}"),
+            ("move-result-object", "v3"),
+            ("iput", "v0", "v3", f"{LP}->layoutInDisplayCutoutMode:I"),
+            ("invoke-virtual", ["v1", "v3"], f"Landroid/view/Window;->setAttributes({LP})V"),
+            L("nocut"),
+            ("iget-boolean", "v0", "v4", F_FULL),
+            ("if-eqz", "v0", "off"),
+            ("const/16", "v0", 0x1706),               # immersive sticky: hide status and navigation bars
+            ("invoke-virtual", ["v2", "v0"], "Landroid/view/View;->setSystemUiVisibility(I)V"),
+            ("const/4", "v0", 6),                     # SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            ("invoke-virtual", ["v4", "v0"], f"{ACT}->setRequestedOrientation(I)V"),
+            ("sget", "v0", "Landroid/os/Build$VERSION;->SDK_INT:I"),
+            ("const/16", "v3", 30),
+            ("if-lt", "v0", "v3", "done"),            # Android 11+: the current way too (bars come back with a swipe)
+            ("invoke-virtual", ["v1"], "Landroid/view/Window;->getInsetsController()Landroid/view/WindowInsetsController;"),
+            ("move-result-object", "v1"),
+            ("invoke-static", [], "Landroid/view/WindowInsets$Type;->systemBars()I"),
+            ("move-result", "v0"),
+            ("invoke-interface", ["v1", "v0"], "Landroid/view/WindowInsetsController;->hide(I)V"),
+            ("const/4", "v0", 2),                     # BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            ("invoke-interface", ["v1", "v0"], "Landroid/view/WindowInsetsController;->setSystemBarsBehavior(I)V"),
+            L("done"),
+            ("return-void",),
+            L("off"),
+            ("const/4", "v0", 0),
+            ("invoke-virtual", ["v2", "v0"], "Landroid/view/View;->setSystemUiVisibility(I)V"),
+            ("const/4", "v0", -1),                    # SCREEN_ORIENTATION_UNSPECIFIED
+            ("invoke-virtual", ["v4", "v0"], f"{ACT}->setRequestedOrientation(I)V"),
+            ("sget", "v0", "Landroid/os/Build$VERSION;->SDK_INT:I"),
+            ("const/16", "v3", 30),
+            ("if-lt", "v0", "v3", "end"),
+            ("invoke-virtual", ["v1"], "Landroid/view/Window;->getInsetsController()Landroid/view/WindowInsetsController;"),
+            ("move-result-object", "v1"),
+            ("invoke-static", [], "Landroid/view/WindowInsets$Type;->systemBars()I"),
+            ("move-result", "v0"),
+            ("invoke-interface", ["v1", "v0"], "Landroid/view/WindowInsetsController;->show(I)V"),
+            L("end"),
+            ("return-void",)]),
+
+        # the picture-in-picture window was closed: the video stops (like any video app)
+        Method("onStop", "()V", regs=4, code=[
+            ("invoke-super", ["v3"], f"{ACT}->onStop()V"),
+            ("iget-boolean", "v0", "v3", F_PIP),
+            ("if-eqz", "v0", "end"),
+            ("const/4", "v0", 0),
+            ("iput-boolean", "v0", "v3", F_PIP),
+            ("iget-object", "v1", "v3", F_WEB),
+            ("const-string", "v2", "window.lentaPipClosed && window.lentaPipClosed()"),
+            ("const/4", "v0", 0),
+            ("invoke-virtual", ["v1", "v2", "v0"], f"{WV}->evaluateJavascript({STR}{VCB})V"),
+            L("end"),
+            ("return-void",)]),
+
+        # closing the app: let go of the wake lock
+        Method("onDestroy", "()V", regs=2, code=[
+            ("const/4", "v0", 0),
+            ("invoke-virtual", ["v1", "v0"], f"{MA}->audio(Z)V"),
+            ("invoke-super", ["v1"], f"{ACT}->onDestroy()V"),
             ("return-void",)]),
 
         # leaving the app: write cookies to disk now, so the sign-in survives the app being closed
@@ -288,6 +479,15 @@ def classes() -> list[ClassDef]:
 
     client = ClassDef(CL, "Landroid/webkit/WebViewClient;", fields=[Field("a", MA)], methods=[
         ctor_with_activity(CL, "Landroid/webkit/WebViewClient;"),
+        # the page's address changed (LENTA moves between pages by the part after "#"): a video player page
+        # (#/play/…) takes the whole screen, sideways; any other page gives it back. Works whatever the page's code.
+        Method("doUpdateVisitedHistory", f"({WV}{STR}Z)V", regs=6, code=[
+            ("iget-object", "v0", "v2", f"{CL}->a:{MA}"),
+            ("const-string", "v1", "#/play/"),
+            ("invoke-virtual", ["v4", "v1"], f"{STR}->contains(Ljava/lang/CharSequence;)Z"),
+            ("move-result", "v1"),
+            ("invoke-virtual", ["v0", "v1"], f"{MA}->setFull(Z)V"),
+            ("return-void",)]),
         # LENTA pages stay in the app; other sites open in the browser
         Method("shouldOverrideUrlLoading", f"({WV}{REQ})Z", regs=6, code=[
             ("invoke-interface", ["v5"], f"{REQ}->isForMainFrame()Z"),
@@ -339,6 +539,94 @@ def classes() -> list[ClassDef]:
             ("iget-object", "v1", "v2", f"{CL}->a:{MA}"),
             ("iput-boolean", "v0", "v1", F_SETUP),
             ("return-void",)]),
+        # HTTPS: LENTA's own certificate ("LENTA local CA") is fine for the saved server (and while connecting on
+        # the setup page); any other certificate problem is refused and explained on the setup page
+        Method("onReceivedSslError", f"({WV}{SSLH}{SSLE})V", regs=8, code=[
+            ("iget-object", "v1", "v4", f"{CL}->a:{MA}"),
+            ("invoke-virtual", ["v7"], f"{SSLE}->getCertificate(){SSLC}"),
+            ("move-result-object", "v0"),
+            ("if-eqz", "v0", "no"),
+            ("invoke-virtual", ["v0"], f"{SSLC}->getIssuedBy(){DN}"),
+            ("move-result-object", "v0"),
+            ("if-eqz", "v0", "no"),
+            ("invoke-virtual", ["v0"], f"{DN}->getCName(){STR}"),
+            ("move-result-object", "v0"),
+            ("if-eqz", "v0", "no"),
+            ("const-string", "v2", "LENTA local CA"),
+            ("invoke-virtual", ["v0", "v2"], f"{STR}->startsWith({STR})Z"),
+            ("move-result", "v0"),
+            ("if-eqz", "v0", "no"),
+            ("iget-boolean", "v0", "v1", F_SETUP),
+            ("if-nez", "v0", "ok"),
+            ("iget-object", "v2", "v1", F_HOST),
+            ("if-eqz", "v2", "no"),
+            ("invoke-virtual", ["v7"], f"{SSLE}->getUrl(){STR}"),
+            ("move-result-object", "v0"),
+            ("if-eqz", "v0", "no"),
+            ("invoke-static", ["v0"], f"Landroid/net/Uri;->parse({STR})Landroid/net/Uri;"),
+            ("move-result-object", "v0"),
+            ("invoke-virtual", ["v0"], f"Landroid/net/Uri;->getHost(){STR}"),
+            ("move-result-object", "v0"),
+            ("if-eqz", "v0", "no"),
+            ("invoke-virtual", ["v2", "v0"], f"{STR}->equalsIgnoreCase({STR})Z"),
+            ("move-result", "v0"),
+            ("if-eqz", "v0", "no"),
+            L("ok"),
+            ("invoke-virtual", ["v6"], f"{SSLH}->proceed()V"),
+            ("return-void",),
+            L("no"),
+            ("invoke-virtual", ["v6"], f"{SSLH}->cancel()V"),
+            ("iget-boolean", "v0", "v1", F_SETUP),
+            ("if-nez", "v0", "end"),
+            ("const-string", "v2", SETUP + "?error=1&ssl=1"),
+            ("invoke-virtual", ["v5", "v2"], f"{WV}->loadUrl({STR})V"),
+            L("end"),
+            ("return-void",)]),
+        # a LENTA page finished loading on the saved machine but at another address (LENTA moved to another
+        # port, or to https): remember the new address, so the app opens it next time
+        Method("onPageFinished", f"({WV}{STR})V", regs=8, code=[
+            ("if-eqz", "v7", "end"),
+            ("const-string", "v0", "http"),
+            ("invoke-virtual", ["v7", "v0"], f"{STR}->startsWith({STR})Z"),
+            ("move-result", "v0"),
+            ("if-eqz", "v0", "end"),
+            ("iget-object", "v1", "v5", f"{CL}->a:{MA}"),
+            ("iget-object", "v2", "v1", F_HOST),
+            ("if-eqz", "v2", "end"),
+            ("invoke-static", ["v7"], f"Landroid/net/Uri;->parse({STR})Landroid/net/Uri;"),
+            ("move-result-object", "v3"),
+            ("invoke-virtual", ["v3"], f"Landroid/net/Uri;->getHost(){STR}"),
+            ("move-result-object", "v0"),
+            ("if-eqz", "v0", "end"),
+            ("invoke-virtual", ["v2", "v0"], f"{STR}->equalsIgnoreCase({STR})Z"),
+            ("move-result", "v0"),
+            ("if-eqz", "v0", "end"),
+            ("invoke-virtual", ["v3"], f"Landroid/net/Uri;->getScheme(){STR}"),
+            ("move-result-object", "v0"),
+            ("if-eqz", "v0", "end"),
+            ("const-string", "v4", "://"),
+            ("invoke-virtual", ["v0", "v4"], f"{STR}->concat({STR}){STR}"),
+            ("move-result-object", "v0"),
+            ("invoke-virtual", ["v3"], f"Landroid/net/Uri;->getEncodedAuthority(){STR}"),
+            ("move-result-object", "v4"),
+            ("if-eqz", "v4", "end"),
+            ("invoke-virtual", ["v0", "v4"], f"{STR}->concat({STR}){STR}"),
+            ("move-result-object", "v0"),
+            *prefs("v2", "v1", "v4"),
+            ("const-string", "v3", "server"),
+            ("const-string", "v4", ""),
+            ("invoke-interface", ["v2", "v3", "v4"], f"{SP}->getString({STR}{STR}){STR}"),
+            ("move-result-object", "v4"),
+            ("invoke-virtual", ["v0", "v4"], f"{STR}->equals({OBJ})Z"),
+            ("move-result", "v4"),
+            ("if-nez", "v4", "end"),
+            ("invoke-interface", ["v2"], f"{SP}->edit(){SPE}"),
+            ("move-result-object", "v2"),
+            ("invoke-interface", ["v2", "v3", "v0"], f"{SPE}->putString({STR}{STR}){SPE}"),
+            ("move-result-object", "v2"),
+            ("invoke-interface", ["v2"], f"{SPE}->apply()V"),
+            L("end"),
+            ("return-void",)]),
         Method("onReceivedError", f"({WV}{REQ}Landroid/webkit/WebResourceError;)V", regs=6, code=[
             ("invoke-interface", ["v4"], f"{REQ}->isForMainFrame()Z"),
             ("move-result", "v0"),
@@ -355,6 +643,15 @@ def classes() -> list[ClassDef]:
             ("iget-object", "v0", "v1", f"{CH}->a:{MA}"),
             ("invoke-virtual", ["v0", "v2", "v3"], f"{MA}->showCustom(Landroid/view/View;{CVC})V"),
             ("return-void",)]),
+        # no grey "play" picture on a video before it starts (the WebView's own default)
+        Method("getDefaultVideoPoster", "()Landroid/graphics/Bitmap;", regs=3, code=[
+            ("const/4", "v0", 1),
+            ("const-string", "v1", "ARGB_8888"),
+            ("invoke-static", ["v1"], "Landroid/graphics/Bitmap$Config;->valueOf(Ljava/lang/String;)Landroid/graphics/Bitmap$Config;"),
+            ("move-result-object", "v1"),
+            ("invoke-static", ["v0", "v0", "v1"], "Landroid/graphics/Bitmap;->createBitmap(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;"),
+            ("move-result-object", "v0"),
+            ("return-object", "v0")]),
         Method("onHideCustomView", "()V", regs=2, code=[
             ("iget-object", "v0", "v1", f"{CH}->a:{MA}"),
             ("invoke-virtual", ["v0"], f"{MA}->hideCustom()V"),
@@ -375,19 +672,15 @@ def classes() -> list[ClassDef]:
             ("return", "v0")]),
     ])
 
-    def ui_call(what, flag_reg, regs):
-        """a.runOnUiThread(new Ui(a, what, flag)) — `this` is the last register"""
-        this = f"v{regs - 1 - (1 if flag_reg == 'arg' else 0)}"
-        flag = f"v{regs - 1}" if flag_reg == "arg" else "v3"
-        code = [("iget-object", "v0", this, f"{BR}->a:{MA}"),
+    def ui_call(what, flag=None, num=None):
+        """a.runOnUiThread(new Ui(a, what, flag, num)); `this` is v4, the argument (if any) v5"""
+        return [("iget-object", "v0", "v4", f"{BR}->a:{MA}"),
                 ("new-instance", "v1", UI),
-                ("const/4", "v2", what)]
-        if flag_reg != "arg":
-            code.append(("const/4", "v3", 0))
-        code += [("invoke-direct", ["v1", "v0", "v2", flag], f"{UI}-><init>({MA}IZ)V"),
-                 ("invoke-virtual", ["v0", "v1"], f"{ACT}->runOnUiThread(Ljava/lang/Runnable;)V"),
-                 ("return-void",)]
-        return code
+                ("const/4", "v2", what),
+                ("const/4", "v3", 0),
+                ("invoke-direct", ["v1", "v0", "v2", flag or "v3", num or "v3"], UI_INIT),
+                ("invoke-virtual", ["v0", "v1"], f"{ACT}->runOnUiThread(Ljava/lang/Runnable;)V"),
+                ("return-void",)]
 
     bridge = ClassDef(BR, OBJ, fields=[Field("a", MA)], methods=[
         ctor_with_activity(BR, OBJ),
@@ -406,7 +699,7 @@ def classes() -> list[ClassDef]:
             ("invoke-interface", ["v1"], f"{SPE}->commit()Z"),
             ("new-instance", "v1", UI),
             ("const/4", "v2", 0),
-            ("invoke-direct", ["v1", "v0", "v2", "v2"], f"{UI}-><init>({MA}IZ)V"),
+            ("invoke-direct", ["v1", "v0", "v2", "v2", "v2"], UI_INIT),
             ("invoke-virtual", ["v0", "v1"], f"{ACT}->runOnUiThread(Ljava/lang/Runnable;)V"),
             ("return-void",)]),
         Method("server", f"(){STR}", regs=4, annotations=[JSI], code=[
@@ -417,19 +710,23 @@ def classes() -> list[ClassDef]:
             ("invoke-interface", ["v0", "v1", "v2"], f"{SP}->getString({STR}{STR}){STR}"),
             ("move-result-object", "v0"),
             ("return-object", "v0")]),
-        Method("changeServer", "()V", regs=5, annotations=[JSI], code=ui_call(2, None, 5)),
-        Method("keepScreenOn", "(Z)V", regs=6, annotations=[JSI], code=ui_call(1, "arg", 6)),
+        Method("changeServer", "()V", regs=5, annotations=[JSI], code=ui_call(2)),
+        Method("keepScreenOn", "(Z)V", regs=6, annotations=[JSI], code=ui_call(1, flag="v5")),
+        Method("audioPlaying", "(Z)V", regs=6, annotations=[JSI], code=ui_call(3, flag="v5")),
+        Method("setColors", "(I)V", regs=6, annotations=[JSI], code=ui_call(4, num="v5")),
+        Method("fullscreen", "(Z)V", regs=6, annotations=[JSI], code=ui_call(5, flag="v5")),
         Method("version", f"(){STR}", regs=2, annotations=[JSI], code=[
             ("const-string", "v0", VERSION), ("return-object", "v0")]),
     ])
 
     ui = ClassDef(UI, OBJ, interfaces=["Ljava/lang/Runnable;"],
-                  fields=[Field("a", MA), Field("what", "I"), Field("flag", "Z")], methods=[
-        Method("<init>", f"({MA}IZ)V", regs=4, code=[
+                  fields=[Field("a", MA), Field("what", "I"), Field("flag", "Z"), Field("n", "I")], methods=[
+        Method("<init>", f"({MA}IZI)V", regs=5, code=[
             ("invoke-direct", ["v0"], f"{OBJ}-><init>()V"),
             ("iput-object", "v1", "v0", f"{UI}->a:{MA}"),
             ("iput", "v2", "v0", f"{UI}->what:I"),
             ("iput-boolean", "v3", "v0", f"{UI}->flag:Z"),
+            ("iput", "v4", "v0", f"{UI}->n:I"),
             ("return-void",)]),
         Method("run", "()V", regs=4, code=[
             ("iget-object", "v0", "v3", f"{UI}->a:{MA}"),
@@ -444,7 +741,25 @@ def classes() -> list[ClassDef]:
             ("invoke-virtual", ["v0", "v1"], f"{MA}->keepOn(Z)V"),
             ("return-void",),
             L("not1"),
+            ("const/4", "v2", 2),
+            ("if-ne", "v1", "v2", "not2"),
             ("invoke-virtual", ["v0"], f"{MA}->openSetup()V"),
+            ("return-void",),
+            L("not2"),
+            ("const/4", "v2", 3),
+            ("if-ne", "v1", "v2", "not3"),
+            ("iget-boolean", "v1", "v3", f"{UI}->flag:Z"),
+            ("invoke-virtual", ["v0", "v1"], f"{MA}->audio(Z)V"),
+            ("return-void",),
+            L("not3"),
+            ("const/4", "v2", 5),
+            ("if-ne", "v1", "v2", "not5"),
+            ("iget-boolean", "v1", "v3", f"{UI}->flag:Z"),
+            ("invoke-virtual", ["v0", "v1"], f"{MA}->setFull(Z)V"),
+            ("return-void",),
+            L("not5"),
+            ("iget", "v1", "v3", f"{UI}->n:I"),
+            ("invoke-virtual", ["v0", "v1"], f"{MA}->colors(I)V"),
             ("return-void",)]),
     ])
     return [main, client, chrome, bridge, ui]

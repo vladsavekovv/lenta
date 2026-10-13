@@ -1,0 +1,105 @@
+/* =====================================================================================
+   TV performance layer — loaded last, applies only when tv.js has set html.tv
+   =====================================================================================
+
+   A television is not a slow laptop; it is a different shape of machine. It has a
+   capable video decoder and almost no graphics budget left over for the page, because
+   the panel is 1920x1080 (often presented to the page as 1920x1080 and then scaled to a
+   4K panel) and the GPU is sized for decoding video, not for compositing it.
+
+   Three things in the normal client cost more than everything else put together:
+
+     backdrop-filter  — the engine must copy what is behind the element, blur that copy,
+                        and keep both in memory. Each one is a separate render surface.
+     filter: blur()   — the same cost, and when it sits on an element that is also
+                        animating, the blur is recomputed every frame rather than cached.
+     infinite animations — .stage-art drifts for 48s and then back again, for ever. On a
+                        detail page that is a blurred, scaled, full-screen image being
+                        recomposited sixty times a second with nobody asking for it.
+
+   Together they can take the whole frame budget, and when the compositor is late the
+   remote appears broken: key presses are queued behind frames that have not been drawn
+   yet, so the set feels dead for a second and then jumps.
+
+   So on a TV this file turns the decoration off and puts a flat colour in its place.
+   !important is deliberate: the theme files load after app.css and their selectors are
+   more specific, and the whole purpose of this layer is to win.
+
+   Nothing here changes the layout — only how expensively it is painted. */
+
+/* ---- 1. no backdrop blur anywhere; opaque panels in its place -------------------- */
+html.tv *,
+html.tv *::before,
+html.tv *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Those panels relied on the blur to separate them from what was behind. Without it
+   they need to be solid, or text lands on top of artwork and becomes unreadable. */
+html.tv .glass,
+html.tv .pill-ctl,
+html.tv .ml-bar,
+html.tv .sheet,
+html.tv .menu,
+html.tv .dialog { background: var(--bg2, #1a1a1a) !important; }
+html.tv .btn.ghost,
+html.tv .btn.glass-btn { background: rgb(var(--text-rgb) / .16) !important; }
+html.tv .chip-g { background: rgb(var(--text-rgb) / .12) !important; }
+
+/* ---- 2. no decorative blurs ------------------------------------------------------ */
+/* The artwork behind a detail page, the bleed behind a wide card, the colour wash
+   behind the dock. All are backdrops: a plain image reads the same from three metres. */
+html.tv .stage-art,
+html.tv .stage.soft .stage-art,
+html.tv .card.wide .wide-fill,
+html.tv .card.landscape.book-wide .bw-blur,
+html.tv .dk-art-bg { filter: none !important; }
+
+/* With the blur gone the stage art is sharp and fights the text in front of it, so
+   fade it instead — cheap, because opacity does not need a new render surface. */
+html.tv .stage-art { opacity: .35 !important; }
+html.tv .stage.soft .stage-art { opacity: .28 !important; }
+
+/* ---- 3. nothing moves unless somebody asked it to -------------------------------- */
+/* drift, rise, fadein, miniIn, zoomflash: all cosmetic, all repainting. The spinner and
+   the music equaliser stay, because they are the only sign that something is happening. */
+html.tv .stage-art,
+html.tv .pill-ctl,
+html.tv .card,
+html.tv .row,
+html.tv .hero,
+html.tv .panel,
+html.tv .sheet { animation: none !important; }
+
+/* A scaled-up poster under the focus ring is worth its cost — it is how you can tell at
+   a glance where you are. Everything else transitions nothing. */
+html.tv * { transition-duration: 0s !important; }
+html.tv .card .frame-link:focus .frame,
+html.tv .card:focus-within .frame { transition-duration: .18s !important; }
+
+/* ---- 4. shadows cost a blur too -------------------------------------------------- */
+/* A large soft shadow is a blurred copy of the element's shape. Dozens of them on a grid
+   of cards is the same work as the backdrop filters above, spread thinly. */
+html.tv .card,
+html.tv .card .frame,
+html.tv .frame img,
+html.tv .tile,
+html.tv .chip-g,
+html.tv .ml-check { box-shadow: none !important; }
+
+/* ---- 5. the video element gets the whole machine --------------------------------- */
+/* While something is playing, the page behind the player is not visible, so it should
+   not be painted at all. This is the difference between a channel that stutters and one
+   that does not. */
+html.tv .player.on ~ .stage,
+html.tv .player.on ~ #view,
+html.tv .player.on ~ .rail { visibility: hidden !important; }
+html.tv .player video { will-change: auto !important; filter: none !important; }
+
+/* ---- 6. the focus ring must always be visible ------------------------------------ */
+/* On a TV the focus ring is the cursor. If a theme paints it away on some page, the set
+   looks broken and the remote gets the blame, so state it once more here, last. */
+html.tv .rail a:focus,
+html.tv .tabbar a:focus,
+html.tv .rail [tabindex]:focus { outline: 3px solid var(--accent) !important; outline-offset: -3px !important; }

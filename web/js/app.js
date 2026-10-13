@@ -2,12 +2,12 @@
 import { api } from './api.js';
 import './hovercard.js';
 import { initCardTools } from './editor.js';
-import { $, html, icon, isTouch, KIND_ICON, mount, onPageScroll, pageScroller, pageScrollTo, pageY, popMenu, raw, setArtStyle, setEpisodeArt, sheet, toast } from './ui.js';
+import { $, html, icon, isTouch, KIND_ICON, mount, nfx, onPageScroll, pageScroller, pageScrollTo, pageY, popMenu, raw, setArtStyle, setEpisodeArt, setViewer, sheet, syncNfx, toast } from './ui.js';
 import { inAndroidApp, installAvailable, promptInstall } from './pwa.js';
 import { renderAuth, changePasswordDialog } from './auth.js';
 import { views } from './views.js';
 import { libraryMenu } from './admin.js';
-import { openPlayer, closePlayer, expandPlayer, playerItem, playerMini, playerOpen } from './player.js';
+import { openPlayer, openLiveChannel, closePlayer, expandPlayer, minimizePlayer, playerIsLive, playerItem, playerMini, playerOpen } from './player.js';
 import { ADMIN_TABS, renderSettingsPage } from './settings-shell.js';
 import { initTv, inTvApp, changeServer } from './tv.js';
 import { runCleanups } from './extras.js';
@@ -21,14 +21,46 @@ export const THEMES = [
   { id: 'abyss', name: 'Abyss', desc: 'Deep water, a thread of cyan' },
   { id: 'velvet', name: 'Velvet', desc: 'Oxblood curtains, crimson seats' },
   { id: 'aurora', name: 'Aurora', desc: 'Midnight indigo, violet glow' },
-  { id: 'redline', name: 'Redline', desc: 'Streaming black and signal red, menu on top' },
+  { id: 'netflix', name: 'Netflix', desc: 'Streaming black and signal red, menu on top' },
+  { id: 'hbo', name: 'HBO Max', desc: 'Black canvas, blue beam, menu on top' },
 ];
 export function applyTheme(id) {
+  if (id === 'redline') id = 'netflix';            // the theme was called Redline before 1.3.1
   const theme = THEMES.some(t => t.id === id) ? id : 'projector';
   document.documentElement.dataset.theme = theme;
+  // themes whose menu is a bar along the top rather than a column on the left
+  document.documentElement.classList.toggle('topnav', theme === 'netflix' || theme === 'hbo');
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', bg || '#17121F');
   setTimeout(fitNav, 50);
+  appBarColors(bg || '#17121F');
+  if (syncNfx() && state.user && lastViewKey) { renderRail(); refreshView(); }      // the phone look came or went: draw the page again
+}
+window.addEventListener('resize', () => { if (syncNfx() && state.user && lastViewKey) { renderRail(); refreshView(); } });
+
+// The phone header (Netflix): see-through at the top of the page, black once you scroll; the library chips slide
+// away while you scroll down and come back when you scroll up, like the app's.
+let lastY = 0;
+onPageScroll(() => {
+  if (!nfx()) return;
+  const y = pageY(), root = document.documentElement;
+  root.classList.toggle('mh-solid', y > 8);
+  if (Math.abs(y - lastY) > 6) { root.classList.toggle('mh-tuck', y > lastY && y > 90); lastY = y; }
+});
+
+// The Android app: its status and navigation bars take the theme's background colour.
+function appBarColors(css) {
+  const app = window.LentaApp;
+  if (!app || typeof app.setColors !== 'function') return;          // the browser, or an older app
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(css.trim());
+  let hex = m ? m[1] : null;
+  if (!hex) {
+    const rgb = /rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/.exec(getComputedStyle(document.body).backgroundColor || '');
+    if (!rgb) return;
+    hex = [rgb[1], rgb[2], rgb[3]].map(n => Number(n).toString(16).padStart(2, '0')).join('');
+  }
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  try { app.setColors((0xff000000 | parseInt(hex, 16)) | 0); } catch { /* nothing to do */ }
 }
 
 const routes = [
@@ -38,6 +70,7 @@ const routes = [
   [/^\/search$/, (m, q) => views.search(q)],
   [/^\/person$/, (m, q) => views.person(q.get('name'))],
   [/^\/mylist$/, () => views.mylist()],
+  [/^\/guide$/, (m, q) => views.guide(q)],
   // Server admin is part of Settings now; old addresses open the matching page
   [/^\/admin(?:\/(\w+))?$/, (m, q) => { location.replace(`#/settings/${ADMIN_TABS[m[1] || 'dashboard'] || 'dashboard'}${q.toString() ? `?${q}` : ''}`); }],
   [/^\/settings(?:\/([\w-]+))?$/, (m, q) => renderSettingsPage(m[1], q)],
@@ -54,6 +87,20 @@ let lastViewKey = null;
 async function route() {
   if (!state.user) return;
   const { path, query } = parseHash();
+  // A live channel keeps the /play/ prefix so the Android app still knows to go full screen.
+  const live = path.match(/^\/play\/live\/(\d+)$/);
+  if (live) {
+    // Already on this channel (coming back from the mini player, or from Settings): bring it up again
+    // rather than starting it afresh — a restart drops the tuner and reopens it for no reason.
+    if (playerIsLive() && playerItem() === Number(live[1])) {
+      expandPlayer({ navigate: false });
+      return;
+    }
+    const hadView = !!lastViewKey;
+    if (!hadView) await renderView('/', new URLSearchParams());
+    openLiveChannel(Number(live[1]), { returnTo: hadView ? 'back' : '#/' });
+    return;
+  }
   const play = path.match(/^\/play\/(\d+)$/);
   if (play) {
     // the same title is already playing (e.g. back from the mini player): carry on, don't start it again
@@ -67,7 +114,13 @@ async function route() {
       returnTo: hadView ? 'back' : '#/' });
     return;
   }
-  if (playerOpen() && !playerMini()) closePlayer({ navigate: false });     // the mini player stays while you browse
+  // Browsing away from a film can close it — you can always resume. A live channel cannot be resumed,
+  // and closing it hands the tuner back, so it carries on in the mini player instead. Going to
+  // Settings › Live TV to read the log is the obvious case, and it should not end what you are reading about.
+  if (playerOpen() && !playerMini()) {
+    if (playerIsLive()) minimizePlayer({ navigate: false });
+    else closePlayer({ navigate: false });
+  }
   await renderView(path, query);
 }
 
@@ -94,7 +147,7 @@ async function renderView(path, query) {
   location.hash = '#/';
 }
 
-// A menu bar along the top (Redline theme) with more libraries than fit: show one "Libraries" button instead.
+// A menu bar along the top (Netflix theme) with more libraries than fit: show one "Libraries" button instead.
 function fitNav() {
   const rail = $('#rail');
   if (!rail) return;
@@ -138,6 +191,10 @@ export function renderRail() {
   // title= gives the collapsed (icons only) menu its names on hover.
   const link = (href, cls, ic, label) => html`<a href="${href}" class="${cls}" title="${label}">${icon(ic)}<span class="label">${label}</span></a>`;
   const collapsed = document.body.classList.contains('rail-collapsed');
+  setViewer(u.username);
+  // the phone header's page name (Netflix); pages without one (a title's page, Settings) have no header
+  const lib = path.startsWith('/library/') ? state.libraries.find(l => `/library/${l.id}` === path) : null;
+  const headTitle = path === '/' ? 'Home' : lib ? lib.name : path === '/search' ? 'Search' : path === '/mylist' ? 'My List' : '';
   mount(rail, html`
     <div class="brand-row">
       <a class="brand-mark-link" href="#/" title="Home" aria-label="${state.server?.name || 'LENTA'} — Home"><img class="brand-mark" src="img/lenta-mark.png" alt=""></a>
@@ -157,14 +214,23 @@ export function renderRail() {
     ${link('#/settings', active('/settings'), 'admin', 'Settings')}
     <button class="navlike" id="account-btn" aria-label="Account" title="${u.username}">
       <span class="avatar" style="background:${u.color || '#F2B33D'}">${u.username[0].toUpperCase()}</span><span class="label">${u.username}</span></button>
+    <header class="mhead" aria-label="${headTitle || 'LENTA'}">
+      <div class="mh-top">
+        <a class="mh-mark" href="#/" aria-label="Home"><img src="img/lenta-mark.png" alt=""></a>
+        <h1 class="mh-title">${headTitle}</h1>
+      </div>
+      ${state.libraries.length > 0 ? html`<nav class="mh-chips" aria-label="Libraries">${state.libraries.map(l =>
+        html`<a class="mh-chip ${path === `/library/${l.id}` ? 'on' : ''}" href="#/library/${l.id}">${l.name}</a>`)}</nav>` : ''}
+    </header>
     <div class="tabbar" role="tablist" aria-label="Main">
-      <a href="#/" class="${active('/')}">${icon('home')}<span>Home</span></a>
-      <a href="#/search" class="${active('/search')}">${icon('search')}<span>Search</span></a>
-      <button type="button" id="tab-libs" class="${path.startsWith('/library') ? 'active' : ''}">${icon('grid')}<span>Libraries</span></button>
-      <a href="#/mylist" class="${active('/mylist')}">${icon('list')}<span>My list</span></a>
-      <button type="button" id="tab-me" class="${path.startsWith('/settings') || path.startsWith('/admin') ? 'active' : ''}">
-        <span class="avatar" style="background:${u.color || '#F2B33D'}">${u.username[0].toUpperCase()}</span><span>${u.username}</span></button>
+      <a href="#/" class="tab-home ${active('/')}">${icon('home')}<span>Home</span></a>
+      <a href="#/search" class="tab-search ${active('/search')}">${icon('search')}<span>Search</span></a>
+      <button type="button" id="tab-libs" class="tab-libs ${path.startsWith('/library') ? 'active' : ''}">${icon('grid')}<span>Libraries</span></button>
+      <a href="#/mylist" class="tab-list ${active('/mylist')}">${icon('list')}<span>My list</span></a>
+      <button type="button" id="tab-me" class="tab-me ${path.startsWith('/settings') || path.startsWith('/admin') ? 'active' : ''}">
+        <span class="avatar" style="background:${u.color || '#F2B33D'}">${u.username[0].toUpperCase()}</span><span>${nfx() ? 'My LENTA' : u.username}</span></button>
     </div>`);
+  document.body.classList.toggle('mh-on', !!headTitle);
   $('#tab-libs').addEventListener('click', librariesSheet);
   $('#tab-me').addEventListener('click', meSheet);
   $('#rail-toggle').addEventListener('click', () => setRailCollapsed(!document.body.classList.contains('rail-collapsed')));
@@ -202,6 +268,7 @@ function librariesSheet() {
 function meSheet() {
   const u = state.user;
   const items = [
+    ...(nfx() ? [{ label: 'My List', action: () => { location.hash = '#/mylist'; } }] : []),     // the phone tab bar has no My list tab
     { label: 'Settings', action: () => { location.hash = '#/settings'; } },
     ...(installAvailable() ? [{ label: 'Install the LENTA app', action: promptInstall }] : []),
     ...(inAndroidApp() ? [{ label: 'Change server…', hint: location.host, action: () => window.LentaApp.changeServer() }] : []),

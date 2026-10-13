@@ -1,0 +1,220 @@
+/* HBO Max — the look of Warner's streaming service: a pure black canvas with a dark indigo glow, light
+   (not bold) lettering, one blue accent, 8px corners and no shadows or glass. The menu runs along the top
+   (the layout is shared with the Netflix theme, see theme-netflix.css under html.topnav).
+   Everything here only applies when the HBO Max theme is chosen (Settings › Look).
+
+   Colours follow the public HBO Max brand material: Obsidian #000, Smoke #050409, Eclipse Indigo #0E0A17,
+   Snow #FFF, Ash Mist #B8B6BB, Iron Veil #89868E, Glacier Beam #71B8F2 and Max Blue #002BE7. The lettering
+   is Max Sans, which isn't ours to ship, so LENTA's own Golos Text stands in for it (Latin and Cyrillic). */
+
+[data-theme="hbo"] {
+  --bg: #000000; --bg-2: #050409; --bg-3: #141020; --line: #1C1726;
+  --text: #FFFFFF; --text-soft: #D9D7DD; --muted: #B8B6BB; --faint: #89868E;
+  --accent: #71B8F2; --accent-hover: #9CD0F8; --accent-ink: #00102B;
+  --accent-fill: linear-gradient(90deg, #002BE7 0%, #71B8F2 100%);
+  --bg-rgb: 0 0 0; --bg2-rgb: 5 4 9; --deep-rgb: 0 0 0; --text-rgb: 255 255 255; --accent-rgb: 113 184 242;
+  --red: #FF8080; --green: #7FD4B0;
+  --body: 'Golos Text', Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --display: 'Golos Text', Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --display-weight: 400; --display-transform: none; --display-tracking: -.02em; --brand-tracking: .16em;
+  --radius: 8px; --panel-radius: 12px;
+  --poster-hue: 232; --poster-sat: 26%;
+  --gutter: clamp(16px, 3vw, 44px);
+  --topbar: 68px;
+  /* the menu bar along the top (the layout itself lives in theme-netflix.css, under html.topnav) */
+  --topnav-solid: #000000; --topnav-link: #B8B6BB; --topnav-link-hover: #FFFFFF;
+  --topnav-link-on: #FFFFFF; --topnav-weight: 600; --topnav-icon: #FFFFFF;
+}
+
+/* black, with the brand's dark radial glow; it stays put as the page scrolls */
+[data-theme="hbo"] body {
+  background: radial-gradient(130% 85% at 50% -12%, #19122C 0%, #0A0812 42%, #000 78%) fixed, #000;
+}
+[data-theme="hbo"] ::selection { background: #002BE7; color: #fff; }
+[data-theme="hbo"] :focus-visible { outline: 2px solid #71B8F2; outline-offset: 3px; }
+
+/* ---------- lettering: light headings, small labels spaced out ---------- */
+[data-theme="hbo"] .page-title { font-weight: 400; text-transform: none; letter-spacing: -.025em; }
+[data-theme="hbo"] .marquee { font-weight: 400; text-transform: none; letter-spacing: -.03em; }
+[data-theme="hbo"] .row h2, [data-theme="hbo"] .section-title {
+  font: 400 clamp(19px, 1.5vw, 24px)/1.2 var(--display); letter-spacing: -.01em; color: #fff;
+}
+[data-theme="hbo"] .page-sub, [data-theme="hbo"] .auth-server {
+  text-transform: uppercase; letter-spacing: .1em; font-size: 12px; color: var(--faint);
+}
+
+/* ---------- buttons: white for Play, a hairline outline for the rest, 8px corners ---------- */
+[data-theme="hbo"] .btn {
+  border-radius: 8px; font-weight: 600; letter-spacing: .02em;
+  border-color: rgb(255 255 255 / .38); background: transparent;
+}
+[data-theme="hbo"] .btn:hover { border-color: #fff; background: rgb(255 255 255 / .08); }
+[data-theme="hbo"] .btn.primary { background: #fff; border-color: #fff; color: #000; }
+[data-theme="hbo"] .btn.primary:hover { background: #DEDDE1; border-color: #DEDDE1; }
+[data-theme="hbo"] .btn.ghost, [data-theme="hbo"] .btn.glass-btn {
+  background: rgb(255 255 255 / .06); backdrop-filter: none; -webkit-backdrop-filter: none;
+  border: 1px solid rgb(255 255 255 / .5); color: #fff;
+}
+[data-theme="hbo"] .btn.ghost:hover, [data-theme="hbo"] .btn.glass-btn:hover { background: rgb(255 255 255 / .14); border-color: #fff; }
+[data-theme="hbo"] .btn.glass-btn.on { border-color: #71B8F2; color: #71B8F2; }
+[data-theme="hbo"] .btn.on { border-color: #71B8F2; color: #71B8F2; }
+[data-theme="hbo"] .avatar { border-radius: 8px; color: #fff; }
+[data-theme="hbo"] .pill, [data-theme="hbo"] .chip { border-radius: 100px; }
+[data-theme="hbo"] .pill.accent { background: #002BE7; border-color: #002BE7; color: #fff; }
+[data-theme="hbo"] .panel { background: #050409; border-color: #1C1726; border-radius: 12px; box-shadow: none; }
+[data-theme="hbo"] .input, [data-theme="hbo"] select.input { border-radius: 8px; background: #0B0912; border-color: #221C2E; }
+[data-theme="hbo"] .input:focus { border-color: #71B8F2; }
+
+/* ---------- the side menu: a strip of icons that opens when pointed at ---------- */
+[data-theme="hbo"] .rail { background: transparent; border-right: 0; }
+[data-theme="hbo"] .rail a, [data-theme="hbo"] .rail button.navlike { border-radius: 8px; font-weight: 500; }
+[data-theme="hbo"] .rail a:hover, [data-theme="hbo"] .rail button.navlike:hover { background: rgb(255 255 255 / .08); color: #fff; }
+[data-theme="hbo"] .rail a.active { background: rgb(255 255 255 / .1); color: #fff; }
+[data-theme="hbo"] .rail a.active svg { color: #71B8F2; }
+[data-theme="hbo"] .rail .group { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: var(--faint); }
+[data-theme="hbo"] .brand { color: #fff; }
+
+@media (min-width: 721px) and (min-height: 501px), (min-width: 721px) and (hover: hover) and (not (any-pointer: coarse)) {
+  /* the page shows through the bar until you scroll, then it turns black */
+  html.topnav[data-theme="hbo"] body .rail {
+    background-image: linear-gradient(180deg, rgb(0 0 0 / .78) 8%, rgb(0 0 0 / 0)); background-color: transparent;
+    border-bottom: 1px solid transparent; transition: background-color .4s, border-color .4s;
+    /* The border is here only to become the divider once the bar turns black, and is transparent until
+       then — but a background painted under a transparent border leaves a dark seam along it, which
+       reads as a line across the page. Clipping the fade to the padding box keeps the border free for
+       the divider below without the gradient reaching under it. */
+    background-clip: padding-box;
+  }
+  html.topnav.scrolled[data-theme="hbo"] body .rail {
+    background-image: none; background-color: #000; border-bottom-color: #1C1726;
+  }
+  /* the page you are on: white, with the blue line under it */
+  html.topnav[data-theme="hbo"] body .rail a.active { position: relative; }
+  html.topnav[data-theme="hbo"] body .rail a.active::after {
+    content: ""; position: absolute; left: 9px; right: 9px; bottom: 0; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, #002BE7, #71B8F2);
+  }
+  html.topnav[data-theme="hbo"] body .rail #tab-libs.active { color: #fff; }
+  /* the billboard runs behind the bar */
+  [data-theme="hbo"] .hero { padding-top: var(--topbar); }
+  [data-theme="hbo"] .d-hero { padding-top: calc(var(--topbar) + 56px); }
+}
+
+/* ---------- the billboard: the picture fades into black, the spotlight glows behind the title ---------- */
+[data-theme="hbo"] .hero { min-height: min(74vh, 740px); }
+[data-theme="hbo"] .hero::before {
+  background:
+    linear-gradient(90deg, #000 0%, rgb(0 0 0 / .86) 32%, rgb(0 0 0 / .12) 68%),
+    linear-gradient(0deg, #000 2%, rgb(0 0 0 / 0) 48%);
+}
+/* the Spotlight: a soft blue beam behind the title, the brand's own device */
+[data-theme="hbo"] .hero::after {
+  content: ""; position: absolute; left: -12%; bottom: -26%; width: 78%; height: 115%; z-index: -1;
+  background: radial-gradient(55% 48% at 34% 62%, rgb(0 43 231 / .3) 0%, rgb(0 43 231 / .08) 45%, transparent 72%);
+  pointer-events: none;
+}
+[data-theme="hbo"] .hero .logo { max-height: 170px; }
+[data-theme="hbo"] .hero-meta { color: #D9D7DD; font-size: 15px; }
+[data-theme="hbo"] .hero-meta .cert, [data-theme="hbo"] .meta .cert { border-color: rgb(255 255 255 / .45); border-radius: 3px; }
+[data-theme="hbo"] .overview { color: #B8B6BB; }
+[data-theme="hbo"] .hb.new { background: rgb(0 0 0 / .55); border: 1px solid rgb(255 255 255 / .3); color: #fff; }
+[data-theme="hbo"] .hb.score { color: #71B8F2; }
+
+/* ---------- rows and pictures: 8px corners, flat, a thin white edge when pointed at ---------- */
+[data-theme="hbo"] .card .frame { border-radius: 8px; background: #0B0912; outline: 0; box-shadow: none; }
+[data-theme="hbo"] .card .frame img { border-radius: 8px; }
+[data-theme="hbo"] .card .frame-link { transition: transform .18s ease; }
+@media (hover: hover) and (pointer: fine) {
+  [data-theme="hbo"] .card:hover .frame { outline: 1px solid rgb(255 255 255 / .55); outline-offset: 0; }
+}
+[data-theme="hbo"] .track { gap: 10px; }
+[data-theme="hbo"] .grid { gap: 26px 10px; }
+[data-theme="hbo"] .card .caption { padding-top: 8px; }
+[data-theme="hbo"] .card .caption .t { font-size: 14px; font-weight: 500; color: #D9D7DD; }
+[data-theme="hbo"] .card .caption .s { font-size: 12.5px; color: #89868E; }
+[data-theme="hbo"] .card.has-logo .caption { display: none; }
+/* No name under a picture that already carries it. A card showing the title's own artwork says what it
+   is far better than a line of text below could, and repeating it makes a shelf of tiles read like a
+   list. A text-free picture gets the name written across it instead, as the logo would have been.
+   Live TV keeps its captions: a station logo names the channel, not what is on it. */
+[data-theme="hbo"] .card.has-art .caption { display: none; }
+[data-theme="hbo"] .track .card.has-art { padding-bottom: 0; }
+[data-theme="hbo"] .card-name {
+  display: -webkit-box; position: absolute; left: 7%; right: 7%; bottom: 12%; z-index: 1; pointer-events: none;
+  color: #fff; font: 700 clamp(15px, 1.3vw, 23px)/1.08 var(--display); letter-spacing: -.01em;
+  text-shadow: 0 2px 10px rgb(0 0 0 / .85); -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+[data-theme="hbo"] .card .frame .card-logo { left: 7%; bottom: 10%; max-width: 56%; max-height: 42%; }
+
+/* "Recently added" is a quiet label here, not a red flag */
+[data-theme="hbo"] .new-badge {
+  display: block; position: absolute; left: 8px; top: 8px; bottom: auto; z-index: 2;
+  background: rgb(0 0 0 / .62); border: 1px solid rgb(255 255 255 / .28); border-radius: 100px;
+  color: #fff; font: 600 10px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; padding: 5px 9px;
+  pointer-events: none;
+}
+[data-theme="hbo"] .badge { background: #002BE7; color: #fff; border-radius: 100px; }
+[data-theme="hbo"] .badge.done { background: rgb(0 0 0 / .72); color: #71B8F2; }
+[data-theme="hbo"] .progress { background: rgb(255 255 255 / .22); height: 3px; }
+[data-theme="hbo"] .progress i { background: linear-gradient(90deg, #002BE7, #71B8F2); }
+
+/* the arrows beside a row: plain chevrons on a dark panel, the full height of the pictures */
+[data-theme="hbo"] .scroll-btn {
+  width: var(--gutter); min-width: 34px; border-radius: 0; background: rgb(0 0 0 / .55);
+  top: var(--frame-top, 0); bottom: auto; height: var(--frame-h, 100%);
+}
+[data-theme="hbo"] .scroll-btn:hover { background: rgb(0 0 0 / .75); }
+[data-theme="hbo"] .scroll-btn svg { width: 26px; height: 26px; transition: transform .12s; }
+[data-theme="hbo"] .scroll-btn:hover svg { transform: scale(1.2); }
+
+/* ---------- the card that opens when you point at a picture ---------- */
+[data-theme="hbo"] .hovercard { border-radius: 10px; background: #0A0810; border: 1px solid #1C1726; box-shadow: 0 16px 40px rgb(0 0 0 / .7); }
+[data-theme="hbo"] .hc-art { border-radius: 10px 10px 0 0; }
+[data-theme="hbo"] .hc-title { text-transform: none; font-weight: 500; letter-spacing: -.015em; }
+[data-theme="hbo"] .hc-btn { border: 1px solid rgb(255 255 255 / .45); background: rgb(255 255 255 / .06); color: #fff; }
+[data-theme="hbo"] .hc-btn:hover { border-color: #fff; background: rgb(255 255 255 / .14); }
+[data-theme="hbo"] .hc-btn.play { background: #fff; border-color: #fff; color: #000; }
+[data-theme="hbo"] .hc-btn.play:hover { background: #DEDDE1; }
+[data-theme="hbo"] .hc-facts .score { color: #71B8F2; font-weight: 600; }
+[data-theme="hbo"] .hc-facts .box { border-color: rgb(255 255 255 / .4); color: #fff; border-radius: 3px; }
+
+/* ---------- title pages ---------- */
+[data-theme="hbo"] .d-title { text-transform: none; font-weight: 400; letter-spacing: -.03em; text-shadow: none; }
+[data-theme="hbo"] .chip-g {
+  border: 0; background: none; border-radius: 0; padding: 0 8px 0 0; color: #B8B6BB; font-size: 15px; backdrop-filter: none;
+}
+[data-theme="hbo"] .chip-g.score, [data-theme="hbo"] .chip-g.good { color: #71B8F2; font-weight: 600; }
+[data-theme="hbo"] .d-progress .bar { background: rgb(255 255 255 / .22); height: 3px; border-radius: 0; }
+[data-theme="hbo"] .d-progress .bar i { background: linear-gradient(90deg, #002BE7, #71B8F2); }
+[data-theme="hbo"] .episode { border-radius: 8px; border-bottom: 1px solid #1C1726; }
+[data-theme="hbo"] .episode:hover, [data-theme="hbo"] .episode:focus { background: #0B0912; }
+[data-theme="hbo"] .episode .num { color: #89868E; font-weight: 400; }
+[data-theme="hbo"] .episode .frame { border-radius: 8px; }
+[data-theme="hbo"] .season-tabs a.on, [data-theme="hbo"] .tabs a.active { color: #fff; }
+[data-theme="hbo"] .ed-tabs button.on { color: #fff; background: #141020; box-shadow: inset 3px 0 0 #002BE7; }
+
+/* ---------- player: a blue line, white controls ---------- */
+[data-theme="hbo"] .player { --accent: #71B8F2; --accent-fill: linear-gradient(90deg, #002BE7, #71B8F2); }
+
+/* ---------- sign in and profiles ---------- */
+[data-theme="hbo"] .auth { background: radial-gradient(120% 80% at 50% -10%, #19122C 0%, #0A0812 45%, #000 80%), #000; }
+[data-theme="hbo"] .auth h1 { font-weight: 400; text-transform: none; letter-spacing: -.02em; color: #fff; }
+[data-theme="hbo"] .profile .avatar { border-radius: 8px; }
+[data-theme="hbo"] .profile:hover .avatar, [data-theme="hbo"] .profile:focus .avatar { box-shadow: 0 0 0 3px #fff; }
+[data-theme="hbo"] .auth-form .btn.primary { background: #fff; color: #000; }
+
+/* ---------- phones and tablets: a flat black bar at the bottom ---------- */
+@media (max-width: 720px), (max-height: 500px) and (hover: none), (max-height: 500px) and (any-pointer: coarse) {
+  [data-theme="hbo"] .rail { background: rgb(0 0 0 / .96); border-top: 1px solid #1C1726; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+  [data-theme="hbo"] .tabbar > a, [data-theme="hbo"] .tabbar > button { color: #89868E; font-weight: 500; }
+  [data-theme="hbo"] .tabbar .active { color: #fff; }
+  [data-theme="hbo"] .tabbar .active svg { color: #71B8F2; }
+  [data-theme="hbo"] .tabbar .active .avatar { box-shadow: 0 0 0 2px #000, 0 0 0 4px #71B8F2; }
+  [data-theme="hbo"] .hero { min-height: min(66vh, 560px); }
+  [data-theme="hbo"] .sheet { border-radius: 16px 16px 0 0; background: #050409; border-color: #1C1726; }
+}
+
+/* ---------- TV: a white frame around what is chosen ---------- */
+html.tv[data-theme="hbo"] .card .frame-link:focus .frame::after { border-color: #fff; border-radius: 8px; }
+html.tv[data-theme="hbo"] .card .frame-link:focus .frame { transform: scale(1.06); transition: transform .2s; }
+html.tv[data-theme="hbo"] .rail a:focus { color: #fff; background: rgb(255 255 255 / .14); }

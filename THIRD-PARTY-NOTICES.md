@@ -71,5 +71,10 @@ off or get a license from the service.
 | Apple iTunes Search API | Apple TV trailers and soundtrack previews | Apple's terms for the iTunes Search API |
 | YouTube | Trailer playback (embedded player, privacy-enhanced mode) | [YouTube Terms of Service](https://www.youtube.com/t/terms) |
 
+**Themes.** LENTA's themes are its own CSS. They imitate the feel of well-known services but carry none of
+their artwork, logos, icons or typefaces: the *HBO Max* theme ships no HBO material and stands Golos Text in
+for Max Sans, and the *Netflix* theme ships nothing of Netflix's. HBO Max is a trademark of Warner Bros.
+Discovery and Netflix is a trademark of Netflix, Inc.
+
 All trademarks belong to their owners. LENTA is not affiliated with or endorsed by any of these projects
 or services.

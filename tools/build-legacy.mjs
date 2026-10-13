@@ -22,7 +22,7 @@ const CHROME = 47;
 mkdirSync(OUT, { recursive: true });
 
 // ---- CSS ----------------------------------------------------------------------------------------------
-const files = ['css/fonts.css', 'css/app.css', 'css/mobile.css', 'css/theme-redline.css'];
+const files = ['css/fonts.css', 'css/app.css', 'css/mobile.css', 'css/theme-netflix.css', 'css/theme-hbo.css', 'css/tv.css'];
 let css = files.map(f => readFileSync(join(WEB, f), 'utf8')).join('\n');
 
 // split "a, b" at top level only
@@ -55,7 +55,12 @@ function plainSizes(v) {
 const aspect = [];          // [selector, ratio] for the small aspect-ratio script
 const gaps = [];            // extra rules for flex gap
 css = css.replace(/([^{}@]+)\{([^{}]*)\}/g, (all, sel, body) => {
-  const s = sel.trim();
+  // What this regex calls the selector is everything since the last brace, so a rule written under a
+  // comment carries that comment with it. Harmless in the stylesheet below, where `sel` is put back
+  // untouched — but the fallbacks built from it are selectors in their own right, and a comment in the
+  // middle of one makes it match nothing at all. That is a silent failure: the rule is simply ignored
+  // by the old engine and the box it was meant to size has no height.
+  const s = sel.replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
   let b = body;
   // these files are only for old engines: plain sizes instead of clamp()/min()/max(), vh instead of dvh
   if (/(?<![a-z-])(clamp|min|max)\(/.test(b)) b = b.replace(/([a-z-]+\s*:\s*)([^;]*)/g, (x, p, v) => p + plainSizes(v));
@@ -85,6 +90,8 @@ css = css.replace(/(--[a-z0-9-]*rgb\s*:\s*)(\d+)\s+(\d+)\s+(\d+)/g, '$1$2, $3, $
   .replace(/rgb\(\s*var\((--[a-z0-9-]+)\)\s*\/\s*([^)]+)\)/g, 'rgba(var($1), $2)');
 // :focus-visible is newer than these engines and would throw away the whole rule
 css = css.replace(/:focus-visible/g, ':focus');
+// media queries with not (…) are newer than these engines, which could drop the whole rule: TVs have no touch screen
+css = css.replace(/ and \(not \(any-pointer: coarse\)\)/g, '');
 css += `
 /* engines without position:sticky (html.no-sticky): the menu on the left stays put */
 @media (min-width: 900px) {

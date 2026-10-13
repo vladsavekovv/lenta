@@ -8,8 +8,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import (about, api_admin, api_auth, api_editor, api_extras, api_library, api_network, api_playback, api_prefs, api_subtitles, logs,
-               intros, scanner, trailers, transcode, trickplay, watcher)
+from . import (about, api_admin, api_auth, api_editor, api_extras, api_library, api_livetv, api_network, api_playback,
+               api_prefs, api_subtitles, epg, intros, livestream, livetv, logs, scanner, trailers, transcode,
+               trickplay, watcher)
 from .config import APP_NAME, VERSION, WEB_DIR, ensure_dirs
 from .db import get_setting, init_db
 
@@ -55,10 +56,13 @@ async def lifespan(app: FastAPI):
     log.info("%s %s starting", APP_NAME, VERSION)
     transcode.start_housekeeping()
     threading.Thread(target=transcode.detect_hardware, daemon=True).start()
+    livetv.start_background()           # finds USB tuners and scans a new one, quietly
+    epg.start_sweeping()                # fills in the guide for multiplexes nobody is watching
     task = asyncio.create_task(_scheduled_scans())
     yield
     task.cancel()
     transcode.stop_all()
+    livestream.stop_all()               # let go of the tuners before the process goes away
 
 
 app = FastAPI(title=APP_NAME, version=VERSION, lifespan=lifespan, docs_url="/api/docs", redoc_url=None,
@@ -74,6 +78,8 @@ app.include_router(about.router)
 app.include_router(api_editor.router)
 app.include_router(api_network.router)
 app.include_router(api_network.public)
+app.include_router(api_livetv.router)
+app.include_router(api_livetv.read)
 app.include_router(trickplay.router)
 app.include_router(intros.router)
 

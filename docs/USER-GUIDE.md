@@ -7,8 +7,9 @@ Everything LENTA can do once it is installed. New here? Start with the
 - [Organising files](#organising-files)
 - [Audiobooks](#audiobooks)
 - [Phones and tablets](#phones-and-tablets-the-lenta-app)
+- [Live TV](#live-tv) · [the programme guide](#the-programme-guide) · [your own channels on Home](#your-own-channels-on-home)
 - [Libraries](#libraries-in-the-menu)
-- [Looks](#looks-five-dark-themes)
+- [Looks](#looks-seven-dark-themes)
 - [Settings](#settings)
 - [Subtitles](#subtitles)
 - [Trailers and theme music](#trailers-and-theme-music)
@@ -155,6 +156,126 @@ curl -s -b ~/.lenta-cookie -H "Content-Type: application/json" \
   -d '{"path": "/mnt/media/Movies/Inception (2010)"}' http://<server>:8484/api/admin/scan-path
 ```
 
+## Live TV
+
+Live TV comes from two places, and they share one channel list: a **USB TV tuner** plugged into the server,
+and **playlists** (an m3u address or an Xtream Codes login). You set both up in *Settings › Live TV*, and you
+watch them by adding a library of the type **Live TV** (Settings › Libraries › Add library — it asks for no
+folders).
+
+**The tuner needs nothing from you.** LENTA looks at the system's `/dev/dvb` every minute. When a tuner
+appears it is identified — the stick's own name over USB, and the standards the chip reports (DVB-T, DVB-T2,
+DVB-C, DVB-S/S2, ATSC) — and a tuner that has never been scanned is scanned once, quietly, in the background.
+No driver is installed: nearly every USB tuner works with the drivers already in Ubuntu, and a few need a
+firmware file in `/lib/firmware` that their maker provides.
+
+**How a scan works.** LENTA tries the frequencies a broadcaster may legally use: UHF 21–60 and VHF 5–12 for an
+aerial, the 8 MHz European raster from 114 to 858 MHz for cable, trying DVB-T2 wherever DVB-T doesn't lock and
+the usual cable symbol rates. The first frequency that locks usually ends the sweep: the stream's own network
+table (NIT) lists the network's other frequencies, so from there LENTA follows the network instead of trying
+the rest of the band. From each stream it reads the service table (SDT) for the channel names and who provides
+them, and the network table for **the provider's own name** — that is what shows as the provider, for example
+*NURTS Digital* or your cable company — and for **the channel numbers the provider asks for**, so channel 1 is
+where the broadcaster intends it to be. Radio services and scrambled channels are marked as such.
+*Full scan (every frequency)* in the ⋮ menu sweeps the whole band instead, for when a network's table is wrong.
+
+**Watching a channel.** Click it in the Live TV library. LENTA tunes a free input of the stick, takes the
+whole multiplex off the adapter and picks that one channel out of it. A channel already broadcast in H.264
+with AAC sound is passed straight through; the older MPEG-2 and MPEG-audio channels, which no browser will
+play, are re-encoded on the way — on the graphics card if the server has one. What a channel is made of is
+read from the stream's own programme table before anything starts, so nothing is re-encoded needlessly.
+
+There is no seek bar, nothing to skip and no resume position, because a broadcast has none of those; a
+**LIVE** badge sits where the clock would be. The mini player works as it does for a film.
+
+**How many at once.** One input can only sit on one frequency, so a twin tuner like the WinTV-dualHD shows
+**two different channels at once** — with any number of people watching each. Everyone on the same channel
+shares one tuner. Asking for a third channel says which two are already on rather than failing quietly.
+
+**A channel you leave is kept ready.** Starting a channel takes a few seconds — the tuner has to lock, and
+the stream has to be read before anything can be sent on. Going back to one you were just watching should
+not pay that again, so leaving a channel does not tear it down: it keeps running, and returning to it joins
+what is already there. Up to five channels are kept this way, each for half an hour after the last person
+leaves; a sixth pushes out whichever has been idle longest. None of this is ever at the expense of somebody
+watching now — a channel being watched outranks every kept one, and a kept channel gives up its input the
+moment a viewer needs it.
+
+**Scanning and watching don't fight.** A scan retunes an input, so it never takes one somebody is watching:
+it uses the stick's other input if one is free, and otherwise says who is watching. Watching is refused the
+same way while that stick is mid-scan.
+
+### The programme guide
+
+**What is on comes from the broadcast**, not from a listings service: there is nothing to sign up for, no key
+to paste and nothing to keep paying. Every transmission carries its own schedule alongside the picture, and
+LENTA reads it.
+
+**It costs nothing to collect.** The schedule on a multiplex describes *every* channel carried on it, not
+just the one you are watching — so watching one channel quietly collects the guide for all of its
+neighbours. Nothing extra is tuned and no extra bandwidth is used.
+
+**The rest fills itself in.** Channels you never watch would otherwise never have a guide, so when an input
+is spare LENTA tunes the multiplexes it has not heard from lately and reads theirs too. **A viewer always
+outranks this**: the sweep gives an input back the instant somebody wants to watch, and will not start while
+every input is busy. Both halves can be switched off separately in *Settings › Live TV* — *Collect while
+watching* and *Tune spare inputs to collect the rest* — and that page says how much has been collected so far.
+
+**Where you see it.** What is on now appears under every channel, in the library and on Home. The **Guide**
+page — *What's on*, at the top of the Live TV library — shows the usual grid, with *Earlier*, *Now* and
+*Later* to move through it and a line marking the present. The guide survives a rescan, and anything more
+than six hours past is forgotten.
+
+### Your own channels on Home
+
+A Home section can be live channels instead of films. Make one in *Settings › Libraries › Home sections*,
+choose the channels you actually watch, and they sit as a row among your films with what is on under each.
+A channel that later disappears from the line-up takes itself out of the row.
+
+**Channel artwork.** A broadcast carries no logo — only a name — so a logo has to be found by matching
+that name against a collection of them. *Find channel logos*, in Settings › Live TV, does that: name your
+country and press the button. LENTA asks the collection what it actually holds and matches your channels
+against that, so it never guesses at addresses; a collection organised differently simply matches fewer
+channels. Naming your country matters because many channels exist in several — it picks your BNT and your
+bTV rather than someone else's. A different collection can be used instead, under *Use a different
+collection*. Names are
+compared forgivingly: *Star Channel HD* and *Star Channel* are the same channel, *24Kitchen* and
+*24 Kitchen* likewise, and Cyrillic names are transliterated, so *СКАТ* finds a file called *skat*.
+
+Anything unmatched gets **a monogram drawn from its own name** — initials on a coloured tile, the same
+colours every time, in the name's own alphabet. Channels from a playlist keep the logo the playlist gave
+them, and a logo you set by hand is never overwritten.
+
+**Satellite** is detected but not yet scanned: which satellite you receive depends on where the dish points,
+and the LNB and any DiSEqC switch have to be told. That page is coming next.
+
+**Playlists.** *Add a playlist* takes an m3u address or an Xtream Codes login. LENTA reads the channel names,
+logos, groups and channel numbers the playlist provides; a group or name that mentions radio, and audio-only
+addresses, are marked as radio.
+
+**A scan holds the tuner** while it runs — nothing else can use that input meanwhile. **Stop** next to the
+tuner ends it at once and keeps whatever it found. *Scan a newly found tuner by itself* switches off the
+automatic first scan, which is worth doing while you test the tuner from the command line.
+
+**If a scan finds nothing**, check the tuner at the operating-system level, outside LENTA:
+
+```bash
+sudo /opt/lenta/deploy/tv-check.py              # look at everything, then sweep every band the tuner supports
+sudo /opt/lenta/deploy/tv-check.py --freq 522   # try one frequency you know is used (MHz)
+sudo /opt/lenta/deploy/tv-check.py --band cable # only the cable band
+sudo /opt/lenta/deploy/tv-check.py --band aerial # only the aerial band
+sudo -u lenta /opt/lenta/deploy/tv-check.py     # as the service account, to prove its access
+```
+
+It uses the very code LENTA uses, and prints: what the system shows (`/dev/dvb` and who may open it), how the
+stick is attached (including whether its socket is a USB 3 one — those radiate noise across the band a tuner
+listens to, so a tuner that receives nothing is worth moving to a USB 2 socket), what the
+driver said while loading (a missing firmware file shows up here), what each tuner reports about itself, and
+then every frequency it tries with the lock, signal strength and quality — and, where it locks, the channels
+that frequency carries. It ends with what to do about whatever it found.
+
+**The channel list.** Everything found is in one list in *Settings › Live TV*, in the provider's order. **Hide**
+keeps a channel out of the Live TV library without deleting it. Playing a channel comes in the next step.
+
 ## Phones and tablets (the LENTA app)
 
 The same address works on phones and tablets, with a layout made for them:
@@ -193,9 +314,22 @@ screen, without a browser and without any browser settings:
    developer: tap *More details › Install anyway* (it's your own app, not from the Play Store).
 3. Open **LENTA**, type your server's address (for example `192.168.1.50:8484`) and tap **Connect**.
 
-In the app: Back goes back in LENTA, full-screen video turns sideways and hides the system bars, the screen
-stays on while a video plays, *Download original file* uses Android's downloads, artwork uploads use the
-phone's file picker, and links to other sites (IMDb, Wikipedia) open in your browser. To point the app at
+In the app: videos open in full screen the moment they start, sideways, with the system bars hidden and the
+picture using the whole screen, the strip beside the camera included (swipe in from an edge to see the bars for a
+moment); Back goes back in LENTA; the screen stays on while a video plays; pressing Home while a video plays keeps it going in a small picture-in-picture window
+(close that window to stop it); music and audiobooks keep playing with the screen off, the status and navigation
+bars take your theme's colour, *Download original file* uses Android's downloads, artwork uploads use the
+phone's file picker, and links to other sites (IMDb, Wikipedia) open in your browser.
+
+**HTTPS:** type the https address (for example `https://192.168.1.50`, port 8443 when you leave it out). The app
+accepts LENTA's own certificate for your server without installing anything on the phone; certificates from
+Let's Encrypt or another authority work as in any browser. If a certificate is refused (expired, for another name)
+the app says so. When you move LENTA to another port or to https in *Settings › Network*, the app follows and
+remembers the new address. (Downloads over https with LENTA's own certificate need the certificate installed on
+the phone, or use the http address.)
+
+**Updating the app:** download and install the new APK the same way; it installs over the old one and keeps
+your server and sign-in. To point the app at
 another server: profile › **Change server…**. If the server can't be reached the app says so, with *Try
 again* and *Use a different address*.
 
@@ -234,7 +368,7 @@ Esc clears the selection.
 show's picture with the show's title logo, like a movie (the season, number and name stay below it). **Settings ›
 Look › Pictures of TV episodes** switches back to a picture from the episode itself.
 
-## Looks: six dark themes
+## Looks: seven dark themes
 
 Each person picks a theme in **Settings** (rail › Settings). The administrator sets the default for the
 sign-in screen and new users in Settings › General.
@@ -246,20 +380,30 @@ sign-in screen and new users in Settings › General.
 | Abyss | Deep water with one thread of cyan, thin wide titles, soft corners |
 | Velvet | Oxblood curtains and crimson, classic picture-palace titles |
 | Aurora | Midnight indigo with a violet-to-cyan glow, bold titles, round corners |
-| Redline | The streaming-service look: near-black and signal red, the menu as a bar along the top, a full-width billboard, rows of wide pictures without names under them, white Play and grey More info buttons |
+| Netflix | The streaming-service look: near-black and signal red, the menu as a bar along the top, a full-width billboard, rows of wide pictures without names under them, white Play and grey More info buttons |
+| HBO Max | The look of Warner's service: a pure black page with a dark indigo glow, light (not bold) lettering, one blue accent, 8px corners and no shadows, and the menu as a bar along the top |
+
+The **HBO Max** theme puts the menu along the top, like the Netflix theme: the page shows through it until you
+scroll and then it turns black, and the page you are on is white with a blue line under it. The billboard fades
+into black with a blue beam behind the title, pictures have 8px corners and a thin white edge when you point at
+them, and *Recently added* is a quiet outlined label in the corner instead of a red flag. On phones the bar at
+the bottom is flat black with a blue mark on the page you are on.
+
+On a phone held upright, Netflix looks like the Netflix app: a header with the page name and your libraries as chips, a framed poster billboard with **Play** and **My List**, posters in every row, *Continue Watching for <you>* with a play circle on each poster (hold a poster for its menu), and a floating tab bar (Home, Libraries, Search, My LENTA). My List and Settings are under My LENTA. While a video plays full screen, spread two fingers to fill the screen (the edges are cut off) and pinch them to see the whole picture again.
 
 Media pages show the backdrop full screen. It drifts slowly, fades and blurs as you scroll, and the
-details sit on translucent panels.
+details sit on translucent panels. On a television none of that moving and blurring happens: a TV has a
+fraction of the graphics power and needs all of it for the picture, so the backdrop is simply dimmed.
 
 **The server's default theme** is used on the sign-in screen ("Who's watching?") and for users who haven't
 picked a theme. An administrator sets it in Settings › Appearance (pick a theme, then *Use … on the sign-in screen*)
-or in Settings › General › Default theme. With Redline the sign-in screen has the streaming-service
+or in Settings › General › Default theme. With Netflix the sign-in screen has the streaming-service
 look: a deep red background, the silver LENTA logo in the corner and large square profiles.
 
 ## Settings
 
 Everything is under one **Settings** button (the gear at the bottom of the side menu, or at the top right with
-the Redline theme). The page has a menu on the left, like Jellyfin's: group headings, items, and items with an
+the Netflix theme). The page has a menu on the left, like Jellyfin's: group headings, items, and items with an
 arrow that open more. Everyone sees **My settings**; administrators also see the server pages. On a phone the
 menu folds into a button at the top that shows where you are. Settings remembers the last page you opened.
 

@@ -45,12 +45,16 @@ Tip: in your router, give the TV a fixed IP address (a "DHCP reservation"). That
 ### 2. Switch on Developer Mode
 
 1. On the remote press **Home** and open **Apps**.
-2. While on the Apps screen, type **1 2 3 4 5** on the remote.
+2. Open **App Settings**. Where this sits has moved about: on older sets it is a gear at the top of the
+   Apps panel, but on recent firmware (the Smart Hub with the **Discover / Apps** switch at the top) it is
+   the **last item at the very bottom of the Apps page** — keep pressing ▼ past every row of apps. The
+   number pad in step 3 only works once you are inside App Settings.
+3. Type **1 2 3 4 5** on the remote.
    * If your remote has no number keys, press the **123** button (or the **⋯** button) to show a number
      pad on the screen and enter 1 2 3 4 5 there.
-3. In the **Developer Mode** window, switch Developer mode **On**.
-4. In **Host PC IP** enter the **LENTA server's** IP address (e.g. `192.168.1.20`) and choose **OK**.
-5. **Restart the TV**: hold the power button on the remote until the TV turns off and on again
+4. In the **Developer Mode** window, switch Developer mode **On**.
+5. In **Host PC IP** enter the **LENTA server's** IP address (e.g. `192.168.1.20`) and choose **OK**.
+6. **Restart the TV**: hold the power button on the remote until the TV turns off and on again
    (about 5 seconds). Simply switching it off and on is not enough.
 
 After the restart, the Apps screen shows **Developer Mode** at the top. That means it worked.
@@ -110,8 +114,14 @@ The installer signs LENTA with the developer certificate that comes with Samsung
 the installer says **"The TV refused the app"**, your TV wants a certificate made for that TV. This is free, but it
 needs Samsung's Tizen Studio on a PC (Windows, Mac or Linux) and a Samsung account:
 
-1. Install **Tizen Studio** from <https://developer.tizen.org/development/tizen-studio/download>.
-2. In Tizen Studio's **Package Manager › Extension SDK**, install **Samsung Certificate Extension**.
+1. Install **Tizen Studio** — Samsung's own TV SDK page has it:
+   <https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/installing-tv-sdk.html>
+   Not the **Visual Studio Code Extension** that tizen.org now recommends: it is the newer way to write
+   apps, but the certificate work below is done in Tizen Studio's own Certificate Manager.
+2. When the installer finishes, tick **Launch the Package Manager**. In **Package Manager › Extension SDK**
+   install both **TV Extensions** and **Samsung Certificate Extension**.
+   **The certificate extension must be version 2.0.73 or newer** — making a certificate with anything
+   older stopped working in September 2025, and the failure does not say so.
 3. With the TV in Developer Mode (Host PC IP = **this PC's** IP for now), open **Tools › Device Manager**, choose
    **Remote Device Manager › +**, add the TV's IP and connect. This lets Tizen Studio read the TV's ID (DUID).
 4. Open **Tools › Certificate Manager › +** and choose **Samsung**, **TV**, then **Create a new certificate
@@ -131,12 +141,25 @@ The script asks for the certificate's password. You can also set it with `CERT_P
 
 ## Troubleshooting
 
+**There is no "App Settings" anywhere in Apps**
+: Some recent sets and regions no longer offer Developer Mode at all. Nothing is lost: use the TV's web
+  browser (Option A above). It is the same LENTA, with the same remote-control mode — only the app icon,
+  permanent full screen and the ▶ ❚❚ ⏩ buttons are missing.
+
 **"The TV did not let this computer in"**
 : Developer Mode is off, the Host PC IP isn't the server's IP, or the TV wasn't restarted (hold the power button)
   after you changed it. Check the TV's IP address too. The installer prints which Host PC IP it expects.
 
-**"The TV refused the app"**
-: See [Samsung certificate](#samsung-certificate-only-if-the-tv-refuses-the-app).
+**"Invaild password" when signing, with a password that is definitely right**
+: Samsung's tools hand the certificate password to the desktop's keyring, and a container has none — so
+  they store something they cannot read back. LENTA writes the signing profile itself to avoid this. If
+  you meet it using Samsung's tools directly, put the password into `profiles.xml` by hand, or switch off
+  Secure Storage in Tizen Studio (Preferences › General › Security › Secure Storage).
+
+**"The TV refused the app"**, with `install failed[118, -12] ... Invalid certificate chain with certificate in signature`
+: The TV will not take the generic developer certificate — usual on sets from about 2023 onwards. Nothing
+  is wrong with your setup: Developer Mode, the network and the signing all worked, and the TV turned the
+  app away at the last step. See [Samsung certificate](#samsung-certificate-only-if-the-tv-refuses-the-app).
 
 **The app shows "This TV's web engine is too old"**
 : The TV is from 2016 or earlier. The screen shows the TV's engine version underneath; send it along if you

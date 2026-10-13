@@ -98,6 +98,7 @@ const P = {
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
   doc: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',
   cpu: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
+  live: '<path d="M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2"/><circle cx="12" cy="12" r="2"/>',
   phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
   restart: '<path d="M4 12a8 8 0 1 0 3-6.2"/><path d="M4 4v4h4"/>',
   film: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/>',
@@ -123,7 +124,7 @@ const P = {
   cloud: '<path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 9.5z"/><path d="M12 11v6M9.5 14.5 12 17l2.5-2.5"/>',
 };
 export const icon = (name) => raw(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`);
-export const KIND_ICON = { movies: 'movies', shows: 'shows', music: 'music', audiobooks: 'book', photos: 'photos' };
+export const KIND_ICON = { movies: 'movies', shows: 'shows', music: 'music', audiobooks: 'book', photos: 'photos', livetv: 'live' };
 
 // ---- formatting ----
 export function fmtTime(sec) {
@@ -242,7 +243,7 @@ export function wideCard(item, opts = {}) {
 }
 
 export function posterCard(item, opts = {}) {
-  if (wideArt() && WIDE_KINDS.has(item.kind)) return wideCard(item, opts);
+  if (wideArt() && !nfx() && WIDE_KINDS.has(item.kind)) return wideCard(item, opts);
   const src = item.poster ? img(item.poster, 342) : null;
   const href = itemHref(item);
   return html`<div class="card poster${opts.captioned ? ' captioned' : ''}" data-id="${item.id}" data-kind="${item.kind}">
@@ -276,6 +277,23 @@ export function landscapeCard(item, opts = {}) {
       <div class="frame">${src ? html`<img loading="lazy" src="${src}" alt="">` : genPoster({ title, year: '' })}${logo}${progressBar(item)}
         ${opts.play ? html`<div class="play-hint">${icon('play')}</div>` : tools(item)}</div></a>
     <div class="caption"><a class="t" href="${details}">${opts.label ? html`<span style="color:var(--accent)">${opts.label} · </span>` : ''}${title}</a><div class="s">${sub}</div></div>
+  </div>`;
+}
+
+// A live channel in a Home row: just the station's artwork, with the whole card going straight to
+// watching it. No number in the corner — the Live TV page numbers its channels because that grid is the
+// line-up, but a hand-picked row on Home is not, and numbers out of sequence there only look like gaps.
+export function channelCard(item) {
+  const to = `#/play/live/${item.id}`;
+  // What is on says more than who carries it, so it takes the line when the guide knows.
+  const on = item.now;
+  const sub = on ? on.title : [item.provider, item.radio ? 'Radio' : ''].filter(Boolean).join(' \u00b7 ');
+  const span = on && on.stop > on.start ? (Date.now() / 1000 - on.start) / (on.stop - on.start) : 0;
+  const bar = on ? html`<span class="tv-prog"><i style="width:${(Math.max(0, Math.min(1, span)) * 100).toFixed(1)}%"></i></span>` : '';
+  return html`<div class="card channel" data-id="${item.id}" data-kind="channel">
+    <a class="frame-link" href="${to}" title="Watch ${item.title}">
+      <div class="frame"><img loading="lazy" src="${item.art}" alt="">${bar}</div></a>
+    <div class="caption"><a class="t" href="${to}">${item.title}</a><div class="s">${sub}</div></div>
   </div>`;
 }
 
@@ -340,8 +358,60 @@ export function rankCard(item, n) {
   </div>`;
 }
 
+// ---- Netflix on a phone held upright: the Netflix app's look (html.nfx) ----------------------------------------
+// Posters in every row, "Continue Watching for <name>" with a play circle, the progress line and ⓘ / ⋮ under each
+// picture, a billboard card with Play and My List, a header with the page name and library chips, a floating tab bar.
+export const nfx = () => document.documentElement.classList.contains('nfx');
+/** Turns the look on or off for the current theme and screen; true when it changed. */
+export function syncNfx() {
+  const on = document.documentElement.dataset.theme === 'netflix' && window.matchMedia('(max-width: 720px)').matches;
+  const was = nfx();
+  document.documentElement.classList.toggle('nfx', on);
+  return on !== was;
+}
+let viewer = '';
+export function setViewer(name) { viewer = name || ''; }
+
+const nfxPoster = (item) => item.kind === 'episode' ? (item.show_poster || item.poster) : item.poster;
+function nfxPercent(item) {
+  const p = item.progress;
+  return p && p.duration && p.position && !p.completed ? Math.min(100, p.position / p.duration * 100) : 0;
+}
+/** A poster, nothing under it (rows and Top 10 aside). Episodes show their show's poster. */
+export function nfxCard(item) {
+  const poster = nfxPoster(item);
+  if (!poster && !WIDE_KINDS.has(item.kind)) return landscapeCard(item);
+  const href = itemHref(item);
+  const title = item.kind === 'episode' ? `${item.show_title || ''} · S${item.season}:E${item.index ?? '?'} ${item.title}` : item.title;
+  return html`<div class="card poster nfx-card" data-id="${item.id}" data-kind="${item.kind}">
+    <a class="frame-link" href="${href}" title="${title}">
+      <div class="frame">${poster ? html`<img loading="lazy" src="${img(poster, 342)}" alt="">` : genPoster(item)}${newBadge(item)}${tools(item)}</div></a>
+    ${nfxPercent(item) ? html`<div class="nfx-prog"><i style="width:${nfxPercent(item).toFixed(1)}%"></i></div>` : ''}
+  </div>`;
+}
+/** Continue watching: the poster plays, a play circle on it, the progress line, then ⓘ (details) and ⋮ (options). */
+export function nfxContinueCard(item) {
+  const poster = nfxPoster(item);
+  const book = item.kind === 'book';
+  const play = book ? `#/item/${item.id}?play=1` : `#/play/${item.id}`;
+  const name = item.kind === 'episode' ? `${item.show_title || ''} S${item.season}:E${item.index ?? '?'}` : item.title;
+  return html`<div class="card poster nfx-card nfx-cw${book ? ' book' : ''}" data-id="${item.id}" data-kind="${item.kind}">
+    <a class="frame-link" href="${play}" title="${book ? 'Listen to' : 'Play'} ${name}">
+      <div class="frame">${poster ? html`<img loading="lazy" src="${img(poster, 342)}" alt="">` : genPoster({ title: name, year: '' })}
+        ${newBadge(item)}<span class="nfx-play" aria-hidden="true">${icon('play')}</span></div></a>
+    <div class="nfx-prog"><i style="width:${nfxPercent(item).toFixed(1)}%"></i></div>
+  </div>`;
+}
+export const nfxViewer = () => viewer;
+
 export function cardFor(item, style, index = 0) {
+  if (item.kind === 'channel') return channelCard(item);
   if (style === 'top10') return rankCard(item, index + 1);
+  if (nfx()) {
+    if (style === 'continue') return nfxContinueCard(item);
+    if (item.kind === 'album' || item.kind === 'book' || item.kind === 'photoalbum') return item.kind === 'photoalbum' ? landscapeCard(item) : squareCard(item);
+    return nfxCard(item);
+  }
   if (style === 'continue') return landscapeCard(item, { play: true, label: item.continue === 'next' ? 'Next' : null });
   if (item.kind === 'album' || item.kind === 'book') return style === 'landscape' && item.kind === 'book' ? bookWideCard(item) : squareCard(item);
   if (style === 'landscape' && WIDE_KINDS.has(item.kind)) return wideCard(item);
@@ -350,6 +420,13 @@ export function cardFor(item, style, index = 0) {
 }
 
 export function rowStyle(row) {
+  if (row.items[0]?.kind === 'channel') return 'channel';
+  if (nfx() && row.style !== 'top10') {
+    const k = row.items[0]?.kind;
+    if (row.style !== 'continue' && (k === 'album' || k === 'book')) return 'square';
+    if (row.style !== 'continue' && k === 'photoalbum') return 'landscape';
+    return 'poster';
+  }
   if (row.style === 'continue') return 'landscape';
   if (row.style) return row.style;
   const k = row.items[0]?.kind;
@@ -360,7 +437,8 @@ export function rowStyle(row) {
 
 export function row(rowData) {
   const style = rowStyle(rowData);
-  const title = rowData.library_id ? html`<a href="#/library/${rowData.library_id}">${rowData.title}</a>` : rowData.title;
+  const name = nfx() && rowData.style === 'continue' && viewer ? `Continue Watching for ${viewer}` : rowData.title;
+  const title = rowData.library_id ? html`<a href="#/library/${rowData.library_id}">${name}</a>` : name;
   return html`<section class="row" aria-label="${rowData.title}"><h2>${title}</h2>
     <div class="scroller">
       <button class="scroll-btn prev" data-scroll="-1" aria-label="Scroll left">${icon('back')}</button>
@@ -402,18 +480,29 @@ document.addEventListener('click', (e) => {
   track.scrollBy({ left: Number(b.dataset.scroll) * track.clientWidth * 0.85, behavior: 'smooth' });
 });
 
+// While something is in full screen (the video player), only that element is drawn: menus, sheets, dialogs and
+// toasts go inside it, so they show up in full screen too.
+export const overlayHost = () => document.fullscreenElement || document.webkitFullscreenElement || document.body;
+function intoView(el) { const h = overlayHost(); if (el.parentNode !== h) h.append(el); return el; }
+// leaving full screen: the shared containers go back to the page (the player may be removed next)
+export function restoreOverlays() {
+  ['#toasts', '#modal-root'].forEach((s) => { const el = $(s); if (el && el.parentNode !== document.body) document.body.append(el); });
+  document.querySelectorAll('.player .menu, .player > .sheet-back').forEach(m => m.remove());
+}
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) restoreOverlays(); });
+
 // ---- toasts ----
 export function toast(message, kind = 'info') {
   const t = document.createElement('div');
   t.className = `toast ${kind}`;
   t.textContent = message;
-  $('#toasts').append(t);
+  intoView($('#toasts')).append(t);
   setTimeout(() => t.remove(), kind === 'error' ? 7000 : 3500);
 }
 
 // ---- modals ----
 export function modal(content, { wide = false, onClose } = {}) {
-  const root = $('#modal-root');
+  const root = intoView($('#modal-root'));
   const back = document.createElement('div');
   back.className = 'modal-back';
   back.innerHTML = `<div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true"></div>`;
@@ -427,7 +516,13 @@ export function modal(content, { wide = false, onClose } = {}) {
     onClose?.();
     prevFocus?.focus?.();
   };
-  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  // With one dialog open on top of another, Escape should shut only the top one. Every dialog listens
+  // on the document, so the one to act is the one that is actually on top, not the one that listened first.
+  const onKey = (e) => {
+    if (e.key !== 'Escape' || back !== root.lastElementChild) return;
+    e.stopImmediatePropagation();
+    close();
+  };
   back.addEventListener('mousedown', (e) => { if (e.target === back) close(); });
   box.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) close(); });
   document.addEventListener('keydown', onKey, true);
@@ -440,8 +535,12 @@ export function modal(content, { wide = false, onClose } = {}) {
 }
 
 // ---- phones ----
-export const isPhone = () => window.matchMedia('(max-width: 720px), (max-height: 500px) and (hover: none)').matches;
-export const isTouch = () => window.matchMedia('(hover: none), (pointer: coarse)').matches;
+// Some phones (several Samsung Galaxy models among them) say they have a mouse — "hover" and a "fine" pointer —
+// so a phone or tablet is also recognised by its system, and the Android app is always a touch screen.
+const mobileOS = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && navigator.maxTouchPoints > 0;
+export const isTouch = () => !!window.LentaApp || mobileOS() || window.matchMedia('(hover: none), (pointer: coarse)').matches;
+if (isTouch()) document.documentElement.classList.add('touch');      // for the CSS: a touch screen whatever it says
+export const isPhone = () => window.matchMedia('(max-width: 720px)').matches || (window.innerHeight <= 500 && isTouch());
 
 /** Bottom sheet (phones): slides up from the bottom; closes on the backdrop, Escape, a swipe down or navigation. */
 export function sheet(content, { title = '', onClose, cls = '' } = {}) {
@@ -483,7 +582,7 @@ export function sheet(content, { title = '', onClose, cls = '' } = {}) {
     y0 = null; box.style.transform = '';
     if (dy > 90) close();
   });
-  document.body.append(back);
+  overlayHost().append(back);
   requestAnimationFrame(() => back.classList.add('open'));
   return { box, body, close };
 }
@@ -505,7 +604,7 @@ export function popMenu(anchor, items) {
   menu.className = 'menu';
   mount(menu, items.map((it, i) => it.sep ? html`<hr>` : it.heading ? html`<div class="menu-head">${it.heading}</div>`
     : html`<button data-i="${i}" ${it.disabled ? raw('disabled') : ''}>${it.label}${it.hint ? html`<span class="menu-hint">${it.hint}</span>` : ''}</button>`));
-  document.body.append(menu);
+  overlayHost().append(menu);
   const r = anchor.getBoundingClientRect();
   const top = Math.min(r.bottom + 6, window.innerHeight - menu.offsetHeight - 10);
   menu.style.top = `${Math.max(10, r.top > window.innerHeight / 2 ? r.top - menu.offsetHeight - 6 : top)}px`;

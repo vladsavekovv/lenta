@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS libraries (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL,
-    kind       TEXT NOT NULL,           -- movies | shows | music | photos
+    kind       TEXT NOT NULL,           -- movies | shows | music | audiobooks | photos | livetv
     paths      TEXT NOT NULL,           -- JSON list of folders
     created_at REAL,
     last_scan  REAL
@@ -150,6 +150,60 @@ CREATE TABLE IF NOT EXISTS intros (
     checked  REAL
 );
 
+CREATE TABLE IF NOT EXISTS tv_sources (       -- where live channels come from
+    id         INTEGER PRIMARY KEY,
+    kind       TEXT NOT NULL,           -- tuner | m3u | xtream
+    name       TEXT NOT NULL,
+    config     TEXT NOT NULL DEFAULT '{}',   -- JSON: tuner key and dish settings, or playlist address
+    enabled    INTEGER NOT NULL DEFAULT 1,
+    provider   TEXT,                     -- the network this source turned out to carry
+    status     TEXT,                     -- idle | scanning | ok | error, with the last message
+    last_scan  REAL,
+    found      INTEGER NOT NULL DEFAULT 0,
+    created_at REAL
+);
+
+CREATE TABLE IF NOT EXISTS tv_channels (      -- one channel, from a tuner or a playlist
+    id          INTEGER PRIMARY KEY,
+    source_id   INTEGER NOT NULL REFERENCES tv_sources(id) ON DELETE CASCADE,
+    uid         TEXT NOT NULL,          -- stable within the source: service id, or the playlist's id
+    name        TEXT NOT NULL,
+    number      INTEGER,                -- the channel number the provider asks for (LCN)
+    provider    TEXT,
+    kind        TEXT NOT NULL DEFAULT 'tv',   -- tv | radio | data
+    logo        TEXT,
+    tune        TEXT NOT NULL DEFAULT '{}',   -- JSON: how to get it (frequency and ids, or a URL)
+    scrambled   INTEGER NOT NULL DEFAULT 0,
+    hidden      INTEGER NOT NULL DEFAULT 0,
+    last_seen   REAL,
+    UNIQUE (source_id, uid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tv_channels_source ON tv_channels(source_id);
+
+-- What is on, read from the broadcast's own event tables while you watch.
+-- Keyed by the channel's uid rather than its row: a rescan rebuilds channel rows, and the guide should
+-- survive that. event_id is the broadcaster's, so a programme that is revised in a later table
+-- replaces itself instead of appearing twice.
+CREATE TABLE IF NOT EXISTS tv_programmes (
+    id          INTEGER PRIMARY KEY,
+    source_id   INTEGER NOT NULL REFERENCES tv_sources(id) ON DELETE CASCADE,
+    uid         TEXT NOT NULL,          -- the channel's uid: onid:tsid:service_id
+    event_id    INTEGER NOT NULL,
+    start       REAL NOT NULL,          -- unix time, from the table's own UTC
+    stop        REAL NOT NULL,
+    title       TEXT NOT NULL DEFAULT '',
+    summary     TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    genre       TEXT NOT NULL DEFAULT '',
+    language    TEXT NOT NULL DEFAULT '',
+    updated_at  REAL NOT NULL,
+    UNIQUE (source_id, uid, event_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tv_programmes_when ON tv_programmes(source_id, uid, start);
+CREATE INDEX IF NOT EXISTS idx_tv_programmes_stop ON tv_programmes(stop);
+
 CREATE TABLE IF NOT EXISTS watchlist (
     user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     item_id  INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
@@ -174,6 +228,7 @@ SETTING_DEFAULTS = {
     "opensubtitles_api_key": "",
     "opensubtitles_username": "",
     "opensubtitles_password": "",
+    "livetv_auto_scan": "1",             # scan a newly found TV tuner once, by itself, in the background
     "theme_music_online": "1",           # look up soundtrack previews online when no local theme file
     "omdb_api_key": "",                  # optional: IMDb / Rotten Tomatoes / Metacritic ratings in the About panel
     "wikipedia_summaries": "1",
@@ -228,6 +283,9 @@ def init_db() -> None:
         con.execute("UPDATE libraries SET position = id WHERE position IS NULL")
         # Renamed from SAVEK: keep a custom server name, but update the old default.
         con.execute("UPDATE settings SET value = 'LENTA' WHERE key = 'server_name' AND value = 'SAVEK'")
+        # The Redline theme is called Netflix from 1.3.1: keep everyone's choice working.
+        con.execute("UPDATE user_prefs SET value = 'netflix' WHERE key = 'theme' AND value = 'redline'")
+        con.execute("UPDATE settings SET value = 'netflix' WHERE key = 'default_theme' AND value = 'redline'")
         con.commit()
         con.close()
 

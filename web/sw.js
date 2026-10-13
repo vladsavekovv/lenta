@@ -1,10 +1,10 @@
 // LENTA app shell: lets the installed app open instantly and show a friendly page when the server
 // can't be reached. Media, artwork and everything under /api/ always come straight from the server.
-const SHELL = 'lenta-shell-v3';
+const SHELL = 'lenta-shell-v11';
 const FILES = [
-  '/', '/index.html', '/manifest.webmanifest', '/css/fonts.css', '/css/app.css', '/css/mobile.css', '/css/theme-redline.css', '/vendor/hls.min.js',
+  '/', '/index.html', '/manifest.webmanifest', '/css/fonts.css', '/css/app.css', '/css/mobile.css', '/css/theme-netflix.css', '/css/theme-hbo.css', '/vendor/hls.min.js',
   '/js/app.js', '/js/api.js', '/js/ui.js', '/js/views.js', '/js/admin.js', '/js/auth.js', '/js/editor.js', '/js/extras.js',
-  '/js/hovercard.js', '/js/music.js', '/js/player.js', '/js/settings.js', '/js/subtitles.js', '/js/pwa.js', '/js/tv.js',
+  '/js/hovercard.js', '/js/livetv.js', '/js/music.js', '/js/player.js', '/js/settings.js', '/js/subtitles.js', '/js/pwa.js', '/js/tv.js',
   '/img/lenta-logo.png', '/img/lenta-mark.png', '/img/lenta-wordmark.png', '/img/icon-192.png', '/img/favicon-32.png',
 ];
 

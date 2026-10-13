@@ -73,6 +73,19 @@ printf "// The LENTA server this app opens first (set by install-tv.sh). Can be 
 if [[ -n "$CERTS" ]]; then
   [[ -f "$CERTS/author.p12" && -f "$CERTS/distributor.p12" ]] || fail "$CERTS must contain author.p12 and distributor.p12 (from Tizen Studio's Certificate Manager)."
   if [[ -z "${CERT_PASSWORD:-}" ]]; then read -rsp "Password of the Samsung certificate: " CERT_PASSWORD </dev/tty; echo; fi
+  # Check the password here, where the answer is one line, rather than finding out from a Java stack
+  # trace several minutes later. (-legacy is needed on OpenSSL 3 for the older format Samsung's tools
+  # write; older OpenSSL has no such option, so try both.)
+  if command -v openssl >/dev/null 2>&1; then
+    for part in author distributor; do
+      openssl pkcs12 -in "$CERTS/$part.p12" -nokeys -passin pass:"$CERT_PASSWORD" -out /dev/null 2>/dev/null \
+        || openssl pkcs12 -legacy -in "$CERTS/$part.p12" -nokeys -passin pass:"$CERT_PASSWORD" -out /dev/null 2>/dev/null \
+        || fail "That password does not open $CERTS/$part.p12.
+     It is the one you set at the author certificate step in Certificate Manager. If you ticked
+     'Apply the same password for the distributor certificate', both files share it."
+    done
+    say "The certificate password opens both files"
+  fi
   mkdir -p "$WORK/certs"; cp "$CERTS/author.p12" "$CERTS/distributor.p12" "$WORK/certs/"
 fi
 chmod -R a+rwX "$WORK"
@@ -112,18 +125,58 @@ if ! sdb devices | grep -q "$TV:26101"; then
 fi
 mkdir -p /tmp/out
 if [ -f /work/certs/author.p12 ]; then
-  # the Samsung certificate made for this TV
-  tizen security-profiles add -n lenta -a /work/certs/author.p12 -p "$CERT_PASSWORD" \
-    -d /work/certs/distributor.p12 -dp "$CERT_PASSWORD" >/dev/null
-  tizen package -t wgt -s lenta -o /tmp/out -- /work/app
+  # Write the signing profile ourselves rather than asking `tizen security-profiles add` to do it.
+  #
+  # That command hands the certificate password to the desktop's keyring (gnome-keyring, KWallet). There
+  # is no keyring in a container, so it stores something it cannot read back: adding the profile reports
+  # success, and signing then fails with "Invaild password" against a password that opens the files
+  # perfectly well by hand. The profile file is plain XML and the password belongs in it, which is
+  # exactly what Tizen Studio itself writes when its secure storage is switched off.
+  PWD_XML="$(printf '%s' "$CERT_PASSWORD" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g')"
+  mkdir -p "$HOME/tizen-studio-data/profile"
+  cat > "$HOME/tizen-studio-data/profile/profiles.xml" <<XML
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<profiles active="lenta" version="3.1">
+<profile name="lenta">
+<profileitem ca="" distributor="0" key="/work/certs/author.p12" password="$PWD_XML" rootca=""/>
+<profileitem ca="" distributor="1" key="/work/certs/distributor.p12" password="$PWD_XML" rootca=""/>
+<profileitem ca="" distributor="2" key="" password="" rootca=""/>
+</profile>
+</profiles>
+XML
+  # The packager keeps its own note of where profiles live, and will not look at the file otherwise.
+  tizen cli-config "profiles.path=$HOME/tizen-studio-data/profile/profiles.xml" >/dev/null 2>&1 || true
+  echo "signing with the Samsung certificate for this TV"
+  SIGN="lenta"
 else
-  # the developer certificate that comes with the tools
-  tizen package -t wgt -o /tmp/out -- /work/app
+  SIGN=""        # the developer certificate that comes with the tools
 fi
+set +e
+if [ -n "$SIGN" ]; then
+  PKG="$(tizen package -t wgt -s "$SIGN" -o /tmp/out -- /work/app 2>&1)"
+else
+  PKG="$(tizen package -t wgt -o /tmp/out -- /work/app 2>&1)"
+fi
+KRC=$?
+set -e
+echo "$PKG"
 WGT="$(ls /tmp/out/*.wgt 2>/dev/null | head -1)"
-[ -n "$WGT" ] || { echo "LENTA-ERR:package"; exit 5; }
-OUT="$(tizen install -s "$TV:26101" --name "$(basename "$WGT")" -- /tmp/out 2>&1)"; echo "$OUT"
-if echo "$OUT" | grep -qiE "fail|error"; then
+if [ "$KRC" -ne 0 ] || [ -z "$WGT" ]; then
+    echo "--- what the tool wrote in its own log ---"
+    find / -name cli.log -newermt '-10 minutes' 2>/dev/null | head -3 | while read -r L; do
+      echo "[$L]"; tail -30 "$L"
+    done
+  echo "LENTA-ERR:package"; exit 5
+fi
+# Say what Samsung said, whatever happens. Captured and echoed afterwards, the output was lost entirely
+# when the install failed: `set -e` ends the script at the assignment, before anything can be printed, and
+# all anyone sees is an exit code. The reason the TV gave is the whole point of running this.
+set +e
+OUT="$(tizen install -s "$TV:26101" --name "$(basename "$WGT")" -- /tmp/out 2>&1)"
+IRC=$?
+set -e
+echo "$OUT"
+if [ "$IRC" -ne 0 ] || echo "$OUT" | grep -qiE "fail|error"; then
   exit 4
 fi
 tizen run -s "$TV:26101" -p "$APP_ID" >/dev/null 2>&1 || true
@@ -146,6 +199,11 @@ case $RC in
      certificate made for that TV. See 'Samsung certificate' in docs/SAMSUNG-TV.md, then run:
        sudo $SELF $TV --samsung-cert /folder/with/the/p12/files" ;;
   5) fail "Signing the app failed (see the messages above). If you used --samsung-cert, check the password." ;;
+  6) fail "The certificate could not be used for signing (the tool's own log is above).
+     By far the most common cause is the wrong password: it is the one you set at the *author certificate*
+     step in Certificate Manager, which also covers the distributor certificate when you left
+     'Apply the same password' ticked. To avoid typing it:
+       sudo CERT_PASSWORD='your-password' -E $SELF $TV --samsung-cert <folder> --server <address>" ;;
   9) fail "Samsung's tools didn't report a finished install (see the messages above)." ;;
   *) fail "Installing stopped (code $RC). The messages above say where." ;;
 esac

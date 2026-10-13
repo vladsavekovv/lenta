@@ -1,5 +1,5 @@
 /* LENTA Web Client
-   Five dark themes. Each sets the palette, title typography and corner shapes; components only
+   Seven dark themes (Netflix and HBO Max have their own files). Each sets the palette, title typography and corner shapes; components only
    use these tokens. Oswald (marquee titles) and Golos Text (reading) are bundled, Latin + Cyrillic. */
 
 :root {
@@ -230,6 +230,16 @@ select.input { appearance: none; padding-right: 36px;
 .track.poster { grid-auto-columns: clamp(132px, 13vw, 190px); }
 .track.landscape { grid-auto-columns: clamp(240px, 23vw, 340px); }
 .track.square { grid-auto-columns: clamp(150px, 14vw, 200px); }
+.track.channel { grid-auto-columns: clamp(152px, 15vw, 224px); }
+/* A channel tile is the station's artwork on a plain frame, same as the Live TV page. Station logos
+   come in every shape there is — a wide wordmark, a tall crest, a square app icon — so the picture is
+   bounded on both sides and keeps its own proportions, rather than being handed a fixed box to fill.
+   min-height stops a tall logo from stretching the tile: a grid item may grow its track to fit its
+   content, which would otherwise beat the aspect ratio above. */
+.card.channel .frame { aspect-ratio: 16 / 10; background: var(--bg-3); display: grid; place-items: center;
+  overflow: hidden; }
+.card.channel .frame img { width: auto; height: auto; max-width: 84%; max-height: 64%;
+  min-width: 0; min-height: 0; object-fit: contain; }
 .scroll-btn {
   position: absolute; top: 4px; bottom: 10px; width: calc(var(--gutter) - 4px); min-width: 36px;
   border: 0; background: rgb(var(--bg-rgb) / .78); color: var(--text); cursor: pointer; z-index: 2;
@@ -481,6 +491,14 @@ select.input { appearance: none; padding-right: 36px;
 html.player-open, html.player-open body { overflow: hidden; }
 .player { position: fixed; inset: 0; z-index: 80; background: #000; color: #fff; overflow: hidden; }
 .player video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+/* touch: two fingers zoom the picture to fill the screen; the page itself never zooms under the player */
+.player.touch { touch-action: pan-x pan-y; }
+.player.zoomed video { object-fit: cover; }
+.player.mini.zoomed video, html.pip .player.zoomed video { object-fit: contain; }
+.zoom-flash { position: absolute; left: 50%; top: 18%; translate: -50% 0; z-index: 6; padding: 8px 16px; border-radius: 6px;
+  background: rgb(0 0 0 / .65); color: #fff; font: 600 15px/1 var(--body); opacity: 0; pointer-events: none; }
+.zoom-flash.on { animation: zoomflash 1.4s ease forwards; }
+@keyframes zoomflash { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 .player .chrome { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto; transition: opacity .25s; }
 .player.idle .chrome { opacity: 0; cursor: none; }
 .player.idle { cursor: none; }
@@ -927,7 +945,7 @@ body.rail-collapsed .rail a:hover, body.rail-collapsed .rail button.navlike:hove
 .hero-pill button { width: 36px; height: 36px; }
 .hero-pill svg { width: 17px; height: 17px; }
 /* phones: top right of the banner, clear of the Play / More info buttons */
-@media (max-width: 720px), (max-height: 500px) and (hover: none) {
+@media (max-width: 720px), (max-height: 500px) and (hover: none), (max-height: 500px) and (any-pointer: coarse) {
   .hero-pill { top: calc(14px + env(safe-area-inset-top)); bottom: auto; right: 12px; }
 }
 .hero > .art, .hero > .hero-body { transition: opacity .6s ease; }
@@ -937,7 +955,7 @@ body.rail-collapsed .rail a:hover, body.rail-collapsed .rail button.navlike:hove
 .panel h4.set-sub { font-size: 15px; font-weight: 600; margin: 22px 0 10px; padding-top: 16px; border-top: 1px solid rgb(255 255 255 / .1); }
 
 /* ---------- hover preview card (mouse/trackpad only) ---------- */
-@media (hover: hover) and (pointer: fine) { .card-tools { display: none; } }   /* their actions live in the preview */
+@media (hover: hover) and (pointer: fine) { html:not(.touch) .card-tools { display: none; } }   /* their actions live in the preview */
 .hovercard { position: absolute; z-index: 80; border-radius: 12px; overflow: hidden; background: var(--bg-2);
   box-shadow: 0 24px 60px rgb(0 0 0 / .6), 0 0 0 1px rgb(var(--text-rgb) / .08);
   opacity: 0; transform: scale(.72); transition: opacity .18s ease, transform .22s cubic-bezier(.2, .8, .2, 1); }
@@ -1282,7 +1300,7 @@ html.tv ::-webkit-scrollbar { display: none; }                   /* TVs: no scro
 .default-theme { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 16px; }
 .default-theme .note { font-size: 14px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
 .default-theme .note svg { width: 16px; height: 16px; color: var(--accent); flex: none; }
-/* sign-in: the corner wordmark is for themes that use it (Redline) */
+/* sign-in: the corner wordmark is for themes that use it (Netflix) */
 .auth { position: relative; }
 .auth-corner { display: none; }
 .profile-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1695,3 +1713,121 @@ html.tv .dock .dk-btn:focus, html.tv .dock .dk-seek:focus { outline: 3px solid v
 body.has-music .save-float { bottom: calc(var(--dock-h) + 18px); }
 @media (max-width: 720px) { .save-float { right: 12px; left: 12px; justify-content: flex-end; bottom: calc(var(--tabbar-h) + 12px); }
   body.has-music .save-float { bottom: calc(var(--tabbar-h) + var(--dock-h) + 12px); } }
+/* touch screens: the big buttons on the picture play/pause and jump; the bar keeps previous, next and stop */
+.player.touch .dock-full [data-dk="back"], .player.touch .dock-full [data-dk="fwd"], .player.touch .dock-full [data-dk="toggle"] { display: none; }
+/* Android picture-in-picture (Home while a video plays): only the video, filling the small window */
+html.pip .player { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 9999 !important;
+  border-radius: 0 !important; animation: none !important; }
+html.pip .player .chrome, html.pip .player #ppanel-root, html.pip .player #pupnext-root, html.pip .player #pstats-root,
+html.pip .player .skip-intro, html.pip .player .transport, html.pip .player::after, html.pip .menu, html.pip .sheet-back,
+html.pip .dock, html.pip .toasts { display: none !important; }
+.player:has(.ppanel) .transport { display: none; }
+
+/* ---------- Live TV (Settings › Live TV, and a Live TV library) ---------- */
+.tv-source { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); }
+.tv-source:first-of-type { border-top: 0; }
+.tv-source.off { opacity: .55; }
+.tv-ic { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 10px; background: var(--bg-3); flex: none; }
+.tv-ic svg { width: 22px; height: 22px; color: var(--accent); }
+.tv-body { flex: 1; min-width: 0; }
+.tv-name { font-weight: 600; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tv-prov { font: 500 12px/1.6 var(--body); color: var(--accent); border: 1px solid rgb(var(--accent-rgb) / .4); border-radius: 100px; padding: 0 9px; }
+.tv-sub { color: var(--muted); font-size: 13.5px; margin-top: 3px; word-break: break-word; }
+.tv-note { color: var(--text-soft); font-size: 13.5px; margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--bg-3); }
+.tv-note .btn { margin: 6px 0; }
+.tv-trace { max-height: 320px; overflow: auto; margin: 6px 0 0; padding: 8px 10px; border-radius: 6px;
+            background: var(--bg-1); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+            white-space: pre; color: var(--text); }
+.tv-prog { height: 4px; border-radius: 2px; background: var(--bg-3); overflow: hidden; margin-top: 8px; }
+.tv-prog i { display: block; height: 100%; background: var(--accent); transition: width .4s ease; }
+.tv-actions { display: flex; gap: 8px; flex: none; }
+.tv-empty { color: var(--muted); padding: 10px 0; }
+.tv-empty code { background: var(--bg-3); border-radius: 4px; padding: 1px 5px; }
+.tv-logo { display: inline-block; width: 28px; height: 20px; object-fit: contain; vertical-align: middle; margin-right: 8px; }
+.tv-no { color: var(--faint); font-variant-numeric: tabular-nums; }
+.tv-lock svg { width: 14px; height: 14px; color: var(--faint); margin-left: 6px; vertical-align: -2px; }
+tr.tv-hidden { opacity: .45; }
+
+/* Choosing which channels a Home section carries. */
+.chan-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.chan-head .input { flex: 1; }
+.chan-list { max-height: min(52vh, 440px); overflow-y: auto; border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 4px; }
+.chan-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+.chan-row:hover { background: var(--bg-2); }
+.chan-row img { width: 38px; height: 24px; object-fit: contain; flex: none; }
+.chan-no { width: 34px; text-align: right; color: var(--faint); font-size: 12.5px;
+  font-variant-numeric: tabular-nums; flex: none; }
+.chan-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chan-count { margin-right: auto; color: var(--muted); font-size: 13.5px; }
+.chan-pickrow { display: flex; align-items: center; gap: 12px; }
+
+/* ---------- the guide: channels down, time across ----------
+   Programmes are placed by their real start and end rather than one box per slot, so a two-hour film
+   is twice the width of an hour of news and the eye can see where things actually begin. */
+.guide-page .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.guide-nav { display: flex; gap: 8px; }
+.guide-grid { --ch-w: 170px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.guide-times { display: flex; position: sticky; top: 0; z-index: 3; background: var(--bg-2); border-bottom: 1px solid var(--line); }
+.guide-corner { width: var(--ch-w); flex: none; border-right: 1px solid var(--line); }
+.guide-scale { position: relative; flex: 1; height: 34px; }
+.guide-tick { position: absolute; top: 9px; font-size: 12px; color: var(--muted); padding-left: 6px;
+  border-left: 1px solid var(--line); line-height: 1; font-variant-numeric: tabular-nums; }
+.guide-row { display: flex; border-bottom: 1px solid var(--line); }
+.guide-row:last-child { border-bottom: 0; }
+.guide-ch { width: var(--ch-w); flex: none; display: flex; align-items: center; gap: 9px; padding: 6px 10px;
+  border-right: 1px solid var(--line); color: var(--text); text-decoration: none; min-width: 0; }
+.guide-ch:hover { background: var(--bg-2); }
+.guide-ch img { width: 40px; height: 26px; object-fit: contain; flex: none; }
+.guide-ch span { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guide-lane { position: relative; flex: 1; height: 60px; }
+.guide-prog { position: absolute; top: 4px; bottom: 4px; display: flex; flex-direction: column; gap: 2px;
+  justify-content: center; overflow: hidden; text-align: left;
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: 6px; color: var(--text);
+  padding: 4px 8px; cursor: pointer; min-width: 0; }
+.guide-prog:hover { background: var(--bg-2); border-color: var(--faint); }
+.guide-prog.on { border-color: var(--accent); }
+.guide-prog b { display: block; font-size: 13px; line-height: 1.25; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guide-prog small { color: var(--faint); font-size: 11.5px; line-height: 1; font-variant-numeric: tabular-nums; }
+/* where we are now, straight down the page */
+.guide-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); z-index: 2; pointer-events: none; }
+@media (max-width: 720px) { .guide-grid { --ch-w: 108px; } .guide-ch img { display: none; } }
+
+.tv-groups { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.tv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px 14px; }
+.tv-card-art { position: relative; aspect-ratio: 16 / 10; border-radius: var(--radius); background: var(--bg-3);
+  display: grid; place-items: center; overflow: hidden; }
+/* Bounded on both sides, never given a box to fill: station logos are every shape from a one-line
+   wordmark to a tall crest, and a fixed width and height would squash some and stretch the tile for
+   others. Same proportions as the channel tiles on Home, so a channel looks the same in both places. */
+.tv-card-art img { width: auto; height: auto; max-width: 84%; max-height: 64%;
+  min-width: 0; min-height: 0; object-fit: contain; }
+.tv-card-ini { font: 600 26px/1 var(--display); color: var(--faint); text-transform: uppercase; }
+.tv-card-no { position: absolute; left: 8px; top: 8px; font: 600 11px/1 var(--body); color: var(--text);
+  background: rgb(var(--deep-rgb) / .65); border-radius: 4px; padding: 4px 6px; }
+/* How far through the programme the channel is — a line along the bottom of the artwork. */
+.tv-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgb(255 255 255 / .18); }
+.tv-prog i { display: block; height: 100%; background: var(--accent); }
+.tv-card-when { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-card-name { margin-top: 8px; font-weight: 500; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-card-sub { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 720px) { .tv-grid { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); }
+  .tv-source { flex-wrap: wrap; } .tv-actions { width: 100%; } }
+
+
+/* Live TV: the seek bar is replaced by a plain rail, because a broadcast has no length and
+   nowhere to drag to. The LIVE badge sits where the clock would be. */
+.dk-live-rail { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--line); }
+.dk-live { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; letter-spacing: .06em;
+           font-size: 11px; color: var(--text); }
+.dk-live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #E50914;
+                   box-shadow: 0 0 0 0 rgba(229, 9, 20, .55); animation: dk-live-pulse 2s ease-out infinite; }
+@keyframes dk-live-pulse { 70% { box-shadow: 0 0 0 7px rgba(229, 9, 20, 0); } 100% { box-shadow: 0 0 0 0 rgba(229, 9, 20, 0); } }
+@media (prefers-reduced-motion: reduce) { .dk-live::before { animation: none; } }
+
+
+/* A channel's artwork is served for every channel, real or drawn, so a tile never has to choose
+   between an image and a placeholder — it shows what it is given. */
+.tv-logo { width: 28px; height: 28px; object-fit: contain; vertical-align: middle; margin-right: 10px;
+           border-radius: 5px; background: var(--bg-3); }

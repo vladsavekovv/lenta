@@ -321,8 +321,10 @@ audio.addEventListener('timeupdate', () => {
   tick();
   if (Date.now() - lastReport > (book ? 10000 : 15000)) { lastReport = Date.now(); report(audio.paused ? 'paused' : 'playing'); }
 });
-audio.addEventListener('play', () => { render(); report('playing'); });
-audio.addEventListener('pause', () => { render(); report('paused'); });
+// The Android app keeps playing with the screen off while music or a book plays (a wake lock).
+const appAudio = (on) => { try { window.LentaApp?.audioPlaying?.(on); } catch { /* the browser */ } };
+audio.addEventListener('play', () => { render(); report('playing'); appAudio(true); });
+audio.addEventListener('pause', () => { render(); report('paused'); appAudio(false); });
 audio.addEventListener('ended', () => {
   if (book) {
     if (part < book.parts.length - 1) { loadPart(part + 1); audio.play().catch(() => {}); return; }

@@ -33,9 +33,11 @@
   <img class="logo" src="lenta-logo.png" alt="LENTA">
 
   <section id="offline" hidden>
-    <h1>Can't reach your LENTA server</h1>
-    <p>Tried <span class="server" id="off-server"></span>. Check that the server is on and that this phone is on your home
+    <h1 id="off-title">Can't reach your LENTA server</h1>
+    <p id="off-text">Tried <span class="server" id="off-server"></span>. Check that the server is on and that this phone is on your home
       Wi-Fi (or your VPN is connected).</p>
+    <p id="off-ssl" hidden>The server's HTTPS certificate isn't trusted: it has expired, is for another name, or was made by
+      someone other than LENTA. Renew or replace it in LENTA's <b>Settings › Network</b>, or use the http:// address.</p>
     <button class="primary" id="retry">Try again</button>
     <button class="secondary" id="change">Use a different address</button>
   </section>
@@ -45,7 +47,8 @@
     <p>Type the address you use in the browser, for example <span class="server">192.168.1.50:8484</span>.</p>
     <label for="addr">Server address</label>
     <input id="addr" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="192.168.1.50:8484">
-    <div class="hint">Port 8484 is used when you leave it out. https addresses work too.</div>
+    <div class="hint">Port 8484 is used when you leave it out. https addresses work too (port 8443 when you leave it out),
+      also with LENTA's own certificate.</div>
     <div class="error" id="err"></div>
     <button class="primary" id="go">Connect</button>
     <button class="secondary" type="button" id="anyway" hidden>Use this address anyway</button>
@@ -67,6 +70,7 @@
     try { u = new URL(s); } catch { return ''; }
     if (!/^[a-z0-9.-]+$|^\[[0-9a-f:.]+\]$/i.test(u.hostname)) return '';
     if (!u.port && u.protocol === 'http:') u.port = '8484';
+    if (!u.port && u.protocol === 'https:' && !/^https:\/\/[^/]*:443\b/i.test(s)) u.port = '8443';   // LENTA's HTTPS port
     return `${u.protocol}//${u.host}`;
   }
 
@@ -113,6 +117,7 @@
   } else if (q.has('error') && saved) {
     $('#off-server').textContent = saved;
     $('#offline').hidden = false;
+    if (q.has('ssl')) { $('#off-title').textContent = 'The secure connection was refused'; $('#off-ssl').hidden = false; }
   } else {
     showSetup(saved, q.has('change'));
   }

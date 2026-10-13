@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from . import about, auth, imdb, logs, metadata, scanner, trailers, transcode, trickplay, intros, watcher
 from .api_auth import validate_new_user
 from .api_playback import current_now_playing
-from .config import DATA_DIR, FFMPEG, LIBRARY_KINDS, TRANSCODE_DIR, VERSION
+from .config import DATA_DIR, FFMPEG, FOLDERLESS_KINDS, LIBRARY_KINDS, TRANSCODE_DIR, VERSION
 from .db import SETTING_DEFAULTS, all_settings, db, get_setting, jloads, now, set_setting
 from .serialize import TOP_KIND, card
 
@@ -90,9 +90,11 @@ class LibraryBody(BaseModel):
 
 def _validate_library(body: LibraryBody) -> list[str]:
     if body.kind not in LIBRARY_KINDS:
-        raise HTTPException(400, "Library type must be movies, shows, music, audiobooks or photos")
+        raise HTTPException(400, "Library type must be movies, shows, music, audiobooks, photos or live TV")
     if not body.name.strip():
         raise HTTPException(400, "Give the library a name")
+    if body.kind in FOLDERLESS_KINDS:
+        return []                      # live TV is filled by the tuners and playlists, not by folders
     paths = []
     for p in body.paths:
         p = os.path.abspath(os.path.expanduser(p.strip()))
@@ -338,7 +340,9 @@ def put_settings(body: dict):
             continue
         if k in ("tmdb_api_key", "opensubtitles_api_key", "opensubtitles_password", "omdb_api_key", "fanart_api_key", "fanart_client_key", "kinocheck_api_key") and v is None:
             continue
-        if k == "default_theme" and v not in ("projector", "noir", "abyss", "velvet", "aurora", "redline"):
+        if k == "default_theme":
+            v = "netflix" if v == "redline" else v              # Redline was renamed to Netflix
+        if k == "default_theme" and v not in ("projector", "noir", "abyss", "velvet", "aurora", "netflix", "hbo"):
             raise HTTPException(400, "Unknown theme")
         if k == "hw_accel" and v not in ("auto", "nvenc", "qsv", "vaapi", "none"):
             raise HTTPException(400, "Unknown hardware acceleration option")

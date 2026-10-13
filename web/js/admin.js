@@ -1,5 +1,6 @@
 // Administrative dashboard: overview, libraries, users, metadata fixes, settings, logs.
 import { api } from './api.js';
+import { renderLiveTv } from './livetv.js';
 import { openEditor, refreshMetadata } from './editor.js';
 import { state, loadLibraries, refreshView, renderRail, THEMES } from './app.js';
 import {
@@ -20,7 +21,7 @@ const layoutPref = (key, page = null) => {
   };
 };
 
-const KIND_NAMES = { movies: 'Movies', shows: 'TV shows', music: 'Music', audiobooks: 'Audiobooks', photos: 'Photos' };
+const KIND_NAMES = { movies: 'Movies', shows: 'TV shows', music: 'Music', audiobooks: 'Audiobooks', photos: 'Photos', livetv: 'Live TV' };
 let pollTimer = null;
 
 // Settings pages made of the server settings blocks (one form; Save saves them all)
@@ -42,6 +43,7 @@ export async function renderAdminPage(page, body, q = new URLSearchParams()) {
   if (page === 'users') return users(body);
   if (page === 'fix-matches') return metadata(body, q);
   if (page === 'logs') return logs(body);
+  if (page === 'livetv') return renderLiveTv(body);
   return settings(body, SETTINGS_PAGES[page] ? page : 'general');
 }
 
@@ -196,9 +198,11 @@ function libraryDialog(lib, done) {
         <label>${icon(KIND_ICON[k])}<input type="radio" name="kind" value="${k}" ${(lib ? lib.kind === k : k === 'movies') ? raw('checked') : ''} ${lib && !switchable(lib.kind, k) ? raw('disabled') : ''}>${n}</label>`)}</div>
         ${lib && AUDIO_KINDS.includes(lib.kind) ? html`<span class="hint">Music and Audiobooks can be swapped: the files are read again the other way.</span>` : ''}</div>
       <div class="field"><label for="lname">Name</label><input class="input" id="lname" value="${lib?.name || ''}" placeholder="Movies" required></div>
-      <div class="field"><span class="label">Folders</span><div class="chips" id="chips"></div>
+      <div class="field" id="folders-field"><span class="label">Folders</span><div class="chips" id="chips"></div>
         <div style="display:flex;gap:8px"><input class="input mono" id="lpath" placeholder="/mnt/media/movies"><button type="button" class="btn" id="browse">${icon('folder')}Browse</button></div>
         <span class="hint">Folders on the server. A NAS share must be mounted on the server first (for example under /mnt).</span></div>
+      <p class="hint" id="livetv-hint" hidden>Live TV has no folders: its channels come from the USB tuners LENTA finds and
+        from the playlists you add, in <a href="#/settings/livetv">Settings › Live TV</a>.</p>
       <p class="error-text" id="lerr"></p>
       <div class="foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">${lib ? 'Save and scan' : 'Add and scan'}</button></div>
     </form>`, { wide: true });
@@ -207,18 +211,25 @@ function libraryDialog(lib, done) {
   chips();
   box.querySelector('#chips').addEventListener('click', (e) => { const b = e.target.closest('[data-rm]'); if (b) { paths.splice(Number(b.dataset.rm), 1); chips(); } });
   box.querySelector('input[name=kind]:checked')?.addEventListener('change', () => {});
+  const foldersFor = (kind) => {
+    box.querySelector('#folders-field').hidden = kind === 'livetv';
+    box.querySelector('#livetv-hint').hidden = kind !== 'livetv';
+  };
   box.querySelectorAll('input[name=kind]').forEach(r => r.addEventListener('change', () => {
     const name = box.querySelector('#lname');
     if (!name.value || Object.values(KIND_NAMES).includes(name.value)) name.value = KIND_NAMES[r.value];
+    foldersFor(r.value);
   }));
+  foldersFor(box.querySelector('input[name=kind]:checked')?.value || 'movies');
   if (!lib) box.querySelector('#lname').value = 'Movies';
   const addTyped = () => { const v = box.querySelector('#lpath').value.trim(); if (v && !paths.includes(v)) { paths.push(v); chips(); } box.querySelector('#lpath').value = ''; };
   box.querySelector('#lpath').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTyped(); } });
   box.querySelector('#browse').addEventListener('click', () => folderPicker(box.querySelector('#lpath').value || '/', (p) => { if (!paths.includes(p)) paths.push(p); chips(); }));
   box.querySelector('#libform').addEventListener('submit', async (e) => {
     e.preventDefault();
-    addTyped();
     const kind = box.querySelector('input[name=kind]:checked').value;
+    if (kind !== 'livetv') addTyped();
+    else paths = [];
     if (lib && kind !== lib.kind && !(await confirmDialog(`Change ${lib.name} to ${KIND_NAMES[kind]}?`,
       `Its files are read again as ${kind === 'audiobooks' ? 'audiobooks (books, authors, chapters)' : 'music (albums, artists, songs)'}. `
       + 'Listening progress and changes made by hand in this library start over.', 'Change and scan'))) return;

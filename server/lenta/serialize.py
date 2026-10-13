@@ -4,7 +4,8 @@ import json
 from . import images
 from .db import db, jloads
 
-TOP_KIND = {"movies": "movie", "shows": "show", "music": "album", "audiobooks": "book", "photos": "photoalbum"}
+TOP_KIND = {"movies": "movie", "shows": "show", "music": "album", "audiobooks": "book", "photos": "photoalbum",
+            "livetv": "channel"}      # live TV has no files: its channels live in tv_channels
 
 
 def resolution_label(width: int | None, height: int | None) -> str:

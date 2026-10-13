@@ -28,7 +28,7 @@
     try { new Function('var a = {}; return a?.b ?? 1'); } catch (e) { window.LENTA_LEGACY = true; }
     if (/[?&]legacy=1/.test(location.search)) window.LENTA_LEGACY = true;          // to try it on a normal browser
     document.write(window.LENTA_LEGACY ? '<link rel="stylesheet" href="legacy/app.css">'
-      : '<link rel="stylesheet" href="css/app.css"><link rel="stylesheet" href="css/mobile.css"><link rel="stylesheet" href="css/theme-redline.css">');
+      : '<link rel="stylesheet" href="css/app.css"><link rel="stylesheet" href="css/mobile.css"><link rel="stylesheet" href="css/theme-netflix.css"><link rel="stylesheet" href="css/theme-hbo.css"><link rel="stylesheet" href="css/tv.css">');
   </script>
 </head>
 <body>
@@ -40,7 +40,20 @@
   <div id="player-root"></div>
   <div id="modal-root"></div>
   <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
-  <script src="vendor/hls.min.js"></script>
+  <script>
+    // hls.js is half a megabyte, and a television has to read, compile and keep all of it before the app
+    // can start — on a Samsung set that is most of a second of a blocked screen. A TV plays HLS itself,
+    // so it does not need the library at all unless that turns out to be untrue, and the player asks for
+    // it then (see ensureHls in js/player.js). Every other browser loads it here, as before, so nothing
+    // waits for it at the moment somebody presses play.
+    (function () {
+      var p = location.search, tv = /[?&]tvapp=1/.test(p) || /[?&]tv=1/.test(p);
+      try { tv = tv || sessionStorage.getItem('lenta-tvapp') === '1' || sessionStorage.getItem('lenta-tv') === '1'; } catch (e) { /* no storage */ }
+      if (!/[?&]tv=0/.test(p) && !tv) tv = /Tizen|SMART-TV|SmartTV|Web0S|webOS|NetCast|BRAVIA|AFTS|AFTM|GoogleTV|CrKey|HbbTV/i.test(navigator.userAgent);
+      window.LENTA_HLS_SRC = 'vendor/hls.min.js';
+      if (!tv) document.write('<script src="vendor/hls.min.js"><\/script>');
+    })();
+  </script>
   <script>document.write(window.LENTA_LEGACY ? '<script src="legacy/app.js"><\/script>' : '<script type="module" src="js/app.js"><\/script>');</script>
 </body>
 </html>

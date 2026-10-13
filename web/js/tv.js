@@ -4,6 +4,7 @@
 //   OK / Enter    open / press
 //   Back          close a menu or dialog, leave the player, go back a page; on Home, leave the app
 //   ▶ ❚❚ ⏯ ⏩ ⏪ ■  play, pause, play/pause, +10 s, −10 s, stop (in the player)
+//   CH ▲ ▼       the next or previous channel, while watching live TV
 //
 // In the player: OK plays or pauses, ◀ ▶ jump 10 s, ▲ ▼ show the controls and move onto them.
 // Turned on by the LENTA TV app (?tvapp=1), by a TV browser, or by adding ?tv=1 to the address once.
@@ -24,7 +25,29 @@ const KEYS = {
   10009: 'Back', 461: 'Back', 8: 'Back',
   415: 'Play', 19: 'Pause', 10252: 'PlayPause', 179: 'PlayPause',
   417: 'FastForward', 412: 'Rewind', 413: 'Stop',
+  427: 'ChannelUp', 428: 'ChannelDown',
 };
+
+// The remote's own channel buttons. Live TV is the one place on a TV where they should mean something,
+// and because the channel you came from is kept warm for half an hour, going back up is immediate.
+let channelList = null;
+
+async function stepChannel(delta) {
+  const at = location.hash.match(/^#\/play\/live\/(\d+)/);
+  if (!at) return;                                        // not watching live: the buttons mean nothing here
+  if (!channelList) {
+    try {
+      const r = await fetch('/api/livetv/channels', { credentials: 'same-origin' });
+      channelList = (await r.json()).channels || [];
+    } catch { channelList = []; }
+  }
+  if (channelList.length < 2) return;
+  const i = channelList.findIndex(c => String(c.id) === at[1]);
+  if (i < 0) return;
+  // Round the end, the way a television does: channel one is what follows the last one.
+  const to = channelList[(i + delta + channelList.length) % channelList.length];
+  location.hash = `#/play/live/${to.id}`;
+}
 
 function keyName(e) {
   if (KEYS[e.keyCode] && !(e.keyCode === 8 && e.target.closest?.('input, textarea'))) return KEYS[e.keyCode];
@@ -38,7 +61,8 @@ const tizen = () => window.tizen;
 
 function registerKeys() {
   try {
-    const keys = ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaFastForward', 'MediaRewind'];
+    const keys = ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaFastForward', 'MediaRewind',
+                  'ChannelUp', 'ChannelDown'];
     const t = tizen();
     if (t?.tvinputdevice) {
       const have = new Set(t.tvinputdevice.getSupportedKeys().map(k => k.name));
@@ -74,9 +98,42 @@ function topLayer() {
   return document.body;
 }
 
+// ---- the page's geometry, read once per key press ------------------------------------------------
+// One arrow press compares the thing in focus against everything it could move to, and on Home that is
+// several hundred cards. Asking the engine where each one is, is what makes a television feel
+// unresponsive: after any change the engine must work the whole layout out again before it can answer,
+// and the old code asked three times per card and asked its style as well. A few thousand of those is a
+// visible wait between pressing the button and the ring moving — on a slow set, long enough that the
+// next press arrives first and appears to have been ignored.
+//
+// Nothing on the page moves while a single press is being handled, so none of the answers can change:
+// they are worked out once and kept until the press is finished.
+let geom = null;
+
+function rect(el) {
+  if (!geom) return el.getBoundingClientRect();
+  let r = geom.rects.get(el);
+  if (r === undefined) geom.rects.set(el, r = el.getBoundingClientRect());
+  return r;
+}
+
+function shown(el) {
+  if (!geom) return visible(el);
+  let v = geom.shown.get(el);
+  if (v === undefined) geom.shown.set(el, v = visible(el));
+  return v;
+}
+
+/** Run one key press with the geometry held still. Nested calls share the outermost one's answers. */
+function press(fn) {
+  const outer = geom;
+  if (!outer) geom = { rects: new Map(), shown: new Map() };
+  try { return fn(); } finally { if (!outer) geom = null; }
+}
+
 function visible(el) {
   if (el.closest('[hidden], .player.mini')) return false;
-  const r = el.getBoundingClientRect();
+  const r = rect(el);
   if (r.width < 2 || r.height < 2) return false;
   const cs = getComputedStyle(el);
   return cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0.05;
@@ -86,8 +143,8 @@ function candidates(layer) {
   const vh = window.innerHeight;
   return [...layer.querySelectorAll(FOCUSABLE)].filter(el => {
     if (layer === document.body && el.closest('.player, .menu, .modal-back, .sheet-back')) return false;
-    const r = el.getBoundingClientRect();
-    return r.bottom > -vh * 2 && r.top < vh * 3 && visible(el);      // near the screen (rows scroll into view)
+    const r = rect(el);
+    return r.bottom > -vh * 2 && r.top < vh * 3 && shown(el);        // near the screen (rows scroll into view)
   });
 }
 
@@ -95,17 +152,17 @@ function candidates(layer) {
 // Containers that are focusable only for screen readers, the row carousels' scroll arrows (the arrows on the remote
 // scroll the row) and the row titles (the libraries are in the menu on the left) stay out of the way too.
 const skip = (el) => el.matches('.card .caption a, .caption .t, .scroll-btn, .row > h2 a, main, #view, .page')
-  || (el.getBoundingClientRect().width > window.innerWidth * 0.8 && el.getBoundingClientRect().height > window.innerHeight * 0.6);
+  || (rect(el).width > window.innerWidth * 0.8 && rect(el).height > window.innerHeight * 0.6);
 const inRail = (el) => !!el.closest('.rail');
 
 function centre(r) { return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
 
 function best(from, list, dir, strict) {
-  const a = from.getBoundingClientRect(), ca = centre(a);
+  const a = rect(from), ca = centre(a);
   let pick = null, score = Infinity;
   for (const el of list) {
     if (el === from || skip(el)) continue;
-    const b = el.getBoundingClientRect(), cb = centre(b);
+    const b = rect(el), cb = centre(b);
     let main, cross;
     if (dir === 'right') { main = b.left - a.right; cross = Math.abs(cb.y - ca.y); if (cb.x <= ca.x + 1) continue; }
     else if (dir === 'left') { main = a.left - b.right; cross = Math.abs(cb.y - ca.y); if (cb.x >= ca.x - 1) continue; }
@@ -125,18 +182,24 @@ function best(from, list, dir, strict) {
 function focusEl(el) {
   if (!el) return;
   el.focus({ preventScroll: true });
-  el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-  const r = el.getBoundingClientRect();                       // keep it comfortably on screen (not under the edges)
-  if (r.top < 90 || r.bottom > window.innerHeight - 60) el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+  // Instantly, not smoothly. A smooth scroll is an animation, and on a television it is still running
+  // when the next press arrives, so the ring trails behind the button by several rows.
+  el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const r = el.getBoundingClientRect();                       // after scrolling: a fresh answer, not the cached one
+  if (r.top < 90 || r.bottom > window.innerHeight - 60) el.scrollIntoView({ block: 'center', inline: 'nearest' });
 }
 
-function firstIn(layer) {
+const firstIn = (layer) => press(() => firstInNow(layer));
+
+function firstInNow(layer) {
   const list = candidates(layer).filter(el => !skip(el));
   const main = layer === document.body ? list.filter(el => !el.closest('.rail')) : list;
   return (main.find(el => el.matches('.btn.primary, .hero .btn, .card .frame-link')) || main[0] || list[0]);
 }
 
-function move(dir) {
+const move = (dir) => press(() => moveNow(dir));
+
+function moveNow(dir) {
   const layer = topLayer();
   let cur = document.activeElement;
   if (!cur || cur === document.body || !layer.contains(cur) || !visible(cur) || skip(cur)) { focusEl(firstIn(layer)); return; }
@@ -202,6 +265,11 @@ function onKey(e) {
     if (typing && e.keyCode === 8) return;
     e.preventDefault(); e.stopPropagation();
     back();
+    return;
+  }
+  if (k === 'ChannelUp' || k === 'ChannelDown') {
+    e.preventDefault(); e.stopPropagation();
+    stepChannel(k === 'ChannelUp' ? 1 : -1);
     return;
   }
   if (p) {

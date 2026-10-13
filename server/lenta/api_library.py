@@ -57,8 +57,12 @@ def libraries(user: dict = Depends(auth.current_user)):
         rows = con.execute(f"SELECT l.* FROM libraries l WHERE {where} ORDER BY l.position, l.id", params).fetchall()
         out = []
         for lib in rows:
-            count = con.execute("SELECT COUNT(*) FROM items WHERE library_id = ? AND kind = ?",
-                                (lib["id"], TOP_KIND[lib["kind"]])).fetchone()[0]
+            if lib["kind"] == "livetv":          # channels, not files
+                count = con.execute("SELECT COUNT(*) FROM tv_channels c JOIN tv_sources s ON s.id = c.source_id "
+                                    "WHERE c.hidden = 0 AND s.enabled = 1").fetchone()[0]
+            else:
+                count = con.execute("SELECT COUNT(*) FROM items WHERE library_id = ? AND kind = ?",
+                                    (lib["id"], TOP_KIND[lib["kind"]])).fetchone()[0]
             out.append({"id": lib["id"], "name": lib["name"], "kind": lib["kind"], "count": count})
     return out
 
@@ -242,11 +246,11 @@ def _row_order(user: dict) -> list[str]:
         return []
 
 
-RULES = ("recent", "top", "shuffle", "genre")
+RULES = ("recent", "top", "shuffle", "genre", "channels")
 
 
 def _sections_config(user: dict) -> dict:
-    """Settings › Home screen: { custom: [{id, title, libs, rule, genre}], titles: {id: name},
+    """Settings › Home screen: { custom: [{id, title, libs, rule, genre, channels}], titles: {id: name},
     libs: {id: [library ids]}, hidden: [ids] }."""
     from .api_prefs import get_prefs
     try:
@@ -261,7 +265,8 @@ def _sections_config(user: dict) -> dict:
             out["custom"].append({"id": c["id"], "title": str(c.get("title") or "New section")[:80],
                                   "libs": [int(x) for x in c.get("libs") or [] if str(x).isdigit()],
                                   "rule": c.get("rule") if c.get("rule") in RULES else "recent",
-                                  "genre": str(c.get("genre") or "")[:80]})
+                                  "genre": str(c.get("genre") or "")[:80],
+                                  "channels": [int(x) for x in c.get("channels") or [] if str(x).isdigit()]})
     if isinstance(cfg.get("titles"), dict):
         out["titles"] = {str(k): str(v)[:80] for k, v in cfg["titles"].items() if str(v).strip()}
     if isinstance(cfg.get("libs"), dict):
@@ -273,6 +278,7 @@ def _sections_config(user: dict) -> dict:
 
 def _section_specs(user: dict, libs: list[dict], con) -> list[dict]:
     """Every section Home can show, in the default order, before the user's changes."""
+    libs = [l for l in libs if l["kind"] != "livetv"]        # live TV has no files to put in a row
     video_libs = [l for l in libs if l["kind"] in ("movies", "shows")]
     all_ids = [l["id"] for l in libs]
     specs = [{"id": "continue", "type": "continue", "title": "Continue watching", "libs": all_ids},
@@ -294,6 +300,36 @@ def _section_specs(user: dict, libs: list[dict], con) -> list[dict]:
                 l["kind"], f"Latest in {l['name']}")
             specs.append({"id": f"recent-{l['id']}", "type": "recent", "title": title, "libs": [l["id"]]})
     return specs
+
+
+def _channel_cards(ids: list[int]) -> list[dict]:
+    """The chosen live channels, as cards a Home row can draw.
+
+    Channels are not library items — they have no file, no year and no poster — so they are built here
+    rather than put through `cards`. The order is the provider's own numbering, not the order they were
+    ticked in, which is what the Live TV page shows and so what someone expects to see again.
+    """
+    from . import epg, livetv
+    want = {int(i) for i in ids}
+    if not want:
+        return []
+    chosen = [c for c in livetv.channels(include_hidden=False) if c["id"] in want]
+    # What is on, in one query per source rather than one per channel.
+    guide: dict[int, dict] = {}
+    by_source: dict[int, list[str]] = {}
+    for c in chosen:
+        by_source.setdefault(c["source_id"], []).append(c["uid"])
+    for sid, uids in by_source.items():
+        guide[sid] = epg.now_next_many(sid, uids)
+    out = []
+    for c in chosen:
+        on = (guide.get(c["source_id"], {}).get(c["uid"]) or {}).get("now")
+        out.append({"kind": "channel", "id": c["id"], "title": c["name"], "number": c.get("number"),
+                    "provider": c.get("provider") or c.get("source_name") or "",
+                    "radio": c.get("kind") == "radio",
+                    "art": f"/api/livetv/channels/{c['id']}/logo",
+                    "now": {"title": on["title"], "start": on["start"], "stop": on["stop"]} if on else None})
+    return out
 
 
 def _section_items(con, uid: int, libs: list[dict], lib_ids: list[int], rule: str, genre: str = "",
@@ -340,7 +376,8 @@ def home_sections(default: bool = False, user: dict = Depends(auth.current_user)
             f"SELECT g.value AS genre, COUNT(*) AS n FROM items i, json_each(i.genres) g "
             f"WHERE i.library_id IN ({','.join('?' * len(ids)) or 'NULL'}) AND i.kind IN ('movie','show') "
             f"GROUP BY g.value ORDER BY n DESC", ids)] if ids else []
-    keep = ("id", "title", "default_title", "default_libs", "type", "rule", "genre", "libs", "custom", "hidden", "renamed", "libs_changed")
+    keep = ("id", "title", "default_title", "default_libs", "type", "rule", "genre", "channels",
+            "libs", "custom", "hidden", "renamed", "libs_changed")
     return {"sections": [{k: r.get(k) for k in keep} for r in rows],
             "libraries": [{"id": l["id"], "name": l["name"], "kind": l["kind"]} for l in libs],
             "genres": genres}
@@ -369,7 +406,7 @@ def _home_rows(user: dict, sections: bool = False):
     with db() as con:
         specs = _section_specs(user, libs, con)
         specs += [{"id": c["id"], "type": "custom", "rule": c["rule"], "genre": c["genre"], "title": c["title"],
-                   "libs": c["libs"], "custom": True} for c in cfg["custom"]]
+                   "libs": c["libs"], "channels": c["channels"], "custom": True} for c in cfg["custom"]]
         for sp in specs:
             sp["default_title"], sp["default_libs"] = sp["title"], [i for i in sp["libs"] if i in allowed]
             if not sp.get("custom") and sp["id"] in cfg["titles"]:
@@ -396,6 +433,9 @@ def _home_rows(user: dict, sections: bool = False):
                     if mylist is None:
                         mylist = _watchlist(user)
                     row["items"] = [c for c in mylist if c.get("library_id") in lib_set]
+                elif sp.get("rule") == "channels":
+                    row["items"] = _channel_cards(sp.get("channels") or [])
+                    row["style"] = "channel"
                 else:
                     rule = sp.get("rule") or {"recent": "recent", "top": "top", "genre": "genre"}[t]
                     items = _section_items(con, uid, libs, sp["libs"], rule, sp.get("genre") or "", seed=sp["id"])
@@ -418,6 +458,9 @@ def _home_rows(user: dict, sections: bool = False):
 def _hero_card(item: dict, uid: int) -> dict:
     hero = card(item)
     hero.update(_play_target(item, uid))
+    with db() as con:              # the phone billboard's My List button shows whether it is on the list
+        hero["in_watchlist"] = bool(con.execute("SELECT 1 FROM watchlist WHERE user_id = ? AND item_id = ?",
+                                                (uid, item["id"])).fetchone())
     return hero
 
 

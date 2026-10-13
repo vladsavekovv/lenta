@@ -4,7 +4,8 @@ import { pauseMusic } from './music.js';
 import { dockMount, dockRefresh, dockRegister, dockUnmount, dockUpdate } from './dock.js';
 import { state } from './app.js';
 import { langName, subtitleSearch } from './subtitles.js';
-import { $, channels, fmtTime, html, icon, img, isTouch, mount, popMenu, toast } from './ui.js';
+import { tvMode } from './tv.js';
+import { $, channels, fmtTime, html, icon, img, isTouch, mount, popMenu, restoreOverlays, toast } from './ui.js';
 
 const sameLang = (a, b) => !!a && !!b && (a === b || a.split('-')[0] === b.split('-')[0]);
 
@@ -41,6 +42,84 @@ function capabilities(forceHls) {
 }
 
 // ---------------------------------------------------------------- open / close
+// A live channel: the same player, without the parts a film has and a broadcast does not —
+// no position to remember, nothing to seek back to, no next episode, no subtitles of our own.
+/** Whether to let the television play the playlist itself rather than hls.js.
+ *
+ *  A TV decodes HLS in hardware. hls.js does the same job in JavaScript — reading every MPEG-TS segment
+ *  and rewriting it for the browser's media engine — on a processor built for a fraction of that work.
+ *  On a desktop the cost is invisible; on a television it is the whole experience, and live TV is the
+ *  worst case because the remuxing never stops. A saturated main thread also stops answering the remote
+ *  control, which makes the set look broken rather than busy.
+ *
+ *  So on a TV that can play the playlist itself, it does. Everywhere else hls.js stays in charge,
+ *  because its error handling and recovery are better than a bare video element's.
+ *
+ *  A set that claims HLS and then cannot play it is remembered for the rest of the session, so the
+ *  fallback is paid for once rather than at the start of every film and every channel.
+ */
+let nativeHlsBroken = false;
+
+/** hls.js, fetching it first if the page did not. Resolves to null if it cannot be had.
+ *
+ *  On a television the page deliberately leaves the library out, because half a megabyte of JavaScript
+ *  has to be read and compiled before the app can draw anything and the set can usually play HLS
+ *  without it. If it turns out it cannot, this is how the library arrives — once, on demand.
+ */
+let hlsArriving = null;
+
+function ensureHls() {
+  if (window.Hls) return Promise.resolve(window.Hls);
+  if (!window.LENTA_HLS_SRC) return Promise.resolve(null);
+  if (!hlsArriving) {
+    hlsArriving = new Promise((done) => {
+      const tag = document.createElement('script');
+      tag.src = window.LENTA_HLS_SRC;
+      tag.onload = () => done(window.Hls || null);
+      tag.onerror = () => done(null);
+      document.head.appendChild(tag);
+    });
+  }
+  return hlsArriving;
+}
+
+function playsHlsItself(video) {
+  if (nativeHlsBroken) return false;
+  try { return tvMode() && video.canPlayType('application/vnd.apple.mpegurl') !== ''; } catch { return false; }
+}
+
+/** Watch a set that said it could play this, and hand over to hls.js if no picture arrives.
+ *
+ *  canPlayType is the set's opinion, not a promise. Some report an error when they cannot cope, which is
+ *  easy to act on; others simply sit on a black screen and say nothing at all, which is not. So both are
+ *  treated the same way: within a few seconds there must be a picture, and if there is not, the library
+ *  takes over and this set is not asked again.
+ *
+ *  What counts as a picture is readyState, not currentTime: a film resumed half way through has a
+ *  position straight away and may still never decode a frame, and seeking sets the position too. Having
+ *  a frame ready to show is the thing actually being tested, so that is what is asked.
+ *
+ *  @param video   the element that was given the playlist
+ *  @param still   whether this attempt is still the current one (the player may have been closed since)
+ *  @param retry   load it again, now that native playback is known not to work
+ */
+function watchNative(video, still, retry) {
+  let done = false;
+  const giveUp = () => {
+    if (done) return;
+    done = true;
+    if (!still() || video.readyState >= 2) return;           // HAVE_CURRENT_DATA: there is a frame
+    nativeHlsBroken = true;
+    retry();
+  };
+  const timer = setTimeout(giveUp, 12000);
+  video.addEventListener('error', () => { clearTimeout(timer); giveUp(); }, { once: true });
+}
+
+export async function openLiveChannel(channelId, opts = {}) {
+  return openPlayer(channelId, { ...opts, live: true });
+}
+
 export async function openPlayer(itemId, opts = {}) {
   if (P) teardown('stopped', { quiet: true });      // another film replaces this one: still playing
   pauseMusic();
@@ -52,17 +131,18 @@ export async function openPlayer(itemId, opts = {}) {
     audioIndex: null, quality: store.get('quality', 'original'), fileId: opts.file ? Number(opts.file) : null,
     playId: Math.random().toString(36).slice(2), lastReport: 0, idleTimer: null, panel: null, stats: false,
     upNextDismissed: false, forceHls: false, returnTo, raf: 0, seeking: false, loadSeq: 0,
+    live: opts.live ? { channelId: itemId, feedId: null, token: '', channel: null } : null,
   };
   const touch = isTouch();
   mount(root, html`<div class="player ${touch ? 'touch' : ''}" id="player">
-    <video id="pv" playsinline preload="auto"></video>
+    <video id="pv" playsinline preload="auto" poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
     <div class="subtitle-layer" id="psub"></div>
-    <div class="seek-flash left" id="pflash-l"></div><div class="seek-flash right" id="pflash-r"></div>
+    <div class="seek-flash left" id="pflash-l"></div><div class="seek-flash right" id="pflash-r"></div><div class="zoom-flash" id="pzoom"></div>
     <div class="chrome">
       ${touch ? html`<div class="transport" id="ptransport">
-        <button class="pbtn" data-a="back10" aria-label="Back 10 seconds">${icon('replay10')}</button>
+        ${opts.live ? '' : html`<button class="pbtn" data-a="back10" aria-label="Back 10 seconds">${icon('replay10')}</button>`}
         <button class="pbtn huge" data-a="toggle" id="pplay2" aria-label="Play">${icon('play')}</button>
-        <button class="pbtn" data-a="fwd10" aria-label="Forward 10 seconds">${icon('fwd10')}</button></div>` : ''}
+        ${opts.live ? '' : html`<button class="pbtn" data-a="fwd10" aria-label="Forward 10 seconds">${icon('fwd10')}</button>`}</div>` : ''}
       <div class="top">
         <button class="pbtn" data-a="minimize" aria-label="Minimize player" title="Minimize: keep watching while you browse">${icon('chevron')}</button>
         <span class="grow"></span>
@@ -77,14 +157,20 @@ export async function openPlayer(itemId, opts = {}) {
   const video = $('#pv');
   P.video = video;
   // iPhone Safari can't put a page element in full screen; the player already fills the screen there.
-  if (!document.fullscreenEnabled && !document.webkitFullscreenEnabled) $('#pfs').hidden = true;
+  if (!appFs() && !document.fullscreenEnabled && !document.webkitFullscreenEnabled) $('#pfs').hidden = true;
   video.volume = Number(store.get('volume', '1'));
   video.muted = store.get('muted', '0') === '1';
   wire();
+  if (touch && store.get('zoom', '0') === '1') setZoom(true, true);
   P.dock = dockMount($('#pdock'), VIDEO);
   applySubStyle();      // the controls: the same bar as the one at the bottom of the screen
   document.documentElement.classList.add('player-open');      // the page behind can't scroll (no scrollbar)
   if (opts.mini) minimizePlayer({ navigate: false });
+  // phones and tablets (and the Android app): the player opens in full screen, sideways, like a video app
+  else if (appFs()) setAppFull(true);
+  else if (touch && root.querySelector('.player').requestFullscreen) act('fullscreen');
+
+  if (P.live) return loadLive();
 
   let detail;
   try {
@@ -142,12 +228,14 @@ async function autoDownload(file, language) {
 
 // ---- mini player (like Plex): the video goes on in the bar at the bottom while you browse ----------------------------
 export const playerMini = () => !!P?.mini;
+export const playerIsLive = () => !!P?.live;
 export const playerItem = () => P?.itemId ?? null;
 
 export function minimizePlayer({ navigate = true } = {}) {
   if (!P || P.mini) return;
   closePanel();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  setAppFull(false);
   P.mini = true;
   const el = P.root.querySelector('.player');
   el.classList.add('mini');
@@ -181,6 +269,8 @@ export function expandPlayer({ navigate = true } = {}) {
   window.dispatchEvent(new CustomEvent('lenta:playback'));     // full screen again: everything else is quiet
   P.returnTo = 'back';
   if (navigate && location.hash !== `#/play/${P.itemId}`) location.hash = `#/play/${P.itemId}`;   // the router sees it is open
+  if (appFs()) setAppFull(true);
+  else if (isTouch() && !document.fullscreenElement && P.root.querySelector('.player').requestFullscreen) act('fullscreen');
   poke();
 }
 
@@ -188,9 +278,12 @@ export function expandPlayer({ navigate = true } = {}) {
 const VIDEO = {
   id: 'video',
   visible: () => !!P?.mini,
-  info: () => ({ title: P.info?.title || P.detail?.title || '', sub: P.info?.subtitle || '', href: `#/item/${P.itemId}`,
-    video: true, artLabel: 'Back to full screen' }),
-  titleClick: (full) => { if (full) openDetails(); else location.hash = `#/item/${P.itemId}`; },
+  info: () => ({ title: P.info?.title || P.detail?.title || '', sub: P.info?.subtitle || '',
+    href: P.live ? '#/livetv' : `#/item/${P.itemId}`, video: true, artLabel: 'Back to full screen' }),
+  titleClick: (full) => {
+    if (P.live) { if (!full) expandPlayer(); return; }
+    if (full) openDetails(); else location.hash = `#/item/${P.itemId}`;
+  },
   state() {
     const v = P.video, pos = position();
     let buf = pos;
@@ -198,11 +291,14 @@ const VIDEO = {
       const b = v.buffered;
       for (let i = 0; i < b.length; i++) if (b.start(i) <= v.currentTime + 1 && b.end(i) > v.currentTime) buf = b.end(i) + (P.mode === 'direct' ? 0 : P.offset);
     } catch { /* nothing buffered */ }
-    return { pos, dur: duration(), buf, paused: v.paused, volume: v.volume, muted: v.muted };
+    return { pos, dur: duration(), buf, paused: v.paused, volume: v.volume, muted: v.muted, live: !!P.live };
   },
-  caps: () => ({ back: 10, fwd: 30, prev: true, prevLabel: 'Back to the start', next: !!P.info?.next_id, nextLabel: 'Next episode',
-    settings: true, settingsLabel: 'Playback settings', list: P.detail?.kind === 'episode', listLabel: 'Play queue',
-    settingsOn: P.panel === 'settings', listOn: P.panel === 'queue' }),
+  // Live has nowhere to skip to and nothing queued behind it, so those controls are left out.
+  caps: () => (P.live
+    ? ({ live: true, settings: false, list: false, prev: false, next: false })
+    : ({ back: 10, fwd: 30, prev: true, prevLabel: 'Back to the start', next: !!P.info?.next_id, nextLabel: 'Next episode',
+        settings: true, settingsLabel: 'Playback settings', list: P.detail?.kind === 'episode', listLabel: 'Play queue',
+        settingsOn: P.panel === 'settings', listOn: P.panel === 'queue' })),
   list(anchor, full) { if (!full) expandPlayer(); if (P.panel !== 'queue') openPanel('queue'); else closePanel(); },
   toggle: () => (P.video.paused ? P.video.play().catch(() => {}) : P.video.pause()),
   seek: (t) => seekTo(t),
@@ -215,9 +311,10 @@ const VIDEO = {
     const big = () => { if (!full) expandPlayer(); };
     popMenu(anchor, [{ heading: P.info?.title || '' },
       full ? { label: 'Minimize player', action: () => minimizePlayer() } : { label: 'Full screen player', action: () => expandPlayer() },
-      { label: "Go to the title's page", action: () => openDetails() },
-      { label: 'Playback settings…', action: () => { big(); openPanel('settings'); } },
-      ...(P.detail?.kind === 'episode' ? [{ label: 'Play queue…', action: () => { big(); openPanel('queue'); } }] : []),
+      ...(P.live ? [{ label: 'All channels', action: () => { location.hash = '#/livetv'; } }]
+                 : [{ label: "Go to the title's page", action: () => openDetails() },
+                    { label: 'Playback settings…', action: () => { big(); openPanel('settings'); } }]),
+      ...(!P.live && P.detail?.kind === 'episode' ? [{ label: 'Play queue…', action: () => { big(); openPanel('queue'); } }] : []),
       ...(full ? [{ label: P.stats ? 'Hide playback info' : 'Playback info', action: () => act('stats') }] : []),
       { sep: true }, { label: 'Stop', action: () => (full ? closePlayer() : closePlayer({ navigate: false })) }]);
   },
@@ -230,6 +327,9 @@ const VIDEO = {
   setMuted(m) { P.video.muted = m; store.set('muted', m ? '1' : '0'); },
 };
 dockRegister(VIDEO, { priority: 2 });
+
+// Android app: the picture-in-picture window was closed — the video stops, like in any video app
+window.lentaPipClosed = () => { if (P && !P.video.paused) P.video.pause(); };
 
 // music or an audiobook starts: a minimised video makes way (one thing plays at a time)
 window.addEventListener('lenta:music-start', () => { if (P?.mini) closePlayer({ navigate: false }); });
@@ -331,6 +431,18 @@ function showTrick(sec, box = $('#pthumb')) {
 }
 
 // Android app: keep the screen on while a video plays
+// The Android app has its own full screen (sideways, bars hidden): it needs no tap first, unlike the page's own
+// full-screen request, and menus show over the video as on any page.
+const appFs = () => typeof window.LentaApp?.fullscreen === 'function';
+function setAppFull(on) {
+  if (!P || !appFs() || !!P.appFull === on) return;
+  P.appFull = on;
+  document.documentElement.classList.toggle('app-full', on);
+  try { window.LentaApp.fullscreen(on); } catch { /* an older app */ }
+  onFs();
+}
+const isFull = () => !!document.fullscreenElement || !!P?.appFull;
+
 function keepAwake(on) { try { window.LentaApp?.keepScreenOn(on); } catch { /* not in the app */ } }
 
 function teardown(reason, { quiet = false } = {}) {
@@ -339,12 +451,18 @@ function teardown(reason, { quiet = false } = {}) {
   keepAwake(false);
   report(reason);
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  setAppFull(false);
   cancelAnimationFrame(P.raf);
   clearTimeout(P.idleTimer);
   clearInterval(P.statsTimer);
   clearTimeout(P.trickTimer);
   if (P.hls) P.hls.destroy();
   if (P.sessionId) fetch(`/api/hls/${P.sessionId}`, { method: 'DELETE', credentials: 'same-origin', keepalive: true }).catch(() => {});
+  // Say we have gone, so the tuner can be reclaimed rather than waiting for the viewer to time out.
+  if (P.live?.feedId) fetch(`/api/livetv/live/${P.live.feedId}?token=${encodeURIComponent(P.live.token)}`,
+    { method: 'DELETE', credentials: 'same-origin', keepalive: true }).catch(() => {});
+  clearInterval(P.live?.keepalive);
+  restoreOverlays();
   P.video.removeAttribute('src');
   P.video.load();
   document.removeEventListener('keydown', onKey, true);
@@ -358,6 +476,100 @@ function teardown(reason, { quiet = false } = {}) {
 }
 
 // ---------------------------------------------------------------- loading streams
+async function loadLive() {
+  const { channelId } = P.live;
+  showSpinner(true);
+  let r;
+  try {
+    r = await api.post(`/api/livetv/channels/${channelId}/watch`);
+  } catch (err) {
+    // The server says why in words — every input busy, a scan running, no lock — so show that.
+    return showMessage('This channel will not start', err.message);
+  }
+  if (!P || P.live?.channelId !== channelId) {          // closed, or flipped on, while we waited
+    fetch(`/api/livetv/live/${r.id}?token=${encodeURIComponent(r.token)}`,
+      { method: 'DELETE', credentials: 'same-origin', keepalive: true }).catch(() => {});
+    return;
+  }
+  P.live.feedId = r.id;
+  P.live.token = r.token;
+  P.live.channel = r.channel;
+  P.live.detail = r.info;
+  P.info = { title: r.channel.name, subtitle: r.channel.number ? `Channel ${r.channel.number}` : 'Live TV',
+             duration: 0, mode: r.info?.mode || 'live' };
+  P.mode = 'live';
+  P.offset = 0;
+  dockUpdate();
+  // Tell the server we are still here; without it the tuner is handed back after a minute or so.
+  clearInterval(P.live.keepalive);
+  P.live.keepalive = setInterval(() => {
+    if (P?.live?.feedId) api.get(`/api/livetv/live/${P.live.feedId}/index.m3u8?token=${encodeURIComponent(P.live.token)}`)
+      .catch(() => {});
+  }, 15000);
+
+  const url = `${r.url}?token=${encodeURIComponent(r.token)}`;
+  const video = P.video;
+  if (P.hls) { P.hls.destroy(); P.hls = null; }
+  if (!playsHlsItself(video)) await ensureHls();
+  if (!P?.live || P.live.feedId !== r.id) return;           // closed while the library was being fetched
+  if (playsHlsItself(video)) {
+    video.src = url;
+    // hls.js is slower here but it does work, and a stuttering channel beats a black screen.
+    watchNative(video, () => !!P?.live && !P.hls && P.live.feedId === r.id, loadLive);
+  } else if (window.Hls && window.Hls.isSupported()) {
+    const hls = new window.Hls({
+      lowLatencyMode: false,
+      // Broadcast television is not a low-latency problem: a few seconds behind the live edge costs
+      // nothing and is the difference between steady playback and constant rebuffering.
+      liveSyncDurationCount: 4,
+      liveMaxLatencyDurationCount: 20,
+      liveDurationInfinity: true,
+      maxBufferLength: 30, maxMaxBufferLength: 60, backBufferLength: 30,
+      maxBufferHole: 1,
+      manifestLoadPolicy: policy(30000, 4), playlistLoadPolicy: policy(20000, 6), fragLoadPolicy: policy(30000, 6),
+      xhrSetup: (xhr) => { xhr.withCredentials = true; },
+    });
+    P.hls = hls;
+    // A buffer stall on live means we have drifted to the edge and run out: jump back to where the
+    // stream actually is rather than waiting for segments that are still being written.
+    const toLiveEdge = () => {
+      try {
+        const s = video.seekable;
+        if (s.length) video.currentTime = Math.max(0, s.end(s.length - 1) - 6);
+        video.play().catch(() => {});
+      } catch { /* nothing seekable yet */ }
+    };
+    hls.on(window.Hls.Events.ERROR, (_, data) => {
+      if (!P) return;
+      if (!data.fatal) {
+        if (data.details === 'bufferStalledError' && (P.live.stalls = (P.live.stalls || 0) + 1) % 3 === 0) toLiveEdge();
+        return;
+      }
+      // A live stream drops segments as it goes; recovering is normal, giving up is not.
+      if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR && (P.live.retries = (P.live.retries || 0) + 1) <= 8) {
+        setTimeout(() => { if (P?.hls === hls) { hls.startLoad(); toLiveEdge(); } }, 1000);
+        return;
+      }
+      if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR && (P.live.recoveries = (P.live.recoveries || 0) + 1) <= 2) {
+        hls.recoverMediaError();
+        return;
+      }
+      hls.stopLoad();
+      showMessage('The channel stopped', 'The tuner stopped sending this channel. It may have been taken for a scan, or the signal dropped.', true);
+    });
+    hls.loadSource(url);
+    hls.attachMedia(video);
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = url;                       // Safari plays HLS itself
+  } else {
+    return showMessage("This browser can't play live TV", 'LENTA needs a browser with HLS support.');
+  }
+  showSpinner(false);
+  video.play().catch(() => {});
+  keepAwake(true);
+}
+
+
 async function load(position, { keepPaused = false } = {}) {
   const seq = ++P.loadSeq;
   showSpinner(true);
@@ -379,9 +591,17 @@ async function load(position, { keepPaused = false } = {}) {
   dockUpdate();
   const video = P.video;
   if (P.hls) { P.hls.destroy(); P.hls = null; }
+  if (info.mode !== 'direct' && !playsHlsItself(video)) {
+    await ensureHls();
+    if (!P || seq !== P.loadSeq) return;                    // closed while the library was being fetched
+  }
   if (info.mode === 'direct') {
     video.src = info.url;
     video.addEventListener('loadedmetadata', () => { if (position > 0) video.currentTime = position; }, { once: true });
+  } else if (playsHlsItself(video)) {
+    video.src = info.url;
+    if (info.lead > 0) video.addEventListener('loadedmetadata', () => { video.currentTime = info.lead; }, { once: true });
+    watchNative(video, () => !!P && seq === P.loadSeq && !P.hls, () => load(position, { keepPaused }));
   } else if (window.Hls && window.Hls.isSupported()) {
     // The stream begins on the keyframe before the wanted position (info.offset); start playing
     // info.lead seconds into it so playback, the seek bar and subtitles all match the film.
@@ -439,10 +659,10 @@ function policy(ttfb, retries) {
 }
 
 const position = () => (P.mode === 'direct' ? 0 : P.offset) + (P.video.currentTime || 0);
-const duration = () => P.info?.duration || P.video.duration || 0;
+const duration = () => (P.live ? 0 : P.info?.duration || P.video.duration || 0);
 
 function seekTo(t) {
-  if (!P?.info) return;
+  if (!P?.info || P.live) return;      // live is where it is; there is nothing either side of now
   t = Math.max(0, Math.min(t, duration() - 1));
   if (P.mode === 'direct') { P.video.currentTime = t; return; }
   const rel = t - P.offset;
@@ -471,6 +691,7 @@ function showMessage(title, text, retry = false) {
 function updateTime() {
   if (!P?.info) return;
   const pos = position(), dur = duration();
+  if (P.live) return;                   // no subtitles of our own yet, and nothing comes up next
   renderSubs(pos);
   upNext(pos, dur);
   if (Date.now() - P.lastReport > 10000 && !P.video.paused) report('playing');
@@ -484,7 +705,7 @@ function loop() {
 }
 
 function report(stateName) {
-  if (!P?.info) return;
+  if (!P?.info || P.live) return;      // nothing to remember: you cannot resume a broadcast
   P.lastReport = Date.now();
   const body = JSON.stringify({ item_id: P.itemId, position: position(), duration: duration(), state: stateName,
     play_id: P.playId, mode: P.mode, quality: P.quality });
@@ -808,9 +1029,13 @@ function act(a, el) {
     case 'tracks': case 'quality': return openPanel(a);
     case 'subsearch': P.panel = null; return openPanel('subsearch');
     case 'stats': P.stats = !P.stats; return renderStats();
-    case 'retry': P.forceHls = P.forceHls || P.mode === 'direct'; return load(position());
+    case 'retry':
+      if (P.live) { P.live.feedId = null; return loadLive(); }     // start the channel again from scratch
+      P.forceHls = P.forceHls || P.mode === 'direct';
+      return load(position());
     case 'fullscreen':
-      if (document.fullscreenElement) { screen.orientation?.unlock?.(); document.exitFullscreen(); }
+      if (appFs()) setAppFull(!P.appFull);
+      else if (document.fullscreenElement) { screen.orientation?.unlock?.(); document.exitFullscreen(); }
       else if (P.root.querySelector('.player').requestFullscreen) {
         P.root.querySelector('.player').requestFullscreen({ navigationUI: 'hide' })
           .then(() => { if (isTouch() && P.video.videoWidth > P.video.videoHeight) screen.orientation?.lock?.('landscape').catch(() => {}); })
@@ -823,6 +1048,7 @@ function wire() {
   const el = P.root.querySelector('.player');
   const v = P.video;
   el.addEventListener('click', (e) => {
+    if (e.target.closest('.sheet-back, .menu, .modal-back')) return;       // menus and sheets shown in full screen
     const b = e.target.closest('[data-a]');
     if (b) { if (b.tagName === 'A') e.preventDefault(); act(b.dataset.a, b); poke(); return; }
     const audio = e.target.closest('[data-audio]');
@@ -860,7 +1086,8 @@ function wire() {
   // (each further tap adds 10 s), like the YouTube and Netflix apps.
   let lastTap = 0, tapTimer = 0, streak = 0, streakSide = '';
   el.addEventListener('pointerup', (e) => {
-    if (e.pointerType === 'mouse' || P?.panel || P?.mini) return;
+    if (e.pointerType === 'mouse' || P?.panel || P?.mini || e.target.closest('.sheet-back, .menu, .modal-back')) return;
+    if (!e.isPrimary || Date.now() - (P.pinchedAt?.() || 0) < 400) return;      // the fingers of a pinch
     const onPicture = e.target === v || e.target.classList.contains('chrome') || e.target.classList.contains('center')
       || e.target.classList.contains('transport') || e.target.classList.contains('subtitle-layer');
     if (!onPicture) { poke(); return; }
@@ -885,6 +1112,24 @@ function wire() {
     }, 260);
   });
   el.addEventListener('touchstart', (e) => { if (!e.target.closest('.chrome button, .seek, .ppanel')) return; poke(); }, { passive: true });
+
+  // Two fingers, like Netflix: spread them to fill the screen (the edges of the picture are cut off), pinch them to
+  // see the whole picture again. Remembered on this device.
+  let pinch0 = 0, pinchEnd = 0;
+  const gap = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  el.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2 && !P?.mini && !e.target.closest('.ppanel, .sheet-back, .menu')) pinch0 = gap(e.touches);
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (!pinch0 || e.touches.length !== 2) return;
+    const r = gap(e.touches) / pinch0;
+    if (r > 1.18 || r < 0.85) {
+      pinch0 = 0; pinchEnd = Date.now();
+      setZoom(r > 1);
+    }
+  }, { passive: true });
+  el.addEventListener('touchend', (e) => { if (e.touches.length < 2 && pinch0) { pinch0 = 0; pinchEnd = Date.now(); } }, { passive: true });
+  P.pinchedAt = () => pinchEnd;
 
   const playIcons = (name) => ['#pplay2'].forEach(id => { const b = $(id); if (b) mount(b, icon(name)); });
   v.addEventListener('play', () => { playIcons('pause'); poke(); keepAwake(true); });
@@ -916,6 +1161,18 @@ function wire() {
   poke();
 }
 
+function setZoom(on, quiet = false) {
+  const el = P?.root.querySelector('.player');
+  if (!el) return;
+  el.classList.toggle('zoomed', on);
+  store.set('zoom', on ? '1' : '0');
+  if (quiet) return;
+  const z = $('#pzoom');
+  if (!z) return;
+  z.textContent = on ? 'Zoomed to fill' : 'Original';
+  z.classList.remove('on'); void z.offsetWidth; z.classList.add('on');
+}
+
 function flash(side, secs) {
   const f = $(side === 'left' ? '#pflash-l' : '#pflash-r');
   if (!f) return;
@@ -925,7 +1182,7 @@ function flash(side, secs) {
 
 function onFs() {
   const b = $('#pfs');
-  if (b) mount(b, icon(document.fullscreenElement ? 'exitfs' : 'fullscreen'));
+  if (b) mount(b, icon(isFull() ? 'exitfs' : 'fullscreen'));
 }
 
 function onKey(e) {
@@ -946,7 +1203,7 @@ function onKey(e) {
       if (P.subtitleKey) selectSubtitle(null);
       else if (subs.length) selectSubtitle((subs.find(s => sameLang(s.lang, state.prefs?.subtitle_lang)) || subs[0]).key);
     },
-    Escape: () => { if (P.panel) closePanel(); else if (!document.fullscreenElement) closePlayer(); },
+    Escape: () => { if (P.panel) closePanel(); else if (!isFull()) closePlayer(); },
   }[k];
   if (handled) { e.preventDefault(); e.stopPropagation(); handled(); poke(); }
 }

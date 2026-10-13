@@ -6,11 +6,11 @@ import { adminItemMenu } from './admin.js';
 import { refreshView, state } from './app.js';
 import { handTrailer, previewTrailerPlaying, trailerPlayer, whenSoundAllowed } from './extras.js';
 import { dockPlaying } from './dock.js';
-import { fmtRuntime, html, icon, img, itemHref, mount, onPageScroll, pageY, toast } from './ui.js';
+import { fmtRuntime, html, icon, img, isTouch, itemHref, mount, onPageScroll, pageY, toast } from './ui.js';
 
 const KINDS = new Set(['movie', 'show', 'episode']);
 const OPEN_DELAY = 550, CLOSE_DELAY = 140;
-const canHover = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+const canHover = () => !isTouch() && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 const cache = new Map();          // id -> { at, data }
 
 let pop = null, card = null, openTimer = 0, closeTimer = 0, token = 0;

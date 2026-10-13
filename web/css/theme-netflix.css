@@ -1,0 +1,582 @@
+/* Netflix — the look of today's big streaming services: near-black, signal red, a menu bar along the top,
+   a full-width billboard and rows of wide pictures that grow when you point at them.
+   Everything here only applies when the Netflix theme is chosen (Settings › Look). */
+
+[data-theme="netflix"] {
+  --bg: #141414; --bg-2: #181818; --bg-3: #2F2F2F; --line: #404040;
+  --text: #FFFFFF; --text-soft: #E5E5E5; --muted: #B3B3B3; --faint: #808080;
+  --accent: #E50914; --accent-hover: #F40612; --accent-ink: #FFFFFF; --accent-fill: var(--accent);
+  --bg-rgb: 20 20 20; --bg2-rgb: 24 24 24; --deep-rgb: 0 0 0; --text-rgb: 255 255 255; --accent-rgb: 229 9 20;
+  --red: #E87C03; --green: #46D369;
+  --body: 'Helvetica Neue', Helvetica, Arial, 'Golos Text', sans-serif;
+  --display: 'Helvetica Neue', Helvetica, Arial, 'Golos Text', sans-serif;
+  --display-weight: 700; --display-transform: none; --display-tracking: -0.01em; --brand-tracking: .02em;
+  --radius: 4px; --panel-radius: 6px;
+  --poster-hue: 0; --poster-sat: 0%;
+  --gutter: 4%;
+  --topbar: 68px;
+}
+
+[data-theme="netflix"] body { background: #141414; }
+[data-theme="netflix"] .btn { border-radius: 4px; font-weight: 700; }
+[data-theme="netflix"] .avatar { border-radius: 4px; color: #fff; }
+[data-theme="netflix"] .panel { background: #181818; border-color: #2a2a2a; }
+[data-theme="netflix"] ::selection { background: #E50914; color: #fff; }
+
+/* ---------- the menu bar along the top (computers and TVs; phones keep the bar at the bottom) ---------- */
+/* The menu as a bar along the top. Shared by every theme that asks for it (Netflix, HBO Max): app.js puts
+   the class "topnav" on <html>. Colours come from the theme through the --topnav-* values. */
+@media (min-width: 721px) and (min-height: 501px), (min-width: 721px) and (hover: hover) and (not (any-pointer: coarse)) {
+  html.topnav body { --rail: 0px; }             /* nothing on the left: full width for pages and the player bar */
+  html.topnav body .d-actions { max-width: 92vw; }
+  html.topnav .app { display: block; }
+  html.topnav .view { margin-left: 0 !important; min-width: 0; }
+  html.topnav body .rail {
+    position: fixed !important; top: 0; left: 0; right: 0; bottom: auto; width: auto !important; height: var(--topbar);
+    flex-direction: row; align-items: center; gap: 4px;
+    padding: 0 var(--gutter) !important; border: 0; z-index: 60;
+    background: linear-gradient(180deg, rgb(0 0 0 / .7) 10%, rgb(0 0 0 / 0));
+    transition: background-color .4s;
+  }
+  html.topnav.scrolled body .rail { background-color: var(--topnav-solid, #141414); }
+  /* Home · libraries (TV Shows, Movies…) · My list */
+  html.topnav body .rail .brand-row { order: 0; }
+  html.topnav body .rail a[href="#/"] { order: 1; }
+  html.topnav body .rail .lib-list { order: 2; }
+  html.topnav body .rail a[href="#/mylist"] { order: 3; }
+  html.topnav body .rail .brand-row { display: flex; align-items: center; margin-right: 26px; flex: none; }
+  html.topnav body .rail .brand-mark-link, html.topnav body .rail .rail-toggle { display: none !important; }
+  html.topnav body .rail .brand, html.topnav body .rail .brand-text { display: flex !important; align-items: center; padding: 0; margin: 0; }
+  html.topnav body .rail .brand small { display: none; }
+  html.topnav body .rail .brand-word { width: 120px; height: auto; max-height: 30px; object-fit: contain; margin-top: 8px; }
+  html.topnav body .rail .group { display: none; }
+  html.topnav body .rail .lib-list { display: flex; flex-direction: row; align-items: center; gap: 4px; flex-wrap: nowrap; }
+  html.topnav body .rail .lib-item > a { padding-right: 9px; }
+  html.topnav body .rail .lib-item { display: flex; align-items: center; }
+  html.topnav body .rail .lib-more { display: none; }
+  html.topnav body .rail .spacer { flex: 1; }
+  html.topnav body .rail .tabbar { display: none; }
+
+  /* text links, like Home · TV Shows · Movies · My List */
+  html.topnav body .rail a, html.topnav body .rail button.navlike {
+    width: auto; padding: 6px 9px; border-radius: 4px; background: none !important; gap: 8px;
+    color: var(--topnav-link, #E5E5E5); font-size: 14px; font-weight: 400; justify-content: flex-start;
+    transition: color .3s;
+  }
+  html.topnav body .rail a:hover, html.topnav body .rail button.navlike:hover { color: var(--topnav-link-hover, #B3B3B3); }
+  html.topnav body .rail a.active { color: var(--topnav-link-on, #fff); font-weight: var(--topnav-weight, 700); }
+  html.topnav body .rail a.active::before { display: none; }
+  html.topnav body .rail a svg { display: none; }
+  html.topnav body .rail .label { display: inline !important; overflow: visible; }
+
+  /* on the right: search, settings and admin as icons, then the profile */
+  html.topnav body .rail a[href="#/search"] { order: 10; margin-left: auto; }
+  html.topnav body .rail .spacer { order: 9; flex: 1; }
+  html.topnav body .rail a[href="#/settings"] { order: 11; }
+  html.topnav body .rail a[href="#/admin"] { order: 12; }
+  html.topnav body .rail #account-btn { order: 13; margin-left: 8px; }
+  html.topnav body .rail a[href="#/search"] svg,
+  html.topnav body .rail a[href="#/settings"] svg,
+  html.topnav body .rail a[href="#/admin"] svg { display: block; width: 22px; height: 22px; color: var(--topnav-icon, #fff); }
+  html.topnav body .rail a[href="#/search"] .label,
+  html.topnav body .rail a[href="#/settings"] .label,
+  html.topnav body .rail a[href="#/admin"] .label,
+  html.topnav body .rail #account-btn .label { display: none !important; }
+  html.topnav body .rail #account-btn .avatar { width: 32px; height: 32px; }
+
+  /* not enough room for every library: one "Libraries" button instead (body.nav-compact, set by app.js) */
+  html.topnav body.nav-compact .rail .lib-list,
+  html.topnav body.nav-compact .rail a[href="#/mylist"] { display: none !important; }
+  html.topnav body.nav-compact .rail .tabbar { display: flex !important; order: 2; position: static; height: auto;
+    background: none; border: 0; padding: 0; box-shadow: none; }
+  html.topnav body.nav-compact .rail .tabbar > :not(#tab-libs) { display: none !important; }
+  html.topnav body .rail #tab-libs { display: flex; align-items: center; gap: 6px; padding: 6px 9px; border: 0;
+    background: none; color: var(--topnav-link, #E5E5E5); font: 400 14px var(--body); cursor: pointer; }
+  html.topnav body .rail #tab-libs svg { display: none; }
+  html.topnav body .rail #tab-libs::after { content: ""; border: 5px solid transparent; border-top-color: currentColor;
+    margin-top: 5px; }
+  html.topnav body .rail #tab-libs:hover { color: var(--topnav-link-hover, #B3B3B3); }
+  html.topnav body .rail #tab-libs.active { color: var(--topnav-link-on, #fff); font-weight: var(--topnav-weight, 700); }
+
+  /* pages start under the bar; the billboard and title pages run behind it */
+  html.topnav .app:not(.bare) .view > :first-child:not(.hero):not(.d-hero):not(.page-hero) { margin-top: var(--topbar); }
+  html.topnav .view > .page, html.topnav .view > .settings { padding-top: calc(var(--topbar) + 12px); }
+}
+
+/* ---------- billboard ---------- */
+[data-theme="netflix"] .hero {
+  min-height: 56.25vw; max-height: 100vh; align-items: center;
+  padding: var(--topbar) var(--gutter) 0;
+}
+[data-theme="netflix"] .hero::before {
+  background:                                   /* the fade into the page lies on top of the side shade */
+    linear-gradient(180deg, rgb(20 20 20 / 0) 0%, rgb(20 20 20 / .15) 40%, rgb(20 20 20 / .7) 72%, #141414 100%),
+    linear-gradient(77deg, rgb(0 0 0 / .6) 0%, rgb(0 0 0 / 0) 85%);
+}
+[data-theme="netflix"] .hero-body { max-width: max(36%, 460px); min-width: 0; margin-top: 4vw; }
+[data-theme="netflix"] .hero .logo { max-width: 100%; max-height: 14vw; margin-bottom: 1.2vw; }
+[data-theme="netflix"] .hero .marquee {
+  font: 700 clamp(32px, 4vw, 88px)/1.02 var(--display); text-transform: none; letter-spacing: -.02em;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  text-shadow: 2px 2px 4px rgb(0 0 0 / .45); margin-bottom: 1.2vw;
+}
+[data-theme="netflix"] .hero .meta { color: #fff; font-size: clamp(14px, 1.1vw, 20px); text-shadow: 2px 2px 4px rgb(0 0 0 / .45); }
+[data-theme="netflix"] .hero .overview {
+  color: #fff; font-size: clamp(15px, 1.2vw, 22px); line-height: 1.3; font-weight: 400;
+  text-shadow: 2px 2px 4px rgb(0 0 0 / .45); margin-bottom: 1.6vw;
+}
+[data-theme="netflix"] .hero .actions, [data-theme="netflix"] .d-hero .actions { gap: 1rem; }
+
+/* Play: white; More info and the others: see-through grey */
+[data-theme="netflix"] .hero .btn, [data-theme="netflix"] .d-hero .btn {
+  height: auto; min-height: 44px; padding: .55rem 1.6rem .55rem 1.3rem; border: 0; border-radius: 4px;
+  font-size: clamp(15px, 1.2vw, 20px); font-weight: 700; backdrop-filter: none;
+  background: rgb(109 109 110 / .7); color: #fff;
+}
+[data-theme="netflix"] .hero .btn:hover, [data-theme="netflix"] .d-hero .btn:hover { background: rgb(109 109 110 / .4); filter: none; }
+[data-theme="netflix"] .hero .btn.primary, [data-theme="netflix"] .d-hero .btn.primary { background: #fff; color: #000; }
+[data-theme="netflix"] .hero .btn.primary:hover, [data-theme="netflix"] .d-hero .btn.primary:hover { background: rgb(255 255 255 / .75); }
+[data-theme="netflix"] .hero .btn svg, [data-theme="netflix"] .d-hero .btn svg { width: 1.5em; height: 1.5em; }
+[data-theme="netflix"] .hero .btn.icon, [data-theme="netflix"] .d-hero .btn.icon { padding: .55rem; border-radius: 50%; width: 44px;
+  background: rgb(42 42 42 / .6); border: 2px solid rgb(255 255 255 / .5); }
+@media (max-width: 1180px) {
+  [data-theme="netflix"] .d-actions .glass-btn { width: 44px; min-width: 44px; padding: 0; border-radius: 50%; justify-content: center; }
+  [data-theme="netflix"] .d-actions .glass-btn svg { width: 22px; height: 22px; }
+}
+[data-theme="netflix"] .hero-pill { background: none; border: 0; backdrop-filter: none; }
+[data-theme="netflix"] .hero-pill button { border: 1px solid rgb(255 255 255 / .7); background: rgb(0 0 0 / .2); color: #fff; }
+
+/* the rows ride up over the bottom of the billboard */
+[data-theme="netflix"] .hero + .rows, [data-theme="netflix"] .hero + * .rows { margin-top: -7vw; position: relative; z-index: 2; }
+[data-theme="netflix"] .rows { gap: 1.45vw; }
+
+/* ---------- rows ---------- */
+[data-theme="netflix"] .row h2, [data-theme="netflix"] .section-title {
+  font: 700 clamp(15px, 1.4vw, 26px)/1.25 var(--display); color: #E5E5E5; letter-spacing: 0;
+  margin: 0 var(--gutter) .5em;
+}
+[data-theme="netflix"] .row h2 a:hover { color: #fff; }
+[data-theme="netflix"] .track { gap: .4vw; padding: 0 var(--gutter) 4px; scroll-padding: 0 var(--gutter); }
+[data-theme="netflix"] .track.landscape { grid-auto-columns: calc((92vw - 5 * .4vw) / 6); }
+[data-theme="netflix"] .track.poster { grid-auto-columns: calc((92vw - 7 * .4vw) / 8); }
+[data-theme="netflix"] .track.square { grid-auto-columns: calc((92vw - 6 * .4vw) / 7); }
+@media (max-width: 1400px) {
+  [data-theme="netflix"] .track.landscape { grid-auto-columns: calc((92vw - 4 * .4vw) / 5); }
+  [data-theme="netflix"] .track.poster { grid-auto-columns: calc((92vw - 6 * .4vw) / 7); }
+}
+@media (max-width: 1100px) {
+  [data-theme="netflix"] .track.landscape { grid-auto-columns: calc((92vw - 3 * .4vw) / 4); }
+  [data-theme="netflix"] .track.poster { grid-auto-columns: calc((92vw - 5 * .4vw) / 6); }
+}
+@media (max-width: 720px) {
+  [data-theme="netflix"] .track.landscape { grid-auto-columns: 42vw; }
+  [data-theme="netflix"] .track.poster { grid-auto-columns: 30vw; }
+}
+
+/* the side arrows: full height, dark, the arrow grows when pointed at */
+[data-theme="netflix"] .scroll-btn {
+  top: 0; bottom: 4px; width: var(--gutter); min-width: 28px; background: rgb(20 20 20 / .5); border-radius: 0;
+}
+[data-theme="netflix"] .scroll-btn:hover { background: rgb(20 20 20 / .7); }
+[data-theme="netflix"] .scroll-btn svg { width: 2.2vw; height: 2.2vw; min-width: 22px; min-height: 22px; transition: transform .1s; }
+[data-theme="netflix"] .scroll-btn:hover svg { transform: scale(1.25); }
+
+/* cards: just the picture (the name is on it, and in the card that opens on pointing) */
+[data-theme="netflix"] .card .frame { border-radius: 4px; background: #232323; outline: 0; }
+[data-theme="netflix"] .card:hover .frame { outline: 0; }
+[data-theme="netflix"] .badge { background: #E50914; color: #fff; border-radius: 2px; }
+[data-theme="netflix"] .grid { gap: 2.4vw .4vw; }
+
+/* ---------- the card that opens when you point at a picture ---------- */
+[data-theme="netflix"] .hovercard { border-radius: 6px; background: #181818; box-shadow: 0 3px 10px rgb(0 0 0 / .75); }
+[data-theme="netflix"] .hc-art { border-radius: 6px 6px 0 0; }
+[data-theme="netflix"] .hc-body { padding: 14px 16px 18px; }
+[data-theme="netflix"] .hc-btn { width: 40px; height: 40px; border: 2px solid rgb(255 255 255 / .5); background: rgb(42 42 42 / .6); color: #fff; }
+[data-theme="netflix"] .hc-btn:hover { border-color: #fff; background: rgb(42 42 42 / .6); }
+[data-theme="netflix"] .hc-btn.play { width: 40px; height: 40px; background: #fff; border-color: #fff; color: #000; }
+[data-theme="netflix"] .hc-btn.play:hover { background: rgb(255 255 255 / .8); }
+[data-theme="netflix"] .hc-facts .score { color: #46D369; font-weight: 700; }
+[data-theme="netflix"] .hc-facts .box { border-color: rgb(255 255 255 / .4); color: #fff; border-radius: 2px; }
+[data-theme="netflix"] .hc-title { text-transform: none; font-weight: 700; letter-spacing: -.01em; }
+[data-theme="netflix"] .hc-options button:hover svg, [data-theme="netflix"] .hc-name:hover { color: #fff; }
+
+/* ---------- title pages ---------- */
+[data-theme="netflix"] .d-hero { padding-top: calc(var(--topbar) + 60px); }
+[data-theme="netflix"] .d-title { text-transform: none; letter-spacing: -.02em; font-weight: 700; text-shadow: 2px 2px 4px rgb(0 0 0 / .45); }
+[data-theme="netflix"] .chip-g { border-radius: 2px; background: none; border: 0; padding: 0 6px 0 0; color: #BCBCBC; backdrop-filter: none; font-size: 15px; }
+[data-theme="netflix"] .chip-g.score, [data-theme="netflix"] .chip-g.good { color: #46D369; font-weight: 700; }
+[data-theme="netflix"] .btn.glass-btn { background: rgb(42 42 42 / .6); border: 2px solid rgb(255 255 255 / .5); backdrop-filter: none; }
+[data-theme="netflix"] .btn.glass-btn:hover { border-color: #fff; background: rgb(42 42 42 / .6); }
+[data-theme="netflix"] .btn.glass-btn.on { color: #fff; border-color: #fff; }
+[data-theme="netflix"] .d-progress .bar { background: #4d4d4d; border-radius: 0; height: 3px; }
+[data-theme="netflix"] .d-progress .bar i { background: #E50914; }
+[data-theme="netflix"] .pill-ctl { background: rgb(0 0 0 / .4); border-color: rgb(255 255 255 / .2); }
+
+/* episodes: number · picture · name and length · description, divided by thin lines */
+[data-theme="netflix"] .episode { border-radius: 4px; border-bottom: 1px solid #404040; padding: 1.6em 1.2em; }
+[data-theme="netflix"] .episode:hover, [data-theme="netflix"] .episode:focus { background: #333; }
+[data-theme="netflix"] .episode .num { font-size: 24px; color: #D2D2D2; font-family: var(--display); font-weight: 400; }
+[data-theme="netflix"] .episode .frame { border-radius: 4px; }
+
+/* ---------- player: red line, white controls ---------- */
+[data-theme="netflix"] .player { --accent: #E50914; --accent-fill: #E50914; }
+
+/* ---------- sign-in and profiles ---------- */
+[data-theme="netflix"] .auth { background: #141414; }
+[data-theme="netflix"] .auth h1 { font-weight: 500; font-size: clamp(28px, 3.5vw, 56px); color: #fff; letter-spacing: 0; text-transform: none; }
+[data-theme="netflix"] .profile { color: #808080; }
+[data-theme="netflix"] .profile .avatar { border-radius: 4px; }
+[data-theme="netflix"] .profile:hover, [data-theme="netflix"] .profile:focus { color: #E5E5E5; }
+[data-theme="netflix"] .profile:hover .avatar, [data-theme="netflix"] .profile:focus .avatar { box-shadow: 0 0 0 3px #E5E5E5; }
+[data-theme="netflix"] .auth-form .btn.primary { background: #E50914; color: #fff; }
+
+/* ---------- TV: a clear white frame around what is chosen ---------- */
+html.tv[data-theme="netflix"] .card .frame-link:focus .frame::after { border-color: #fff; border-radius: 4px; }
+html.tv[data-theme="netflix"] .card .frame-link:focus .frame { transform: scale(1.06); transition: transform .2s; }
+html.tv[data-theme="netflix"] .rail a:focus { color: #fff; font-weight: 700; box-shadow: none; text-decoration: underline; text-underline-offset: 6px; }
+
+/* ---------- dialogs: the chosen tab white with a red mark (red on dark grey is hard to read) ---------- */
+[data-theme="netflix"] .ed-tabs button.on { color: #fff; background: #2F2F2F; box-shadow: inset 3px 0 0 #E50914; }
+[data-theme="netflix"] .tabs a.active { color: #fff; }
+
+/* ---------- phones: a taller billboard, the rows start below it ---------- */
+@media (max-width: 720px) {
+  [data-theme="netflix"] .hero { min-height: 72vh; max-height: none; align-items: flex-end; padding: var(--topbar) var(--gutter) 28px; }
+  [data-theme="netflix"] .hero-body { max-width: 100%; min-width: 0; margin-top: 0; }
+  [data-theme="netflix"] .hero + .rows, [data-theme="netflix"] .hero + * .rows { margin-top: 0; }
+  [data-theme="netflix"] { --topbar: 0px; }
+}
+[data-theme="netflix"] .pill.accent { background: #E50914; color: #fff; border-color: #E50914; }
+[data-theme="netflix"] a.pill.accent:hover { background: #F40612; }
+
+/* =====================================================================================================
+   The 2025 billboard: a rounded card inside the page, the page tinted with the picture's colour,
+   pill buttons, a "Movie · Action · 2025 · 1h 23m · 16+" line, labels in the corner. While the trailer
+   plays only the title, that line and the buttons show; when it ends the picture and the description
+   come back with a button to replay it.
+   ===================================================================================================== */
+[data-theme="netflix"] body.home-page {
+  /* fixed to the window, so the colour stays with you all the way down the page and back up */
+  background: linear-gradient(180deg, var(--hero-tint, #141414) 0%, color-mix(in srgb, var(--hero-tint, #141414) 70%, #141414) 55%,
+    color-mix(in srgb, var(--hero-tint, #141414) 45%, #141414) 100%) fixed, #141414;
+  transition: background .8s;
+}
+@media (min-width: 721px) and (min-height: 501px), (min-width: 721px) and (hover: hover) and (not (any-pointer: coarse)) {
+  html[data-theme="netflix"] body.home-page .rail { background: none; }
+  html[data-theme="netflix"].scrolled body.home-page .rail { background-color: var(--hero-tint, #141414); }
+  /* the menu entry of the page you're on: a grey pill */
+  html[data-theme="netflix"] body .rail a.active { background: rgb(255 255 255 / .2) !important; border-radius: 999px; padding: 6px 16px; }
+  html[data-theme="netflix"] body .rail a, html[data-theme="netflix"] body .rail #tab-libs { font-size: 15px; font-weight: 500; padding: 6px 12px; }
+}
+
+[data-theme="netflix"] .hero {
+  margin: calc(var(--topbar) + 8px) var(--gutter) 0;
+  min-height: 0; height: min(42.3vw, calc(100vh - var(--topbar) - 40px)); max-height: none;
+  padding: 0 4.5% 3.4%; align-items: flex-end;
+  border-radius: 22px; overflow: hidden; isolation: isolate;
+  box-shadow: 0 12px 40px rgb(0 0 0 / .45), 0 0 0 1px rgb(255 255 255 / .06);
+}
+[data-theme="netflix"] .hero .art { border-radius: inherit; }
+[data-theme="netflix"] .hero::before {
+  background:
+    linear-gradient(0deg, rgb(0 0 0 / .62) 0%, rgb(0 0 0 / .25) 30%, rgb(0 0 0 / 0) 52%),
+    linear-gradient(90deg, rgb(0 0 0 / .5) 0%, rgb(0 0 0 / .12) 42%, rgb(0 0 0 / 0) 60%);
+}
+[data-theme="netflix"] .hero-trailer { border-radius: inherit; overflow: hidden; }
+[data-theme="netflix"] .hero-body { max-width: min(46%, 760px); margin-top: 0; }
+[data-theme="netflix"] .hero .logo { max-height: min(13vw, 220px); max-width: 100%; margin-bottom: 1.1vw; }
+[data-theme="netflix"] .hero .marquee { margin-bottom: .9vw; }
+
+/* Movie · Action · 2025 · 1h 23m · 16+ */
+[data-theme="netflix"] .hero .meta { display: none; }
+[data-theme="netflix"] .hero-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0; margin: 0 0 1.1vw;
+  color: #fff; font-weight: 700; font-size: clamp(14px, 1.05vw, 20px); text-shadow: 0 1px 6px rgb(0 0 0 / .5);
+}
+[data-theme="netflix"] .hero-meta > span + span::before { content: "•"; color: rgb(255 255 255 / .6); margin: 0 .5em; font-weight: 400; }
+[data-theme="netflix"] .hero-meta .cert { font-weight: 500; font-size: .9em; }
+
+/* the description: only when no trailer is playing */
+[data-theme="netflix"] .hero .overview {
+  font-size: clamp(15px, 1.25vw, 24px); line-height: 1.3; max-width: 40ch; margin-bottom: 1.5vw;
+  transition: opacity .6s, max-height .6s, margin .6s; max-height: 8em; overflow: hidden;
+}
+[data-theme="netflix"] .hero.trailer-on .overview { opacity: 0; max-height: 0; margin-bottom: 0; }
+
+/* pill buttons; More info without its icon */
+[data-theme="netflix"] .hero .btn { border-radius: 999px; padding: .55rem 1.5rem; min-height: 46px; font-size: clamp(15px, 1.15vw, 20px); }
+[data-theme="netflix"] .hero .btn.primary { padding-left: 1.2rem; }
+[data-theme="netflix"] .hero .btn.ghost { background: rgb(255 255 255 / .2); backdrop-filter: blur(6px); }
+[data-theme="netflix"] .hero .btn.ghost:hover { background: rgb(255 255 255 / .3); }
+[data-theme="netflix"] .hero .btn.ghost svg { display: none; }
+
+/* sound / replay: a small round button in the top right corner */
+[data-theme="netflix"] .hero-pill { position: absolute; top: 3.2%; right: 2.2%; bottom: auto; padding: 0; gap: 8px; }
+[data-theme="netflix"] .hero-pill button { width: 34px; height: 34px; border: 1px solid rgb(255 255 255 / .35); background: rgb(40 40 40 / .55); }
+[data-theme="netflix"] .hero-pill button:hover { background: rgb(80 80 80 / .7); border-color: #fff; }
+[data-theme="netflix"] .hero-pill svg { width: 16px; height: 16px; }
+
+/* labels in the bottom right corner */
+[data-theme="netflix"] .hero-badges { display: flex; gap: 8px; position: absolute; right: 2.2%; bottom: 3.6%; z-index: 2; }
+[data-theme="netflix"] .hb {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 6px;
+  background: rgb(28 28 28 / .82); color: #fff; font: 700 13px/1 var(--body); backdrop-filter: blur(6px);
+}
+[data-theme="netflix"] .hb .hb-mark { height: 19px; margin: -3px 0; width: auto; display: block; flex: none; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .6)); }   /* LENTA's mark */
+[data-theme="netflix"] .hb.score b { color: #F5C518; font-size: 14px; }
+
+/* the rows start under the card now (it no longer runs to the page edge) */
+[data-theme="netflix"] .hero + .rows, [data-theme="netflix"] .hero + * .rows { margin-top: 2.4vw; }
+
+@media (max-width: 720px) {
+  [data-theme="netflix"] .hero { margin: 12px 12px 0; height: 68vh; border-radius: 16px; padding: 0 18px 22px; }
+  [data-theme="netflix"] .hero-body { max-width: 100%; }
+  [data-theme="netflix"] .hero-badges { display: none; }
+  [data-theme="netflix"] .hero + .rows, [data-theme="netflix"] .hero + * .rows { margin-top: 18px; }
+}
+
+
+/* =====================================================================================================
+   Cards like the streaming service: rounded pictures with the title's logo on them, no name underneath
+   (only where the picture shows the title), "Recently added" in red at the bottom, and the progress
+   line under the picture. Rows and libraries alike.
+   ===================================================================================================== */
+[data-theme="netflix"] .card .frame { border-radius: 6px; }
+[data-theme="netflix"] .card .frame img { border-radius: 6px; }
+[data-theme="netflix"] .track { gap: 8px; }
+[data-theme="netflix"] .grid { gap: 26px 8px; }
+
+/* the name under the picture only when the picture doesn't show it */
+[data-theme="netflix"] .card.has-logo .caption { display: none; }
+[data-theme="netflix"] .card .caption { padding-top: 6px; }
+[data-theme="netflix"] .card .caption .t { font-size: 13px; font-weight: 500; color: #E5E5E5; }
+[data-theme="netflix"] .card .caption .s { font-size: 12px; color: #A3A3A3; }
+
+/* the logo: bottom left, large enough to read across the room */
+[data-theme="netflix"] .card .frame .card-logo { left: 6%; bottom: 12%; max-width: 58%; max-height: 46%; }
+
+/* Recently added: a red label in the middle of the picture's bottom edge */
+[data-theme="netflix"] .new-badge {
+  display: block; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 2; white-space: nowrap;
+  background: #E50914; color: #fff; font: 700 11px/1 var(--body); letter-spacing: .01em; padding: 4px 7px 4px; border-radius: 3px 3px 0 0;
+  pointer-events: none;
+}
+[data-theme="netflix"] .card .badge { top: 6px; right: 6px; }
+
+/* progress: a short line under the picture (not on it) */
+[data-theme="netflix"] .card .frame { overflow: visible; }
+/* ...except a channel tile, which is a logo centred on a plain frame rather than a picture that fills
+   it. Left to overflow, a tall station logo stretches the tile taller than the ones either side of it. */
+[data-theme="netflix"] .card.channel .frame { overflow: hidden; }
+[data-theme="netflix"] .card .frame .wide-fill { inset: 0; clip-path: inset(0 round 6px); }
+[data-theme="netflix"] .card .frame .progress {
+  top: calc(100% + 7px); bottom: auto; left: 18%; right: 18%; height: 2px; background: #5a5a5a; border-radius: 0;
+}
+[data-theme="netflix"] .card .frame .progress i { background: #E50914; }
+[data-theme="netflix"] .card:has(.progress) .caption, [data-theme="netflix"] .track .card .frame:has(.progress) { margin-bottom: 0; }
+[data-theme="netflix"] .track { padding-bottom: 14px; }
+[data-theme="netflix"] .card .frame .play-hint { border-radius: 6px; }
+
+/* No names under the pictures: the backgrounds show the title (written on them, or the logo laid on top).
+   A text-free picture without a logo gets the name written on it instead. */
+[data-theme="netflix"] .card.has-art .caption { display: none; }
+[data-theme="netflix"] .card-name {
+  display: block; position: absolute; left: 7%; right: 7%; bottom: 13%; z-index: 1; pointer-events: none;
+  color: #fff; font: 800 clamp(15px, 1.35vw, 24px)/1.05 var(--display); letter-spacing: -.01em;
+  text-shadow: 0 2px 10px rgb(0 0 0 / .85); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+[data-theme="netflix"] .track .card.has-art { padding-bottom: 0; }
+
+/* title pages: one icon size on every button, round buttons the same height as the others */
+[data-theme="netflix"] .d-hero .btn { min-height: 46px; height: 46px; }
+[data-theme="netflix"] .d-hero .btn svg { width: 22px; height: 22px; flex: none; }
+[data-theme="netflix"] .d-hero .btn.primary svg { width: 24px; height: 24px; }
+[data-theme="netflix"] .d-hero .btn.icon, [data-theme="netflix"] .d-actions .glass-btn:not(:has(.lbl)),
+[data-theme="netflix"] .d-hero .btn.round { width: 46px; min-width: 46px; padding: 0; justify-content: center; border-radius: 50%; }
+[data-theme="netflix"] .d-hero .btn.icon svg { width: 22px; height: 22px; }
+
+/* pictures on Home and in the libraries: 13 px corners */
+[data-theme="netflix"] { --card-radius: 13px; }
+[data-theme="netflix"] .card .frame,
+[data-theme="netflix"] .card .frame img,
+[data-theme="netflix"] .card .frame .play-hint,
+[data-theme="netflix"] .card .frame .gen-poster { border-radius: var(--card-radius); }
+[data-theme="netflix"] .card .frame .wide-fill { clip-path: inset(0 round var(--card-radius)); }
+[data-theme="netflix"] .new-badge { border-radius: 4px 4px 0 0; }
+html.tv[data-theme="netflix"] .card .frame-link:focus .frame::after { border-radius: var(--card-radius); }
+
+/* every picture on Home and in the libraries: 13px corners */
+[data-theme="netflix"] .card .frame, [data-theme="netflix"] .card .frame > img, [data-theme="netflix"] .card .frame > svg,
+[data-theme="netflix"] .card .frame .play-hint, [data-theme="netflix"] .card .frame .genposter, [data-theme="netflix"] .dthumb .genposter,
+[data-theme="netflix"] .dthumb, [data-theme="netflix"] .dthumb img, [data-theme="netflix"] .tt img, [data-theme="netflix"] .tt .noimg { border-radius: 13px; }
+[data-theme="netflix"] .card .frame .wide-fill { clip-path: inset(0 round 13px); }
+html.tv[data-theme="netflix"] .card .frame-link:focus .frame::after { border-radius: 13px; }
+
+/* a soft shadow under every picture, like the banner */
+[data-theme="netflix"] .card .frame { box-shadow: 0 6px 18px rgb(0 0 0 / .45), 0 2px 5px rgb(0 0 0 / .3); }
+[data-theme="netflix"] .card .frame-link:hover .frame { box-shadow: 0 10px 26px rgb(0 0 0 / .55), 0 3px 8px rgb(0 0 0 / .35); }
+
+/* row arrows: just a white arrow at the very edge of the screen, as tall as the pictures (no dark box) */
+[data-theme="netflix"] .scroller .scroll-btn, [data-theme="netflix"] .scroller .scroll-btn:hover {
+  top: var(--frame-top, 0px); bottom: auto; height: var(--frame-h, calc(100% - 14px));
+  width: var(--gutter); min-width: 36px; border-radius: 0; background: none !important; color: #fff;
+  display: grid; place-items: center; transition: opacity .2s;
+}
+[data-theme="netflix"] .scroller .scroll-btn.prev { left: 0; }
+[data-theme="netflix"] .scroller .scroll-btn.next { right: 0; }
+[data-theme="netflix"] .scroller .scroll-btn svg {
+  width: 40px; height: 40px; min-width: 0; min-height: 0; stroke-width: 2.5;
+  filter: drop-shadow(0 0 3px rgb(0 0 0 / .9)) drop-shadow(0 2px 10px rgb(0 0 0 / .7)); transition: transform .15s;
+}
+[data-theme="netflix"] .scroller .scroll-btn:hover svg { transform: scale(1.3); }
+
+/* ---- sign-in, Netflix style: deep red wash, small logo in the corner, big square profiles ---- */
+[data-theme="netflix"] .auth {
+  background:
+    radial-gradient(120% 80% at 100% 100%, rgb(0 0 0 / .85), transparent 60%),
+    linear-gradient(180deg, #56121A 0%, #44101A 30%, #2D0A0F 65%, #160406 100%);
+  place-items: center;
+}
+[data-theme="netflix"] .auth-corner { display: block; position: absolute; top: 28px; left: 4%; width: 150px; height: auto; }   /* the same silver wordmark as in the menu bar */
+[data-theme="netflix"] .auth-logo, [data-theme="netflix"] .auth-server { display: none; }
+[data-theme="netflix"] .auth h1 { font: 700 clamp(26px, 2.4vw, 40px)/1.2 var(--body); color: #fff; margin: 0 0 1.4em; letter-spacing: 0; }
+[data-theme="netflix"] .profiles { gap: clamp(18px, 2.2vw, 40px); margin-bottom: 44px; }
+[data-theme="netflix"] .profile { gap: 14px; color: #B3B3B3; font: 500 clamp(14px, 1.1vw, 18px)/1.2 var(--body); }
+[data-theme="netflix"] .profile .avatar { width: clamp(84px, 8vw, 150px); height: clamp(84px, 8vw, 150px); border-radius: 6px;
+  font: 700 clamp(40px, 4vw, 72px)/1 var(--body); color: #fff; outline: 0; box-shadow: none; transition: box-shadow .15s, transform .15s; }
+[data-theme="netflix"] .profile:hover, [data-theme="netflix"] .profile:focus-visible { color: #fff; }
+[data-theme="netflix"] .profile:hover .avatar, [data-theme="netflix"] .profile:focus-visible .avatar { box-shadow: 0 0 0 3px #fff; outline: 0; }
+[data-theme="netflix"] .auth-who .linkish { display: inline-block; padding: .55em 1.6em; border: 1px solid #808080; border-radius: 2px;
+  color: #808080; text-decoration: none; font: 500 clamp(14px, 1.05vw, 17px)/1.4 var(--body); letter-spacing: .06em; background: none; }
+[data-theme="netflix"] .auth-who .linkish:hover, [data-theme="netflix"] .auth-who .linkish:focus-visible { color: #fff; border-color: #fff; }
+/* the password form: a dark card like the sign-in page of streaming services */
+[data-theme="netflix"] .auth-signin .auth-inner { width: min(450px, 100%); background: rgb(0 0 0 / .72); border-radius: 6px;
+  padding: 44px clamp(24px, 5vw, 64px) 52px; }
+[data-theme="netflix"] .auth-signin h1 { font-size: 32px; text-align: left; margin-bottom: 26px; }
+[data-theme="netflix"] .auth-signin .profiles { margin-bottom: 22px; }
+[data-theme="netflix"] .auth-signin .profile .avatar { width: 84px; height: 84px; font-size: 40px; }
+[data-theme="netflix"] .auth-signin .profile { font-size: 16px; color: #fff; }
+[data-theme="netflix"] .auth-form { width: 100%; }
+[data-theme="netflix"] .auth-form label { color: #B3B3B3; }
+[data-theme="netflix"] .auth-form .input { height: 52px; background: rgb(22 22 22 / .7); border: 1px solid rgb(128 128 128 / .7); border-radius: 4px; color: #fff; font-size: 16px; }
+[data-theme="netflix"] .auth-form .input:focus { border-color: #fff; outline: 2px solid #fff; outline-offset: 1px; }
+[data-theme="netflix"] .auth-form .btn.primary { height: 44px; border-radius: 4px; font-weight: 700; font-size: 16px; }
+[data-theme="netflix"] .auth-form .btn.primary:hover { background: #C11119; }
+[data-theme="netflix"] .auth-signin .linkish { color: #B3B3B3; }
+[data-theme="netflix"] .auth-signin .linkish:hover { color: #fff; }
+
+/* Top 10 row: Netflix proportions, grey outlined numbers */
+[data-theme="netflix"] .track.top10 { --rh: 8.6vw; gap: 2.1vw; }
+@media (max-width: 1100px) { [data-theme="netflix"] .track.top10 { --rh: 11.6vw; } }
+@media (max-width: 720px) { [data-theme="netflix"] .track.top10 { --rh: 32vw; } }
+
+[data-theme="netflix"] .card.rank .frame { box-shadow: -10px 0 18px -2px rgb(0 0 0 / .8), -24px 0 44px -6px rgb(0 0 0 / .55), 0 6px 16px rgb(0 0 0 / .45); }
+[data-theme="netflix"] .track .card.rank { padding-bottom: 0; }
+
+/* =====================================================================================================
+   Phones held upright (html.nfx, set by ui.js syncNfx): the Netflix app. Black page tinted at the top
+   with the billboard's colour; a header with the page name and the libraries as chips; a framed poster
+   billboard with white Play and grey My List; posters in every row; Continue Watching with a play circle,
+   the red progress line and ⓘ / ⋮ under each poster; a floating tab bar.
+   ===================================================================================================== */
+html.nfx { --bg: #000; --bg-rgb: 0 0 0; --tabbar-h: calc(86px + env(safe-area-inset-bottom)); --gutter: 12px; }
+html.nfx body { background: #000; }
+html.nfx body.home-page { background: linear-gradient(180deg, var(--hero-tint, #000) 0, color-mix(in srgb, var(--hero-tint, #000) 55%, #000) 420px, #000 820px) no-repeat, #000; }
+
+/* ---------- header: LENTA mark, the page's name, My List and Settings; the libraries underneath ---------- */
+html.nfx .rail { position: static !important; background: none !important; border: 0 !important; backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important; height: 0 !important; }
+html.nfx .rail > .mhead { display: none !important; }
+html.nfx body.mh-on .rail > .mhead { display: block !important; }
+.mhead { display: none; }
+html.nfx .mhead { position: fixed; top: 0; left: 0; right: 0; z-index: 60; padding-top: env(safe-area-inset-top);
+  background: transparent; transition: background .25s ease; }
+html.nfx.mh-solid .mhead { background: #000; }
+html.nfx .mh-top { display: flex; align-items: center; gap: 8px; height: 62px; padding: 0 8px 0 16px; }
+html.nfx .mh-mark img { display: block; height: 34px; width: auto; }
+html.nfx .mh-title { flex: 1; min-width: 0; margin: 0 0 0 2px; font: 700 28px/1.1 var(--body); letter-spacing: -.01em; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: none; }
+html.nfx .mh-ic { display: grid; place-items: center; width: 44px; height: 44px; color: #fff; }
+html.nfx .mh-ic svg { width: 26px; height: 26px; stroke-width: 1.9; }
+html.nfx .mh-chips { display: flex; gap: 8px; padding: 2px 16px 14px; overflow-x: auto; scrollbar-width: none;
+  max-height: 64px; transition: max-height .25s ease, padding .25s ease, opacity .2s ease; }
+html.nfx .mh-chips::-webkit-scrollbar { display: none; }
+html.nfx.mh-tuck .mh-chips { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; pointer-events: none; }
+html.nfx .mh-chip { flex: none; display: inline-flex; align-items: center; height: 40px; padding: 0 17px; border-radius: 20px;
+  border: 1px solid rgb(255 255 255 / .42); background: rgb(255 255 255 / .06); color: #fff; font: 600 15.5px/1 var(--body);
+  white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+html.nfx .mh-chip.on { background: rgb(255 255 255 / .22); border-color: rgb(255 255 255 / .7); }
+/* the page starts under the header */
+html.nfx body.mh-on .view { padding-top: calc(env(safe-area-inset-top) + 118px); }
+html.nfx body.mh-on .page { padding-top: 6px; }
+html.nfx body.mh-on .page-head .page-title { display: none; }          /* the header shows the name already */
+
+/* ---------- the billboard: a framed poster card ---------- */
+html.nfx .hero.nfx-hero { display: block; position: relative; margin: 0 20px; height: auto; min-height: 0; max-height: none;
+  aspect-ratio: 2 / 3; padding: 0; border-radius: 12px; overflow: hidden; border: 1.5px solid rgb(255 255 255 / .28);
+  background: #111; box-shadow: 0 18px 50px rgb(0 0 0 / .55); }
+html.nfx .nfx-hero .nh-link { position: absolute; inset: 0; display: block; }
+html.nfx .nfx-hero .art { position: absolute; inset: 0; background-size: cover; background-position: center top; }
+html.nfx .nfx-hero .art::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 42%, rgb(0 0 0 / .45) 64%, rgb(0 0 0 / .88) 100%); }
+html.nfx .nfx-hero .nh-body { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; flex-direction: column;
+  align-items: center; text-align: center; padding: 0 18px 18px; margin: 0; max-width: none; pointer-events: none; }
+html.nfx .nfx-hero .logo { max-width: 72%; max-height: 92px; object-fit: contain; margin: 0 0 12px; filter: drop-shadow(0 2px 10px rgb(0 0 0 / .5)); }
+html.nfx .nfx-hero .marquee { font: 800 34px/1.05 var(--body); margin: 0 0 12px; text-shadow: 0 2px 12px rgb(0 0 0 / .6); text-transform: none; letter-spacing: -.01em; }
+html.nfx .nh-tags { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 0; margin-bottom: 16px;
+  font: 400 15px/1.3 var(--body); color: rgb(255 255 255 / .92); }
+html.nfx .nh-tags span:first-child { font-weight: 600; color: rgb(255 255 255 / .8); }
+html.nfx .nh-tags span + span::before { content: "•"; margin: 0 9px; color: rgb(255 255 255 / .55); font-size: 12px; vertical-align: 1px; }
+html.nfx .nh-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; pointer-events: auto; }
+html.nfx .nh-btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 42px; border: 0; border-radius: 4px;
+  font: 600 17px/1 var(--body); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+html.nfx .nh-btn svg { width: 24px; height: 24px; }
+html.nfx .nh-btn.play { background: #fff; color: #000; }
+html.nfx .nh-btn.play svg { fill: currentColor; stroke: none; width: 26px; height: 26px; }
+html.nfx .nh-btn.list { background: rgb(109 109 110 / .6); color: #fff; }
+html.nfx .nh-btn:active { opacity: .8; }
+html.nfx .hero.nfx-hero + .rows { margin-top: 26px; }
+
+/* ---------- rows: posters, three and a bit across ---------- */
+html.nfx .row { margin: 0 0 26px; }
+html.nfx .row h2 { font: 700 20px/1.2 var(--body); color: #fff; margin: 0 0 10px; padding: 0 12px; letter-spacing: -.005em; text-transform: none; }
+html.nfx .row h2 a { color: inherit; }
+html.nfx .track.poster { grid-auto-columns: 28.2vw; gap: 6px; padding-left: 12px; padding-right: 12px; scroll-padding-left: 12px; }
+html.nfx .track.square { grid-auto-columns: 30vw; gap: 6px; padding-left: 12px; }
+html.nfx .scroll-btn { display: none !important; }
+html.nfx .nfx-card .frame { aspect-ratio: 2 / 3; border-radius: 4px; background: #1c1c1c; }
+html.nfx .nfx-card .frame img { border-radius: 4px; object-fit: cover; width: 100%; height: 100%; }
+html.nfx .nfx-card .card-tools { display: none; }
+html.nfx .nfx-card .new-badge { font-size: 11.5px; padding: 4px 8px; border-radius: 3px 3px 0 0; }
+html.nfx .nfx-card > .nfx-prog { height: 3px; margin-top: 5px; background: #5b5b5b; border-radius: 2px; overflow: hidden; }
+html.nfx .nfx-prog i { display: block; height: 100%; background: #E50914; }
+
+/* Continue Watching: play circle on the poster, the line and ⓘ | ⋮ on a dark strip below */
+html.nfx .nfx-cw { background: #1f1f1f; border-radius: 5px; overflow: hidden; -webkit-touch-callout: none; }
+html.nfx .nfx-cw .frame, html.nfx .nfx-cw .frame img { border-radius: 4px 4px 0 0; }
+html.nfx .nfx-cw.book .frame img { object-fit: cover; }
+html.nfx .nfx-play { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 44px; height: 44px; border-radius: 50%;
+  border: 2px solid #fff; background: rgb(0 0 0 / .42); display: grid; place-items: center; z-index: 2; pointer-events: none; }
+html.nfx .nfx-play svg { width: 20px; height: 20px; fill: #fff; stroke: none; margin-left: 3px; }
+html.nfx .nfx-cw > .nfx-prog { margin: 6px 7px 0; height: 3px; background: #5b5b5b; border-radius: 0; }
+html.nfx .nfx-cw > .nfx-prog { margin-bottom: 7px; }
+
+/* ---------- the tab bar floats: a rounded bar, the chosen tab in a lighter pill ---------- */
+html.nfx .tabbar { position: fixed; z-index: 55; left: 28px; right: 28px; bottom: calc(12px + env(safe-area-inset-bottom)); height: 62px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 5px; border-radius: 32px;
+  background: rgb(40 40 42 / .86); border: 1px solid rgb(255 255 255 / .08); box-shadow: 0 10px 30px rgb(0 0 0 / .5);
+  backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3); }
+html.nfx .tabbar > a, html.nfx .tabbar > button { border-radius: 27px; color: rgb(255 255 255 / .72); font: 500 12.5px/1.1 var(--body); gap: 3px; }
+html.nfx .tabbar svg { width: 25px; height: 25px; }
+html.nfx .tabbar .active { color: #fff; background: rgb(255 255 255 / .15); }
+html.nfx .tabbar .active svg { color: #fff; }
+html.nfx .tabbar .tab-home { order: 1; } html.nfx .tabbar .tab-libs { order: 2; }
+html.nfx .tabbar .tab-search { order: 3; } html.nfx .tabbar .tab-me { order: 4; }
+html.nfx .tabbar .tab-list { display: none; }
+html.nfx .tabbar .avatar { width: 25px; height: 25px; border-radius: 6px; font-size: 13px; }
+html.nfx .tabbar .active .avatar { box-shadow: none; }
+html.nfx .dock, html.nfx .player.mini { bottom: calc(86px + env(safe-area-inset-bottom)); }
+/* library grids, search and My List: posters edge to edge, no names under pictures that show them, no edit tools */
+html.nfx .grid.poster { gap: 8px 6px; }
+html.nfx .grid.poster .card.poster:has(.frame > img) .caption { display: none; }
+html.nfx .card-tools { display: none; }

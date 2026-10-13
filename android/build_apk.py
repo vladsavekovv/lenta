@@ -24,7 +24,7 @@ sys.path.insert(0, HERE)
 from dexwriter import Dex                       # noqa: E402
 from app_code import PKG, VERSION, classes      # noqa: E402
 
-VERSION_CODE = 2
+VERSION_CODE = 7
 MIN_SDK, TARGET_SDK = 26, 34
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 
@@ -34,7 +34,7 @@ ATTR = {"theme": 0x01010000, "label": 0x01010001, "icon": 0x01010002, "name": 0x
         "drawable": 0x01010199, "minSdkVersion": 0x0101020c, "versionCode": 0x0101021b, "versionName": 0x0101021c,
         "windowSoftInputMode": 0x0101022b, "targetSdkVersion": 0x01010270, "allowBackup": 0x01010280,
         "hardwareAccelerated": 0x010102d3, "supportsRtl": 0x010103af, "usesCleartextTraffic": 0x010104ec,
-        "roundIcon": 0x0101052c}
+        "roundIcon": 0x0101052c, "resizeableActivity": 0x010104f6, "supportsPictureInPicture": 0x010104f7}
 THEME_MATERIAL_NO_ACTION_BAR = 0x0103022e      # @android:style/Theme.Material.NoActionBar
 # our resources (resources.arsc below)
 R_COLOR_BG, R_DRAWABLE_FG, R_MIPMAP_ICON = 0x7f010000, 0x7f020000, 0x7f030000
@@ -136,6 +136,7 @@ def manifest() -> bytes:
                          ("package", PKG)], [
         ("uses-sdk", [("android:minSdkVersion", (T_INT_DEC, MIN_SDK)), ("android:targetSdkVersion", (T_INT_DEC, TARGET_SDK))], []),
         ("uses-permission", [("android:name", "android.permission.INTERNET")], []),
+        ("uses-permission", [("android:name", "android.permission.WAKE_LOCK")], []),   # music with the screen off
         ("application", [("android:label", "LENTA"), ("android:icon", (T_REF, R_MIPMAP_ICON)),
                          ("android:roundIcon", (T_REF, R_MIPMAP_ICON)),
                          ("android:theme", (T_REF, THEME_MATERIAL_NO_ACTION_BAR)),
@@ -145,6 +146,8 @@ def manifest() -> bytes:
             ("activity", [("android:name", PKG + ".MainActivity"), ("android:exported", (T_BOOL, 0xFFFFFFFF)),
                           ("android:launchMode", (T_INT_DEC, 2)),                 # singleTask
                           ("android:configChanges", (T_INT_HEX, config_changes)),  # rotating keeps the page
+                          ("android:resizeableActivity", (T_BOOL, 0xFFFFFFFF)),
+                          ("android:supportsPictureInPicture", (T_BOOL, 0xFFFFFFFF)),  # a video goes on in a small window
                           ("android:windowSoftInputMode", (T_INT_HEX, 0x10))], [   # adjustResize
                 ("intent-filter", [], [
                     ("action", [("android:name", "android.intent.action.MAIN")], []),
@@ -292,6 +295,10 @@ def main():
     ap.add_argument("--key", default=os.path.join(HERE, "lenta-release.pem"))
     ap.add_argument("--out", default=os.path.join(HERE, "lenta.apk"))
     args = ap.parse_args()
+    from verify_code import check                 # the same checks Android's verifier makes, before building
+    problems = check(classes())
+    if problems:
+        sys.exit("The app code has errors, nothing was built:\n  " + "\n  ".join(problems))
     read = lambda p: open(os.path.join(HERE, p), "rb").read()
     fg, icon = "res/drawable-xxxhdpi-v4/ic_launcher_foreground.png", "res/mipmap-anydpi-v26/ic_launcher.xml"
     files = [

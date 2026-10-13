@@ -39,13 +39,17 @@ def _set_cookie(response: Response, request: Request, user_id: int) -> None:
                         samesite="lax", secure=request.url.scheme == "https", path="/")
 
 
+def _theme(name: str) -> str:
+    return "netflix" if name == "redline" else name            # Redline was renamed to Netflix
+
+
 @router.get("/server")
 def server_info(request: Request, response: Response):
     response.headers["Access-Control-Allow-Origin"] = "*"      # the Samsung TV app checks the address from its own page
     setup_required = auth.user_count() == 0
     info = {"name": get_setting("server_name"), "version": VERSION, "setup_required": setup_required,
             "signed_in": auth.user_from_request(request) is not None,
-            "theme": get_setting("default_theme") or "projector"}
+            "theme": _theme(get_setting("default_theme") or "projector")}
     if not setup_required and get_setting("show_users_on_login") == "1":
         with db() as con:
             info["users"] = [{"username": r["username"], "color": r["color"]}

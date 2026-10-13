@@ -7,7 +7,7 @@ import { onCleanup, openTrailer, stageHtml, startExtras, startHomeTrailer, stopH
 import { openSubtitleDialog } from './subtitles.js';
 import {
   $, $$, cardFor, channels, esc, fmtBytes, fmtRuntime, fmtTime, genPoster, html, icon, img, itemHref, lang, mount,
-  popMenu, posterCard, raw, row, squareCard, landscapeCard, toast, modal, wideArt,
+  popMenu, posterCard, raw, row, squareCard, landscapeCard, toast, modal, wideArt, nfx,
 } from './ui.js';
 
 const view = () => $('#view');
@@ -77,8 +77,31 @@ export function tintFromPicture(url) {
   im.src = url;
 }
 
+// Phones (Netflix): the Netflix app's billboard — a framed card with the poster, the logo, a line of tags and
+// two buttons side by side, white Play and grey My List. The picture opens the title's page.
+function nfxHero(h) {
+  const art = h.poster || h.backdrop || h.thumb;
+  const genres = Array.isArray(h.genres) ? h.genres.slice(0, 3) : [];
+  const tags = [h.kind === 'show' ? 'Series' : 'Movie', ...genres];
+  const label = !h.play ? 'Play' : h.play.action === 'resume' ? 'Resume'
+    : h.play.action === 'start' && h.kind === 'movie' ? 'Play Movie' : playLabel(h.play);
+  return html`<section class="hero nfx-hero" data-art="${img(art, 342)}">
+    <a class="nh-link" href="#/item/${h.id}" aria-label="${h.title}">
+      <div class="art" style="background-image:url('${img(art, 780)}')"></div></a>
+    <div class="hero-body nh-body">
+      ${h.logo ? html`<img class="logo" src="${img(h.logo, 780)}" alt="${h.title}">` : html`<h1 class="marquee">${h.title}</h1>`}
+      <div class="nh-tags">${tags.map(t => html`<span>${t}</span>`)}</div>
+      <div class="nh-actions">
+        ${h.play ? html`<a class="nh-btn play" href="#/play/${h.play.item_id}">${icon('play')}<span>${label}</span></a>` : ''}
+        <button type="button" class="nh-btn list ${h.in_watchlist ? 'on' : ''}" data-hero-list="${h.id}" aria-pressed="${h.in_watchlist ? 'true' : 'false'}">
+          ${icon(h.in_watchlist ? 'check' : 'plus')}<span>My List</span></button>
+      </div>
+    </div></section>`;
+}
+
 function hero(h) {
   if (!h) return '';
+  if (nfx()) return nfxHero(h);
   const art = h.backdrop || h.thumb;
   return html`<section class="hero" data-art="${img(art, 1920)}">
     <div class="art" style="background-image:url('${img(art, 1920)}')"></div>
@@ -114,7 +137,7 @@ async function home() {
   document.body.classList.add('home-page');
   onCleanup(() => document.body.classList.remove('home-page'));
   if (data.hero) tintFromPicture(document.querySelector('.hero')?.dataset.art);
-  startHomeTrailer(data.hero);
+  if (!nfx()) startHomeTrailer(data.hero);          // the phone billboard is a still card, like the app's
   if (data.hero) rotateBanner(data.hero);
 }
 
@@ -149,10 +172,128 @@ function rotateBanner(first) {
       cur.classList.remove('trailer-on');
       tintFromPicture(cur.dataset.art);
       requestAnimationFrame(() => cur.classList.remove('swapping'));
-      startHomeTrailer(next);
+      if (!nfx()) startHomeTrailer(next);
     } catch { /* try again next time */ } finally { busy = false; }
   }, 1000);
   onCleanup(() => { clearInterval(tick); io.disconnect(); });
+}
+
+// The phone billboard's My List button
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-hero-list]');
+  if (!b) return;
+  e.preventDefault();
+  const id = Number(b.dataset.heroList), on = !b.classList.contains('on');
+  try {
+    await api.post(`/api/items/${id}/watchlist`, { on });
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    mount(b, html`${icon(on ? 'check' : 'plus')}<span>My List</span>`);
+    toast(on ? 'Added to My List' : 'Removed from My List');
+  } catch (ex) { toast(ex.message, 'error'); }
+});
+
+// A long press on a Continue Watching poster (phones, Netflix): details, start again, My List, mark as watched.
+function wireNfxPress() {
+  let timer = 0, until = 0, card = null;
+  document.addEventListener('pointerdown', (e) => {
+    card = nfx() ? e.target.closest('.nfx-cw') : null;
+    if (!card) return;
+    timer = setTimeout(() => {
+      until = Date.now() + 700;            // lifting the finger must not play the title or close the menu again
+      navigator.vibrate?.(10);
+      nfxCardMenu(card, Number(card.dataset.id));
+    }, 500);
+  });
+  const stop = () => clearTimeout(timer);
+  ['pointerup', 'pointercancel', 'pointerleave', 'pointermove'].forEach(t => document.addEventListener(t, stop));
+  document.addEventListener('click', (e) => { if (Date.now() < until) { e.preventDefault(); e.stopPropagation(); } }, true);
+  document.addEventListener('contextmenu', (e) => {
+    const c = nfx() ? e.target.closest('.nfx-cw') : null;
+    if (!c) return;
+    e.preventDefault();
+    nfxCardMenu(c, Number(c.dataset.id));
+  });
+}
+wireNfxPress();
+
+async function nfxCardMenu(b, id) {
+  {
+  let d;
+  try { d = await api.get(`/api/items/${id}`); } catch (ex) { return toast(ex.message, 'error'); }
+  const listId = d.kind === 'episode' ? d.show_id : d.id;
+  const inList = d.kind === 'episode' ? null : d.in_watchlist;
+  popMenu(b, [
+    { heading: d.kind === 'episode' ? `${d.show_title || ''} · S${d.season}:E${d.index ?? '?'}` : d.title },
+    { label: d.kind === 'episode' ? 'Episodes & info' : 'Details & info', action: () => { location.hash = itemHref(d); } },
+    ...(d.kind === 'book' ? [] : [{ label: 'Play from the beginning', action: () => { location.hash = `#/play/${d.id}?restart=1`; } }]),
+    ...(inList === null ? [] : [{ label: inList ? 'Remove from My List' : 'Add to My List', action: async () => {
+      await api.post(`/api/items/${listId}/watchlist`, { on: !inList });
+      toast(inList ? 'Removed from My List' : 'Added to My List');
+    } }]),
+    { label: 'Mark as watched (remove from row)', action: async () => {
+      await api.post(`/api/items/${d.id}/watched`, { watched: true });
+      refreshView();
+    } },
+    ...(state.user?.is_admin ? [{ sep: true }, ...adminItemMenu(d)] : []),
+  ]);
+  }
+}
+
+// ---------------------------------------------------------------- live tv
+/** A Live TV library: the channels the tuners and playlists found, in the provider's own order. */
+/** "20:30 - 21:30" in the viewer's own clock. Broadcast times are UTC; this is the only place that
+ *  reliably knows what the viewer's clock says, so the conversion belongs here rather than on the server. */
+function slot(p) {
+  const t = (s) => new Date(s * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${t(p.start)} - ${t(p.stop)}`;
+}
+
+/** How far through a programme we are, 0 to 1 — the line under the artwork. */
+function through(p, at) {
+  const span = p.stop - p.start;
+  return span > 0 ? Math.max(0, Math.min(1, (at - p.start) / span)) : 0;
+}
+
+async function liveTvLibrary(lib) {
+  const [{ channels }, guide] = await Promise.all([
+    api.get('/api/livetv/channels'),
+    // The guide is a nicety: a tuner that has never been watched has none yet, and the page is no
+    // worse than it was before it existed. So a failure here must not take the channel list with it.
+    api.get('/api/livetv/epg/now').catch(() => ({ at: Date.now() / 1000, channels: {} })),
+  ]);
+  const groups = [...new Set(channels.map(c => c.provider || c.source))];
+  mount(view(), html`<div class="page">
+    <div class="page-head"><div><div class="page-sub">Live TV</div><h1 class="page-title">${lib.name}</h1></div>
+      <a class="btn" href="#/guide">${icon('rows')}What's on</a></div>
+    ${channels.length ? html`
+      ${groups.length > 1 ? html`<div class="tv-groups">${groups.map(g => html`<span class="pill">${g}</span>`)}</div>` : ''}
+      <div class="tv-grid">${channels.map(c => {
+        const on = guide.channels?.[c.id]?.now;
+        const after = guide.channels?.[c.id]?.next;
+        return html`<button type="button" class="tv-card" data-ch="${c.id}"
+            title="${on ? `${on.title} · ${slot(on)}${after ? `\nNext: ${after.title}` : ''}` : c.name}">
+          <div class="tv-card-art"><img src="/api/livetv/channels/${c.id}/logo" alt="" loading="lazy">
+            ${c.number != null ? html`<span class="tv-card-no">${c.number}</span>` : ''}
+            ${on ? html`<span class="tv-prog"><i style="width:${(through(on, guide.at) * 100).toFixed(1)}%"></i></span>` : ''}</div>
+          <div class="tv-card-name">${c.name}</div>
+          <div class="tv-card-sub">${on ? on.title : [c.provider || c.source, c.kind === 'radio' ? 'Radio' : '']
+            .filter((x, i, all) => x && all.indexOf(x) === i).join(' · ')}</div>
+          ${on ? html`<div class="tv-card-when">${slot(on)}</div>` : ''}
+        </button>`;
+      })}</div>
+      ${state.user?.is_admin ? html`<p class="lead" style="margin-top:28px">Channels are found and arranged in
+        <a href="#/settings/livetv">Settings › Live TV</a>.</p>` : ''}`
+      : html`<div class="empty"><h3>No channels yet</h3>
+        <p>${state.user?.is_admin
+          ? html`Plug in a USB tuner — LENTA finds it by itself and scans it — or add a playlist in <a href="#/settings/livetv">Settings › Live TV</a>.`
+          : 'An administrator hasn\'t set up any channels yet.'}</p></div>`}
+  </div>`);
+  // One tuner input per channel, so a channel can take a few seconds to come on: say so rather than
+  // leaving a card that looks ignored.
+  $$('[data-ch]').forEach(card => card.addEventListener('click', () => {
+    location.hash = `#/play/live/${card.dataset.ch}`;
+  }));
 }
 
 // ---------------------------------------------------------------- library
@@ -235,11 +376,12 @@ function tableRow(i, group) {
 async function library(id, q) {
   const lib = state.libraries.find(l => l.id === id);
   if (!lib) throw new Error('That library does not exist or is not shared with you.');
+  if (lib.kind === 'livetv') return liveTvLibrary(lib);
   const group = lib.kind === 'music' ? 'music' : lib.kind === 'audiobooks' ? 'books' : lib.kind === 'photos' ? 'photos' : 'video';
   const sort = q.get('sort') || (group === 'photos' ? 'release' : 'added');
   const filter = q.get('filter') || '';
   const genre = q.get('genre') || '';
-  const style = lib.kind === 'music' || lib.kind === 'audiobooks' ? 'square' : lib.kind === 'photos' ? 'landscape' : (wideArt() ? 'landscape' : 'poster');
+  const style = lib.kind === 'music' || lib.kind === 'audiobooks' ? 'square' : lib.kind === 'photos' ? 'landscape' : (wideArt() && !nfx() ? 'landscape' : 'poster');
   const mode = group === 'photos' ? 'grid' : (state.prefs?.library_view || 'grid');
   const zoom = Math.min(7, Math.max(1, Number(state.prefs?.library_zoom || 4)));
   const render = (items) => items.map(i => mode === 'detail' ? detailRow(i, group) : mode === 'table' ? tableRow(i, group)
@@ -881,7 +1023,7 @@ async function search(q) {
     const nothing = !r.titles.length && !r.episodes.length && !r.tracks.length && !r.people.length;
     mount(out, html`
       ${nothing ? html`<div class="empty"><h3>Nothing matches "${term}"</h3><p>Check the spelling, or search for an actor, an episode or a song.</p></div>` : ''}
-      ${video.length ? html`<h2 class="section-title" style="margin:0 0 14px">Movies and shows</h2><div class="grid ${wideArt() ? 'landscape' : 'poster'}" style="margin-bottom:40px">${video.map(i => posterCard(i, { captioned: true }))}</div>` : ''}
+      ${video.length ? html`<h2 class="section-title" style="margin:0 0 14px">Movies and shows</h2><div class="grid ${wideArt() && !nfx() ? 'landscape' : 'poster'}" style="margin-bottom:40px">${video.map(i => posterCard(i, { captioned: true }))}</div>` : ''}
       ${r.people.length ? html`<h2 class="section-title" style="margin:0 0 14px">People</h2><div class="people-list" style="margin-bottom:40px">${r.people.map(p => html`
         <a class="person" href="#/person?name=${encodeURIComponent(p.name)}">${p.profile ? html`<img src="${img(p.profile, 185)}" alt="">` : html`<span class="ph">${p.name[0]}</span>`}
         <span><div class="n">${p.name}</div><div class="c">${p.count} title${p.count === 1 ? '' : 's'}</div></span></a>`)}</div>` : ''}
@@ -908,7 +1050,7 @@ async function person(name) {
     <div class="page-head"><div style="display:flex;gap:22px;align-items:center">
       ${d.profile ? html`<img src="${img(d.profile, 185)}" alt="" style="width:96px;height:96px;border-radius:50%;object-fit:cover">` : ''}
       <div><h1 class="page-title">${d.name}</h1><div class="page-sub">${d.items.length} title${d.items.length === 1 ? '' : 's'} on this server</div></div></div></div>
-    <div class="grid ${wideArt() ? 'landscape' : 'poster'}">${d.items.map(i => posterCard(i, { captioned: true, sub: [i.character ? `as ${i.character}` : '', ...(i.roles || [])].filter(Boolean).join(' · ') || i.year }))}</div></div>`);
+    <div class="grid ${wideArt() && !nfx() ? 'landscape' : 'poster'}">${d.items.map(i => posterCard(i, { captioned: true, sub: [i.character ? `as ${i.character}` : '', ...(i.roles || [])].filter(Boolean).join(' · ') || i.year }))}</div></div>`);
 }
 
 // My list: the same pictures as on Home, but static (no previews or trailers on hover) and editable:
@@ -918,7 +1060,7 @@ async function mylist() {
   const count = (n) => `${n} saved`;
   mount(view(), html`<div class="page mylist-page">
     <div class="page-head"><div><h1 class="page-title">My list</h1><div class="page-sub" id="ml-count">${count(items.length)}</div></div></div>
-    ${items.length ? html`<div class="grid ${wideArt() ? 'landscape' : 'poster'} no-preview" id="ml-grid">${items.map(i => i.kind === 'album' || i.kind === 'book' ? squareCard(i) : posterCard(i, { captioned: true }))}</div>`
+    ${items.length ? html`<div class="grid ${wideArt() && !nfx() ? 'landscape' : 'poster'} no-preview" id="ml-grid">${items.map(i => i.kind === 'album' || i.kind === 'book' ? squareCard(i) : posterCard(i, { captioned: true }))}</div>`
       : html`<div class="empty"><h3>Your list is empty</h3><p>Use the My list button on any movie or show to keep it here for later.</p></div>`}
     <div class="ml-bar" id="ml-bar" hidden>
       <span class="ml-n" id="ml-n"></span>
@@ -989,4 +1131,83 @@ async function mylist() {
   });
 }
 
-export const views = { home, library, item, search, person, mylist };
+// ---------------------------------------------------------------- the guide
+/** What is on, channels down and time across — the page a TV guide has always been.
+ *
+ *  Programmes are laid out by their real times rather than one box per slot, because a broadcast
+ *  schedule is not a grid: a film runs two hours while the news either side of it runs fifteen minutes,
+ *  and a guide that pretends otherwise lies about when things start.
+ */
+async function guide(query) {
+  const hours = 4;
+  const startOf = (t) => { const d = new Date(t); d.setMinutes(d.getMinutes() < 30 ? 0 : 30, 0, 0); return d; };
+  let from = Number(query.get('t')) || startOf(Date.now()).getTime() / 1000;
+  const draw = async () => {
+    let data;
+    try { data = await api.get(`/api/livetv/epg?start=${Math.round(from)}&hours=${hours}`); }
+    catch (ex) { mount(view(), html`<div class="page"><div class="empty"><h3>The guide didn't load</h3>
+      <p>${ex.message}</p></div></div>`); return; }
+    const span = data.stop - data.start;
+    const withAny = data.channels.filter(c => c.programmes.length);
+    const ticks = [];
+    for (let t = data.start; t < data.stop; t += 1800) ticks.push(t);
+    const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const at = Date.now() / 1000;
+    mount(view(), html`<div class="page guide-page">
+      <div class="page-head"><div><div class="page-sub">Live TV</div><h1 class="page-title">Guide</h1></div>
+        <div class="guide-nav">
+          <button class="btn small" data-go="-1">${icon('back')}Earlier</button>
+          <button class="btn small" data-go="0">Now</button>
+          <button class="btn small" data-go="1">Later${icon('next')}</button>
+        </div></div>
+      ${withAny.length ? html`
+        <p class="lead">${new Date(data.start * 1000).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}
+          · ${withAny.length} of ${data.channels.length} channels have a guide so far.</p>
+        <div class="guide-grid" style="--hours:${hours}">
+          <div class="guide-times"><div class="guide-corner"></div>
+            <div class="guide-scale">${ticks.map(t => html`<span class="guide-tick"
+              style="left:${((t - data.start) / span * 100).toFixed(3)}%">${clock(t)}</span>`)}
+              ${at > data.start && at < data.stop
+                ? html`<span class="guide-now" style="left:${((at - data.start) / span * 100).toFixed(3)}%"></span>` : ''}</div></div>
+          ${withAny.map(c => html`<div class="guide-row">
+            <a class="guide-ch" href="#/play/live/${c.id}" title="Watch ${c.name}">
+              <img src="/api/livetv/channels/${c.id}/logo" alt="" loading="lazy"><span>${c.name}</span></a>
+            <div class="guide-lane">
+              ${at > data.start && at < data.stop
+                ? html`<span class="guide-now" style="left:${((at - data.start) / span * 100).toFixed(3)}%"></span>` : ''}
+              ${c.programmes.map(p => {
+                const l = Math.max(0, (p.start - data.start) / span);
+                const r = Math.min(1, (p.stop - data.start) / span);
+                return html`<button type="button" class="guide-prog ${p.start <= at && p.stop > at ? 'on' : ''}"
+                  style="left:${(l * 100).toFixed(3)}%;width:${((r - l) * 100).toFixed(3)}%"
+                  data-prog="${c.id}" data-title="${p.title}" data-when="${slot(p)}"
+                  data-sum="${p.summary || ''}" data-desc="${p.description || ''}">
+                  <b>${p.title}</b><small>${clock(p.start)}</small></button>`;
+              })}
+            </div></div>`)}
+        </div>`
+        : html`<div class="empty"><h3>No guide yet</h3>
+          <p>The guide arrives with the picture rather than from a website. Watch a channel for a minute
+            or two and the guide for every channel on its multiplex fills itself in — LENTA also tunes
+            the others whenever a tuner input is spare.</p></div>`}
+    </div>`);
+    $$('[data-go]').forEach(b => b.addEventListener('click', () => {
+      const d = Number(b.dataset.go);
+      from = d === 0 ? startOf(Date.now()).getTime() / 1000 : from + d * hours * 3600;
+      draw();
+    }));
+    // A programme is worth a closer look: the grid can only ever show a title and a time.
+    $$('[data-prog]').forEach(b => b.addEventListener('click', () => {
+      const d = b.dataset;
+      const m = modal(html`<h2>${d.title}</h2>
+        <p class="lead">${d.when}${d.sum ? ` · ${d.sum}` : ''}</p>
+        ${d.desc ? html`<p>${d.desc}</p>` : ''}
+        <div class="foot"><button type="button" class="btn" data-close>Close</button>
+          <a class="btn primary" href="#/play/live/${d.prog}">Watch the channel</a></div>`);
+      m.box.querySelector('a.primary').addEventListener('click', () => m.close());
+    }));
+  };
+  await draw();
+}
+
+export const views = { home, library, item, search, person, mylist, guide };

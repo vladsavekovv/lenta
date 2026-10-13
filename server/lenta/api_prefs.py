@@ -7,7 +7,8 @@ from .db import db, get_setting
 
 router = APIRouter(prefix="/api")
 
-THEMES = ["projector", "noir", "abyss", "velvet", "aurora", "redline"]
+THEMES = ["projector", "noir", "abyss", "velvet", "aurora", "netflix", "hbo"]
+THEME_RENAMED = {"redline": "netflix"}      # Redline was renamed to Netflix in 1.3.1
 SUBTITLE_MODES = ["off", "forced", "always", "foreign"]   # foreign = only when the audio isn't in my language
 TRAILER_MODES = ["off", "button", "background", "background_sound"]
 HOME_TRAILER_MODES = ["off", "muted", "sound"]
@@ -46,6 +47,8 @@ PREF_DEFAULTS = {
 
 def _validate(key: str, value) -> str:
     v = "" if value is None else str(value).strip()
+    if key == "theme" and v:
+        v = THEME_RENAMED.get(v, v)                 # an older page may still send the old name
     if key == "theme" and v and v not in THEMES:
         raise HTTPException(400, "Unknown theme")
     if key in ("audio_lang", "subtitle_lang") and v and v not in languages.CODES:
@@ -119,6 +122,7 @@ def get_prefs(user_id: int) -> dict:
         for r in con.execute("SELECT key, value FROM user_prefs WHERE user_id = ?", (user_id,)):
             if r["key"] in prefs:
                 prefs[r["key"]] = r["value"]
+    prefs["theme"] = THEME_RENAMED.get(prefs["theme"], prefs["theme"])
     if prefs["theme"] not in THEMES:
         prefs["theme"] = get_setting("default_theme") or "projector"
     return prefs
