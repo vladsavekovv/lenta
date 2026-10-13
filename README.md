@@ -8,7 +8,7 @@
   Created with the idea to give us more power and flexibility than Plex and Jellyfin.
 </p>
 
-https://github.com/user-attachments/assets/fd15839a-c3be-4ab5-9f9b-38d438728136
+https://github.com/user-attachments/assets/ecd20a9b-4fea-4781-9b54-c5688e15229c
 
 <p align="center">
   <img alt="Version" src="https://img.shields.io/badge/version-1.8.17-8a5cf6">
