@@ -1,4 +1,4 @@
-# LENTA on a Samsung TV
+# LENTA on a Samsung TV (WORK IN PROGRESS)
 
 There are two ways to watch LENTA on a Samsung TV. Both use the same LENTA server and need a TV from
 **2017 or newer** (Tizen 3.0 and later). TVs up to 2022 have an older web engine; LENTA notices that and sends them
