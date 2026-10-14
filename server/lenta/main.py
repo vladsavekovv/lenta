@@ -9,8 +9,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import (about, api_admin, api_auth, api_editor, api_extras, api_library, api_livetv, api_network, api_playback,
-               api_prefs, api_subtitles, epg, intros, livestream, livetv, logs, scanner, trailers, transcode,
-               trickplay, watcher)
+               api_prefs, api_streaming, api_subtitles, epg, intros, livestream, livetv, logs, scanner,
+               streaming, trailers, transcode, trickplay, watcher)
 from .config import APP_NAME, VERSION, WEB_DIR, ensure_dirs
 from .db import get_setting, init_db
 
@@ -37,6 +37,8 @@ async def _scheduled_scans() -> None:
             trickplay.start()
         if minutes == 4:                             # intro detection for TV shows
             intros.start()
+        if minutes == 5 or minutes % 720 == 0:       # what the streaming services are showing: twice a day
+            streaming.request_refresh()              # (the fetch itself only runs when a day has passed)
         try:
             interval = int(get_setting("scan_interval_minutes") or 0)
         except ValueError:
@@ -77,6 +79,8 @@ app.include_router(api_extras.router)
 app.include_router(about.router)
 app.include_router(api_editor.router)
 app.include_router(api_network.router)
+app.include_router(api_streaming.router)
+app.include_router(api_streaming.read)
 app.include_router(api_network.public)
 app.include_router(api_livetv.router)
 app.include_router(api_livetv.read)

@@ -40,6 +40,7 @@ PREF_DEFAULTS = {
     "home_banner_interval": "60",    # seconds before the banner moves to another title; 0 = never
     "intro_skip": "button",
     "trailer_skip": "0",             # seconds cut from the start of trailers (the green "approved for appropriate audiences" card)          # TV intros: off | button ("Skip intro") | auto (skipped by itself)
+    "tv_key_watch": "0",             # televisions: show the number each remote key sends (for diagnosing one)
     "theme_music": "1",
     "theme_music_volume": "0.35",
 }

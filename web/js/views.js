@@ -5,6 +5,7 @@ import { playTracks, currentTrackId, playBook, currentBookId, bookPosition, jump
 import { adminItemMenu, libraryMenu } from './admin.js';
 import { onCleanup, openTrailer, stageHtml, startExtras, startHomeTrailer, stopHomeTrailer, wireStage } from './extras.js';
 import { openSubtitleDialog } from './subtitles.js';
+import { tvMode } from './tv.js';
 import {
   $, $$, cardFor, channels, esc, fmtBytes, fmtRuntime, fmtTime, genPoster, html, icon, img, itemHref, lang, mount,
   popMenu, posterCard, raw, row, squareCard, landscapeCard, toast, modal, wideArt, nfx,
@@ -133,12 +134,22 @@ async function home() {
       ${state.user.is_admin ? html`<a class="btn" href="#/settings/dashboard">See scan progress</a>` : ''}</div></div>`);
     return;
   }
-  mount(view(), html`${hero(data.hero)}<div class="rows" ${data.hero ? '' : raw('style="padding-top:40px"')}>${data.rows.map(row)}</div>`);
+  // A streaming row's whole purpose is to open somebody else's app in a new tab, which a television
+  // cannot usefully do: Tizen has no second tab to open and no browser to return from. Rather than
+  // show cards that go nowhere, the rows are left off there. (Launching the set's own Netflix app by
+  // id would be the right answer, and is a job of its own.)
+  const rows = tvMode() ? data.rows.filter(r => r.items[0]?.kind !== 'streaming') : data.rows;
+  if (!rows.length) return mount(view(), html`<div class="page"><div class="empty"><h3>Nothing to show yet</h3></div></div>`);
+  mount(view(), html`${hero(data.hero)}<div class="rows" ${data.hero ? '' : raw('style="padding-top:40px"')}>${rows.map(row)}</div>`);
   document.body.classList.add('home-page');
   onCleanup(() => document.body.classList.remove('home-page'));
-  if (data.hero) tintFromPicture(document.querySelector('.hero')?.dataset.art);
-  if (!nfx()) startHomeTrailer(data.hero);          // the phone billboard is a still card, like the app's
-  if (data.hero) rotateBanner(data.hero);
+  // A television gets the banner as a still picture and leaves it there. The tint re-downloads the
+  // artwork to read its colour off a canvas; the rotation redraws the whole of Home every minute,
+  // which on a TV is a visible stutter and throws away wherever the remote had got to. Neither is
+  // worth what it costs there, and the trailer behind it cost more than both (see extras.js).
+  if (data.hero && !tvMode()) tintFromPicture(document.querySelector('.hero')?.dataset.art);
+  if (!nfx() && !tvMode()) startHomeTrailer(data.hero);   // the phone billboard is a still card, like the app's
+  if (data.hero && !tvMode()) rotateBanner(data.hero);
 }
 
 // The banner moves to another random title (from the libraries chosen in Settings › Home screen)
@@ -147,6 +158,10 @@ async function home() {
 function rotateBanner(first) {
   const every = Number(state.prefs?.home_banner_interval ?? 60);
   if (!every) return;
+  // Says plainly that the banner is on a timer, so a test can see it rather than wait a minute to find
+  // out. Cleared when the page goes.
+  document.documentElement.dataset.bannerRotating = '1';
+  onCleanup(() => delete document.documentElement.dataset.bannerRotating);
   const shown = [first.id];
   let elapsed = 0, busy = false, inView = true;
   const el = () => document.querySelector('.hero');

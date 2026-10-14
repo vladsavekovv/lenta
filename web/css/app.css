@@ -1831,3 +1831,102 @@ tr.tv-hidden { opacity: .45; }
    between an image and a placeholder — it shows what it is given. */
 .tv-logo { width: 28px; height: 28px; object-fit: contain; vertical-align: middle; margin-right: 10px;
            border-radius: 5px; background: var(--bg-3); }
+
+/* =====================================================================================
+   Streaming service rows — titles on Netflix, Max and the rest, which are not ours
+   ===================================================================================== */
+/* A card that leaves LENTA should look like one. The service's own mark sits on the picture so there
+   is never a moment where somebody thinks this is a file they have, and the row carries the credit
+   JustWatch's data is given to us on. */
+.row h2 .row-credit {
+  margin-left: 10px; font: 400 11px/1 var(--body); letter-spacing: .02em;
+  color: var(--text-soft); opacity: .65; vertical-align: middle; text-transform: none;
+}
+.card.streaming .frame { position: relative; }
+/* In the landscape style the service's mark would otherwise sit under a wide, bright picture; it keeps
+   the same corner but gets something to stand on. */
+.card.landscape.streaming .sv-logo { width: 24px; height: 24px; border-radius: 5px; }
+.card.streaming .sv-logo {
+  position: absolute; left: 8px; bottom: 8px; width: 28px; height: 28px; border-radius: 6px;
+  object-fit: cover; box-shadow: 0 2px 8px rgb(0 0 0 / .5); background: #000;
+}
+.card.streaming .sv-name {
+  position: absolute; left: 8px; bottom: 8px; padding: 3px 7px; border-radius: 5px;
+  background: rgb(0 0 0 / .72); color: #fff; font: 700 11px/1 var(--body);
+}
+/* The one piece of chrome that is worth its pixels: it tells you the click leaves. */
+.card.streaming .frame-link::after {
+  content: ''; position: absolute; right: 8px; top: 8px; width: 20px; height: 20px; border-radius: 5px;
+  background: rgb(0 0 0 / .6) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/%3E%3Cpolyline points='15 3 21 3 21 9'/%3E%3Cline x1='10' y1='14' x2='21' y2='3'/%3E%3C/svg%3E") center / 12px no-repeat;
+  opacity: 0; transition: opacity .15s;
+}
+.card.streaming:hover .frame-link::after, .card.streaming .frame-link:focus::after { opacity: 1; }
+
+/* Settings › Streaming services: pick the ones you pay for */
+.sv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 12px; }
+.sv-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer;
+  border: 1px solid rgb(var(--text-rgb) / .12); border-radius: 10px; background: rgb(var(--text-rgb) / .03);
+}
+.sv-item:hover { border-color: rgb(var(--text-rgb) / .26); }
+.sv-item.on { border-color: var(--accent); background: rgb(var(--text-rgb) / .07); }
+.sv-item img, .sv-item .sv-blank { width: 32px; height: 32px; border-radius: 7px; object-fit: cover; flex: none; background: rgb(var(--text-rgb) / .1); }
+.sv-item .sv-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sv-langs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.sv-lang {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; cursor: pointer;
+  border: 1px solid rgb(var(--text-rgb) / .14); border-radius: 999px; font-size: 13px;
+}
+.sv-lang i { font-style: normal; font-size: 11px; color: var(--text-soft); opacity: .7; }
+.sv-lang.off { border-color: rgb(var(--text-rgb) / .34); opacity: .55; text-decoration: line-through; }
+.sv-lang:hover { border-color: rgb(var(--text-rgb) / .34); }
+/* The pencil on a streaming tile.
+   Everywhere else on a desktop the card tools are hidden, because a title you own shows its actions in
+   the hover preview instead. A streaming tile has no preview — there is nothing to preview, it is not
+   here — so for these the tools are the only way in and must actually appear. */
+@media (hover: hover) and (pointer: fine) { html:not(.touch) .card.streaming .card-tools { display: flex; } }
+.card.streaming .card-tools { opacity: 0; transition: opacity .15s; justify-content: flex-end; }
+.card.streaming:hover .card-tools, .card.streaming:focus-within .card-tools { opacity: 1; }
+/* bottom right, because bottom left is the service's mark and top right is the leaves-LENTA arrow */
+
+/* =====================================================================================
+   Choosing the picture for a streaming tile — one column, top to bottom
+   =====================================================================================
+   Deliberately not the metadata editor's ed-* styles: those lay a dialog out as a tab rail beside a
+   panel, and this one is a row of choices above a short form. Same look, different shape. */
+.sa-head { padding: 16px 20px 0; }
+.sa-head h3 { margin: 0; font-size: 19px; }
+.sa-body { display: flex; flex-direction: column; gap: 14px; padding: 14px 20px 18px; min-height: 0; }
+.sa-tabs { display: flex; gap: 8px; flex: none; }
+.sa-tab { padding: 7px 18px; border-radius: 999px; border: 1px solid rgb(var(--text-rgb) / .16);
+  background: none; color: var(--text-soft); font: 500 13px var(--body); cursor: pointer; }
+.sa-tab:hover { color: var(--text); border-color: rgb(var(--text-rgb) / .34); }
+.sa-tab.on { border-color: var(--accent); color: var(--text); background: rgb(var(--text-rgb) / .07); }
+/* The pictures scroll; everything below them stays put, so the buttons never wander up the dialog. */
+.sa-grid { display: grid; gap: 10px; overflow-y: auto; min-height: 120px; max-height: 44vh;
+  align-content: start; padding: 2px; }
+.sa-grid.backdrop { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.sa-grid.poster { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.sa-pick { padding: 0; border: 2px solid transparent; border-radius: 8px; background: rgb(var(--text-rgb) / .05);
+  cursor: pointer; overflow: hidden; line-height: 0; }
+/* aspect-ratio keeps every tile the same height before its picture has arrived, so the grid does not
+   jump about as they load one by one. */
+.sa-grid.backdrop .sa-pick { aspect-ratio: 16 / 9; }
+.sa-grid.poster .sa-pick { aspect-ratio: 2 / 3; }
+.sa-pick img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sa-pick:hover, .sa-pick:focus-visible { border-color: var(--accent); outline: none; }
+.sa-rest { flex: none; padding-top: 14px; border-top: 1px solid rgb(var(--text-rgb) / .1); }
+.sa-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 620px) { .sa-fields { grid-template-columns: 1fr; } }
+.sa-fld { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-soft); }
+.sa-fld input[type=url] { padding: 9px 11px; border-radius: 8px; border: 1px solid rgb(var(--text-rgb) / .18);
+  background: rgb(var(--text-rgb) / .04); color: var(--text); font: 400 14px var(--body); }
+.sa-fld input[type=url]:focus { border-color: var(--accent); outline: none; }
+.sa-note { margin: 12px 0 0; font-size: 12px; color: var(--text-soft); opacity: .8; }
+.sa-actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+.sa-actions .sa-gap { flex: 1; }
+/* The service's mark beside a streaming row's name.
+   display:inline-block is the whole point: every img in LENTA is a block by default (line 91), so
+   without this the mark takes a line of its own and sits above the heading instead of beside it. */
+.row h2 .row-logo { display: inline-block; width: 22px; height: 22px; border-radius: 5px;
+  object-fit: cover; vertical-align: -4px; margin-right: 9px; background: rgb(var(--text-rgb) / .08); }

@@ -183,3 +183,20 @@ The script asks for the certificate's password. You can also set it with `CERT_P
   and `sdb` tools. Remove them with `sudo docker rmi vitalets/tizen-webos-sdk` (and `sudo apt remove docker.io`).
 * On the TV: one small app, **LENTA** (`LentaTV001.LENTA`). It contains only a start page that opens your
   server. Remove it like any app: **Apps › LENTA › ⚙ › Delete**.
+
+
+## If a key on the remote does nothing
+
+The sets do not agree about which number a key sends, and Back is the worst of them: 10009 on Samsung,
+461 on LG, and others elsewhere. Rather than guess, ask the set.
+
+Turn it on wherever is easiest — a laptop will do: **Settings › LENTA app › Show what the remote
+sends**. It is saved with your account, so the panel appears on the televisions next time LENTA opens
+there. (The TV's own Internet browser has an address bar and `?keys=1` works there too — but it answers
+about the browser, not about the app, which is where the key is not working.) A small panel appears in
+the corner of the TV. Press the key that is not
+working. The panel shows the number the set sent, the name it gave it, and what LENTA made of it.
+
+That line is the answer. If it says `LENTA reads "Back"` then LENTA understood it and the fault is
+elsewhere; if it shows a number LENTA does not know, that number is what needs adding. Closing the app
+stops the panel; it only appears when you ask for it.

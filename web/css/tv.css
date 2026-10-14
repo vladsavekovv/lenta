@@ -103,3 +103,124 @@ html.tv .player video { will-change: auto !important; filter: none !important; }
 html.tv .rail a:focus,
 html.tv .tabbar a:focus,
 html.tv .rail [tabindex]:focus { outline: 3px solid var(--accent) !important; outline-offset: -3px !important; }
+
+/* ---- 7. the player's settings panel, for a remote and a room ---------------------
+   On a laptop this panel is a neat two-column grid in the lower middle of the screen,
+   read from two feet away with a mouse in your hand. On a television it was the same
+   grid at the same size: thirteen-pixel labels, a column of values a thumb wide, and
+   two-thirds of a 1920-wide screen left empty either side of it. Unreadable from a
+   sofa, and nothing about it said which line the remote was on.
+
+   Worse on a 2017 set, which has no CSS grid: the fallback laid the label/value pairs
+   out in a single row, so the whole panel ran off the side of the screen.
+
+   So on a television it becomes what a television expects — a tall panel down one side,
+   one setting per line, large enough to read across a room, with the line you are on
+   filled in rather than outlined. Laid out with floats rather than a grid, because the
+   oldest sets this client supports have never heard of one. */
+html.tv .ppanel {
+  position: fixed !important; right: 0 !important; top: 0 !important; bottom: 0 !important;
+  left: auto !important; width: 620px !important; max-width: 46vw !important;
+  margin: 0 !important; border-radius: 0 !important;
+  padding: 44px 40px 40px !important;
+  background: #0d0e11 !important;
+  border-left: 1px solid rgb(var(--text-rgb) / .14) !important;
+  overflow-y: auto !important; max-height: none !important;
+  z-index: 6 !important;                      /* above the transport bar, which is 3 */
+  font-size: 22px !important;
+}
+html.tv .ppanel h3,
+html.tv .ppanel h4 { font-size: 32px !important; margin: 0 0 26px !important; text-align: left !important; }
+
+/* Two flexible halves that wrap two to a line. Not a grid, which the oldest sets do not
+   have, and not floats either: a label two lines long and a value one line long drift
+   apart as the panel goes down, and the tick ends up beside the wrong words. On one
+   line of a wrapping flex row they are the same height by definition. */
+html.tv .pset-grid { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important;
+  align-items: stretch !important; gap: 0 !important; }   /* any gap and the two halves no longer fit on one line */
+html.tv .pset-l {
+  box-sizing: border-box !important; flex: 0 0 38% !important; max-width: 38% !important;
+  text-align: left !important; font-size: 22px !important; letter-spacing: 0 !important;
+  text-transform: none !important;        /* sentence case fits the column and reads further away */
+  padding: 22px 12px 22px 0 !important; margin: 0 !important;
+  border-bottom: 1px solid rgb(var(--text-rgb) / .1) !important;
+}
+html.tv .pset-v {
+  box-sizing: border-box !important; flex: 0 0 62% !important; max-width: 62% !important;
+  margin: 0 !important; padding: 12px 0 !important;
+  display: flex !important; align-items: center !important;
+  border-bottom: 1px solid rgb(var(--text-rgb) / .1) !important;
+}
+html.tv .pset-l.off, html.tv .pset-l.off + .pset-v { opacity: .4 !important; }
+
+/* The value is the thing you press, so it is the whole width of its half and reads as a
+   line rather than as a word with an arrow after it. */
+html.tv .pset-dd,
+html.tv .pset-static {
+  display: block !important; width: 100% !important; text-align: left !important;
+  font-size: 22px !important; padding: 12px 14px !important; border-radius: 10px !important;
+  white-space: normal !important;
+}
+html.tv .pset-dd .caret { float: right !important; }
+/* Filled white with the accent around it: the strongest thing a television can draw, and
+   the one that still reads from the back of a room with the lights on. */
+html.tv .pset-dd:focus {
+  background: #fff !important; color: #111 !important; outline: none !important;
+}
+
+/* The offset stepper and the auto-play tick are buttons too: a remote needs to be able
+   to land on them and see that it has. */
+html.tv .pset-offset button,
+html.tv .pset-check { width: 54px !important; height: 54px !important; font-size: 24px !important; }
+html.tv .pset-offset { display: block !important; }
+html.tv .pset-offset b { font-size: 22px !important; padding: 0 14px !important; }
+html.tv .pset-offset button:focus,
+html.tv .pset-check:focus,
+html.tv .ppanel .opt:focus {
+  outline: 3px solid var(--accent) !important; outline-offset: 2px !important;
+}
+
+/* The lists that open from a row — subtitles, audio, the play queue — are the same
+   panel, so they get the same room and the same sized type. */
+html.tv .ppanel .opt {
+  display: block !important; width: 100% !important; text-align: left !important;
+  font-size: 22px !important; padding: 14px 16px !important; border-radius: 10px !important;
+}
+html.tv .ppanel .opt.sel { background: rgb(var(--text-rgb) / .12) !important; }
+
+/* The list that opens when you press OK on a row — and the same list on a library page's
+   genre or sort box. It was a mouse's drop-down: sixteen-pixel lines in a box the width
+   of a thumb, next to a panel built for a room. */
+html.tv .menu { min-width: 360px !important; max-width: 46vw !important; padding: 10px !important; }
+html.tv .menu button {
+  font-size: 22px !important; padding: 14px 18px !important; border-radius: 10px !important;
+}
+html.tv .menu button:focus {
+  background: #fff !important; color: #111 !important; outline: none !important;
+}
+html.tv .menu .menu-head { font-size: 18px !important; padding: 10px 18px !important; }
+html.tv .menu .menu-hint { font-size: 18px !important; }
+
+/* ---- 8. the ring is white, on every set and in every theme ------------------------
+   The ring used to be painted in the theme's accent. Two things are wrong with that on a
+   television. The accent is a custom property, and the sets that have never heard of one are
+   served the plain fallback the stylesheet was built with — which is the default theme's amber,
+   whatever theme is actually chosen. So a 2017 Samsung drew a yellow ring over a Netflix-red
+   page. And an accent is picked to look right as a word or a small badge, not as the one mark on
+   the screen telling you where you are, over artwork of every possible colour.
+
+   White does that job in every theme and on every engine, and the dark halo keeps it visible on
+   the pale parts of a picture. */
+html.tv a:focus, html.tv button:focus, html.tv input:focus, html.tv select:focus,
+html.tv textarea:focus, html.tv [tabindex]:focus,
+html.tv .rail a:focus, html.tv .tabbar a:focus, html.tv .rail [tabindex]:focus,
+html.tv .player .pbtn:focus, html.tv .seek:focus,
+html.tv .pset-offset button:focus, html.tv .pset-check:focus, html.tv .ppanel .opt:focus {
+  outline-color: #fff !important;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / .65), 0 0 10px rgb(0 0 0 / .5) !important;
+}
+html.tv .card .frame-link:focus .frame::after { border-color: #fff !important; }
+html.tv .card .frame-link:focus + .caption .t,
+html.tv .card:focus-within .caption .t { color: #fff !important; }
+/* A line filled white needs no edge at all: the fill is the signal. */
+html.tv .pset-dd:focus, html.tv .menu button:focus { box-shadow: none !important; outline: none !important; }

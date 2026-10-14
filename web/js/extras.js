@@ -5,6 +5,7 @@ import { state } from './app.js';
 import { musicPlaying } from './music.js';
 import { dockPlaying } from './dock.js';
 import { $, html, icon, img, mount, onPageScroll, pageY } from './ui.js';
+import { tvMode } from './tv.js';
 
 const cleanups = [];
 let pageToken = 0;
@@ -128,7 +129,19 @@ function fader(get, set) {
 }
 
 /** { el, play, pause, setMuted, fadeTo, time, destroy } — onState gets 1 playing, 2 paused, 0 ended (YouTube's codes). */
+/** Whether a trailer should play behind the page at all.
+ *
+ *  Not on a television. A background trailer is a second video decoding while you browse, on a machine
+ *  that is working hard enough to decode one — it is the single most expensive thing Home does. And
+ *  when it fails, which a YouTube embed on a TV often does, the artwork it was meant to replace has
+ *  already been hidden: what is left is an empty panel where the banner should be.
+ *
+ *  A trailer the viewer actually asked for — the Trailer button, which has controls — still plays.
+ */
+export const backgroundTrailers = () => !tvMode();
+
 export function trailerPlayer(key, { muted = true, controls = false, start = 0, onState, onTime, replace = true, onUnavailable, skipLead = true } = {}) {
+  if (!controls && !backgroundTrailers()) return null;
   // Settings › Playback › Media pages › Start trailers after: skip the green "approved for appropriate audiences" card
   if (skipLead) start = Math.max(start, Number(state.prefs?.trailer_skip || 0));
   if (isFileTrailer(key)) {
@@ -290,6 +303,7 @@ class BackgroundTrailer {
         if (s === 1) this.reveal();
         if (s === 0) this.end();
       } });
+      if (!this.player) return;            // a television: the backdrop stays a picture
       host.replaceChildren(this.player.el);
       this.frame = this.player.el;
       this.fallback = setTimeout(() => this.reveal(), 4500);   // in case the player sends no events
@@ -400,6 +414,7 @@ class HomeTrailer {
         if (s === 1) this.reveal();
         if (s === 0) this.end();
       } });
+      if (!this.player) return;            // a television: the banner stays a picture
       layer.append(this.player.el);
       this.hero.querySelector('.art').after(layer);
       this.layer = layer;
@@ -563,6 +578,7 @@ export async function startHomeTrailer(item) {
   if (token !== pageToken || !hero?.isConnected) return;
   if (!data.trailer) return why('no trailer found for this title');
   why(`playing trailer ${data.trailer.key}`);
+  if (!backgroundTrailers()) return why('a television plays the banner as a picture, not a trailer');
   homeTrailer?.destroy();                 // the banner moved on: the previous title's trailer goes
   homeTrailer = new HomeTrailer(hero, data.trailer.key, data.trailer.name, { sound: mode === 'sound', limit: state.prefs?.home_trailer_30 === '1' ? 30 : 0, itemId: item.id });
   homeTrailer.start();

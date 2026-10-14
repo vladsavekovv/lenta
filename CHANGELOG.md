@@ -1,5 +1,350 @@
 # Changelog
 
+## 1.10.13 — The ring, the logo, the controls, and the two columns of Settings
+
+- **The focus ring is white on a television, in every theme and on every set.** It used to be painted
+  in the theme's accent — and an accent is a custom property, so the sets that have never heard of one
+  were served the plain fallback the stylesheet was built with, which is the default theme's amber.
+  A 2017 Samsung drew a yellow ring over a Netflix-red page. White also simply does the job better:
+  an accent is chosen to look right as a word or a badge, not as the one mark on the screen telling
+  you where you are, over artwork of every possible colour. A dark halo keeps it visible on pale
+  pictures, and a line that is filled white needs no edge at all.
+- **The name is level with the menu again.** The menu down the side keeps fourteen pixels under the
+  name to clear the first link. In a bar those fourteen pixels are inside the thing being centred, so
+  the name rode seven pixels high — and the old remedy, a margin on the picture, only halved it.
+- **The player's controls let go in the end.** A mouse keeps them up by resting on them and takes
+  itself away; a remote has nothing to rest and nothing to take away, so since 1.10.9 they stayed on
+  the picture for the whole film. They now get a longer run while the ring is on them and are then let
+  go, with the ring taken off them. ▲ or ▼ brings both back at once.
+- **Settings behaves like two columns, because it is two columns.** The list of settings pages down
+  the left now works like the menu: ▲ ▼ walk it, ▶ leaves it for the panels, ◀ comes back to it. What
+  made it feel strange was a ▼ halfway down a panel slipping sideways into that list, simply because
+  the next thing below happened to be four pixels nearer over there.
+
+## 1.10.12 — A great deal less work for every press of the remote
+
+- **One press of an arrow now asks the engine about seventeen things instead of four hundred.** Working
+  out where the ring goes next means comparing where it is against where everything else is, and asking
+  the engine where something is forces it to lay the whole page out before it can answer. That was the
+  single biggest cost of the remote, and most of it was wasted: ◀ ▶ along a row of pictures can only
+  ever end on another picture in that row, ▲ ▼ can only end in a row near this one, and the menu is
+  only in the reckoning when the press is trying to reach it. So each press now measures the block the
+  ring is standing in and its neighbours, and the menu only when it might be the answer.
+- **Holding the key down costs far less than it did.** A remote sends about twenty presses a second,
+  and each one used to be a full round of questions and its own scroll. Nothing about the page changes
+  while the ring crosses it, so a burst is now worked through on one frame from one set of
+  measurements, and the page is scrolled once at the end. Eight presses with no pause: 61 questions and
+  one scroll, where before it was a thousand questions and eight scrolls.
+- **One scroll per press instead of two.** Bringing the ring into view asked for the nearest position,
+  measured where that had put it, and then often scrolled again to centre it — two layouts and two
+  repaints for one press. The same question is answered before scrolling at all.
+- **The banner is now a row like any other**: ◀ ▶ walk its own buttons and stop at the end of them,
+  rather than leaping into the pictures below.
+- The tests measure all of this rather than describing it: at most a fifth of the page measured for one
+  press, a burst costing less per press than a single press does, and the page scrolled once for eight.
+
+## 1.10.11 — Playback settings, built for a room rather than a desk
+
+- **The player's settings panel is now a television's panel.** It was the laptop's: a two-column grid
+  in the lower middle of the screen, thirteen-pixel labels, a column of values a thumb wide, and
+  two-thirds of a 1920-wide screen left empty either side of it. Nothing about it said which line the
+  remote was on. On a 2017 set it was worse — those engines have no CSS grid, so the label and value
+  pairs ran out in a single row and the whole panel disappeared off the side of the screen.
+- It is now a tall panel down one side, one setting to a line with its value beside it, in type meant
+  to be read from a sofa. The line the ring is on is filled in white rather than outlined, because an
+  outline is a hairline from three metres. The film keeps playing beside it.
+- **The list that opens when you press OK is the same size now** — and so is the one behind a library
+  page's genre and sort boxes, which is the same list.
+- Laid out with a wrapping flex row rather than a grid, so the oldest sets lay it out the same way the
+  newest do. Measured in the tests: every setting level with its own value, every value beside its
+  label rather than under it, the whole panel on the screen, and nothing smaller than twenty pixels.
+
+## 1.10.10 — The panels inside the player took no notice of the remote
+
+- **Fixed: the playback settings panel could not be used with a remote.** It is drawn inside the
+  player, and the remote decides what the arrows mean by asking what is on top — which was still the
+  player. So the ring stayed on the controls behind the panel, the arrows went on meaning "seek the
+  film", and the panel sat there taking nothing, however many times you pressed.
+- The panel is now a layer in its own right: the first arrow puts the ring inside it, the arrows walk
+  its rows, OK offers the choices for a row, and Back peels one layer at a time — the choices, then the
+  panel, then the player. The subtitle, audio, quality and play-queue panels all come the same way.
+- The transport keys (play, pause, forward, back, stop) still mean the same thing whatever is drawn
+  over the picture.
+
+## 1.10.9 — The remote could not reach the player's controls
+
+- **Fixed: inside a film, nothing on the remote worked but ◀ ▶.** Pressing ▲ or ▼ over the picture is
+  meant to bring the controls up and put the ring on one of them. It looked for the play button by an
+  id that had been renamed, found nothing, and left the ring where it was — so the player went on
+  believing the ring was not on its controls, and every arrow afterwards fell through to seeking. Ten
+  seconds forward, ten seconds back, and nothing else on the remote did anything at all.
+- It now takes whichever control is actually there, and tries again on the next frame if the controls
+  were still being drawn.
+- **And they no longer fade out from under the ring.** A mouse keeps the controls up by resting on
+  them; a remote has nothing to rest. Three seconds later they would vanish with the ring still on a
+  button, and the arrows quietly went back to meaning something else with nothing on screen to say so.
+
+## 1.10.8 — The ring could go in but not come out
+
+- **Fixed: on a library page the remote could not get back to the menu.** The first thing above the
+  pictures is the genre box, and a drop-down was being left to the engine: every arrow belonged to it
+  from the moment the ring arrived. Nothing on screen moved, however many times ▲ was pressed, and the
+  menu — New Movies, All Movies, Settings, all of it — was unreachable without leaving the page.
+- **Drop-downs are now opened with OK**, which offers their choices as LENTA's own menu, with a tick
+  against the one in use. The arrows go back to meaning "move the ring", on a drop-down as everywhere
+  else. This also makes them work at all on a set whose browser has no drop-down of its own to show.
+- **Coming back to the top menu brings the page with it.** The bar lies across the top of the page, so
+  arriving there with the page still scrolled left the banner cut through the middle with the menu over
+  it. That was the mess at the top of the screen when you walked back up Home.
+- **Fixed: the Top 10 row was a pile-up on a 2017 set.** Every measurement in that row — the width of
+  the tile, the width of the big hollow numeral, how much of it the poster covers — is arithmetic over
+  custom properties each card sets on itself, and Chromium 47 has never heard of them. The numeral came
+  out at whatever size it liked and the poster landed on top of it. Those sets now get plain posters:
+  the row still says what is best rated, it just does not count them out in six-foot numerals.
+
+## 1.10.7 — Back out of a film, and a lighter page to move around
+
+- **Fixed: Back did nothing while a film was playing.** The player has no Back button of its own — Stop
+  lives in the … menu, which is no way out with a remote in your hand — and the remote was clicking for
+  a button that is only ever drawn on the error screen. It found nothing, did nothing, and reported
+  success. On a television that is the whole app stuck on one film. The player is now asked directly,
+  and answers: a settings panel on top of it closes first, the player itself after.
+- **Moving the focus about costs a third of what it did.** One press of an arrow asked the engine where
+  every focusable thing on the page was — four hundred of them on Home, and the engine must work out
+  the whole layout before it can answer the first. Rows are now measured one question each, and a row
+  nowhere near the screen takes all of its cards out of the reckoning with it. One press: 400 position
+  questions down to about 120, and 110 style questions down to 60.
+- **The key watcher now reports playback too.** Which of the four routes a film took to the screen —
+  the file itself, hls.js, or the set playing the playlist on its own — what it was asked to start at,
+  and whether anything ever arrived, with the picture's own error if it did not. A television has no
+  console to open and no address bar to type in, so "it doesn't play" was as far as anyone could get.
+
+## 1.10.6 — One press of Back is one Back
+
+- **Fixed: a single press of Back was acted on three times.** The key watcher on a real Samsung set
+  showed every press arriving as two Tizen hardware events and one ordinary key press — in that order,
+  on both the 2017 and the 2024 television. LENTA answered all three, so one press walked back three
+  pages at once. From anywhere shallow that is straight out of the app, which is exactly what "the Back
+  key does nothing" looks like from the sofa.
+- The two hardware events are the *same* event seen twice, once on its way past the document and once
+  at the window, so that pair is now recognised by marking the event itself rather than by guessing at
+  a stopwatch. The key press that follows is a third report of the same thump of the thumb, and is
+  folded in with it. Two presses a moment apart still count as two.
+- **The key watcher now says what LENTA did**, not only what the remote sent: closed the menu, left the
+  player, went back a page, left the app — or that there was nothing left to close. A dead key is
+  otherwise unanswerable from anywhere but the room the television is in.
+- Leaving the app now reports which way out worked. A set that has navigated to the server may no
+  longer hold the Tizen object that closes the app, and silence was indistinguishable from a bug.
+
+## 1.10.5 — The 2017 television's client could not draw Settings
+
+- **Fixed: on a Samsung set from 2017–2022, Settings died with "This page didn't load".** The client
+  built for those engines was being asked for `append` — the method that puts anything on the page —
+  and Chromium 47 has no such method: it arrived in Chromium 54. The build fills in what those engines
+  lack, and this was simply missing from the list.
+- The same gap took My list, and every dialog, drop-down menu and message in the app. They are all
+  placed on the page the same way, so one absent method silenced the lot: a button on the remote would
+  be pressed and nothing at all would happen.
+- `prepend`, `before`, `after`, `replaceWith` and a working `replaceChildren` were missing with it, and
+  are now filled in too — the old `replaceChildren` stand-in was itself written in terms of `append`,
+  so it could never have run on the engine it was written for.
+- **Also: the focus ring no longer yanks the page about on those sets.** Asking to be scrolled into
+  view "nearest" needs a settings object that Chromium 47 cannot read; it took the object as a plain
+  yes and threw the focused card to the edge of the screen on every single press. The row arrows,
+  which scroll a row by script, threw outright. Both are filled in now.
+- **A new test runs the old-TV client in a browser with the old TV's DOM taken away from it.**
+  `tests/test_legacy_build.py` only ever asked whether the bundle *parses* on a 2017 set — and
+  `el.append(child)` parses perfectly well before throwing. The new file deletes every method those
+  engines lack, loads the real bundle into the hole, and walks Home, Settings, My list, the guide, a
+  library and a title's page. It reports 24 failures against yesterday's build.
+
+## 1.10.4 — Settings was unreachable from the remote
+
+- **Fixed: in the Netflix and HBO Max themes, a remote could not get to Settings at all.** Those two put
+  the menu as a bar across the top; the rest run it down the side. The navigation assumed the column
+  everywhere, so in the menu ▶ meant "leave the menu" — and on a bar that is the direction you walk
+  along it. The first ▶ jumped straight back into the page, and the gear at the end of the bar could
+  never be reached.
+- The menu is now entered and walked whichever way it actually lies: ▲ into a top bar and ◀ ▶ along it,
+  ◀ into a side column and ▲ ▼ along it.
+- The test suite now walks to Settings with nothing but the four arrows, in a theme of each kind. It
+  fails on the old code, which is the point: everything else about the remote worked, which is exactly
+  why this went unnoticed for so long.
+
+## 1.10.3 — The key watcher, switched on from anywhere
+
+- **Settings › LENTA app › Show what the remote sends** is now a saved preference rather than something
+  one browser remembers, and it is offered everywhere rather than only on a television. Tick it on a
+  laptop and the panel appears on the TV next time LENTA opens there — which is the point: the set
+  whose remote is misbehaving is the worst place to go hunting for the switch.
+- No panel of key codes appears on the laptop itself, where nobody asked the question.
+- `?keys=1` on the address still works and now outranks the preference, instead of being quietly
+  switched off a moment later when the session read the saved value.
+
+## 1.10.2 — Reaching the key watcher from a television
+
+- **Settings › LENTA app › Show what the remote sends.** 1.10.1 put the key watcher behind `?keys=1`,
+  which is no use on a television: the app has no address bar, and the set's own browser would answer
+  about itself rather than about the app, where the key is not working. It is now a switch you can
+  reach with the very remote you are trying to diagnose. It shows only on a TV, turns on and off at
+  once, stays on while you move about, and lasts until the app is closed.
+
+## 1.10.1 — The banner on a television
+
+- **Fixed: the Home banner was an empty panel on a TV.** The stylesheet hides the banner's artwork the
+  moment its trailer starts. A YouTube embed on a television often never starts — so the picture was
+  gone and nothing replaced it. A television now shows the banner as a picture and leaves it there.
+- **That trailer was also the most expensive thing on the page.** A second video decoding behind
+  everything you browse, on a machine working hard to decode one. Gone on a TV, along with the colour
+  wash that re-downloaded the artwork to read it off a canvas, and the rotation that redrew the whole
+  of Home every sixty seconds — which on a TV also threw away wherever the remote had got to. A trailer
+  you actually ask for, with the Trailer button, still plays.
+- **Back is recognised more widely.** The sets disagree about its number: 10009 on Samsung, 461 on LG,
+  8 from a keyboard, 166 and 27 elsewhere, and some Tizen firmware sends an event of its own
+  (`tizenhwkey`) instead of a key press at all. All of them now mean Back.
+- **New: open LENTA with `?keys=1` on the TV** and every press appears in the corner — the number the
+  set sent, the name it gave it, and what LENTA made of it. If Back still does nothing, that is what
+  says why, in about thirty seconds.
+
+## 1.10.0 — Genres, and the service's mark on its rows
+
+- **Pick the genres you actually watch.** Fifteen of them in *Settings › Streaming services* — Action,
+  Horror, Science Fiction, Fantasy and the rest — and the rows are narrowed to any of those rather than
+  whatever is most popular overall. Leave them all unticked and nothing is narrowed.
+- **The numbers come from TMDB, not from memory.** Films and series are filed under different numbers
+  there, and a number remembered wrongly filters the wrong thing without ever saying so. LENTA fetches
+  both lists and keeps them for a month.
+- **The two are not the same shape, and the page says so.** TMDB has one *Sci-Fi & Fantasy* for series
+  where films have two separate genres, one *Action & Adventure* likewise, and no Horror, Romance or
+  Thriller for series at all. Those three are marked *films only*: picking one narrows your films and
+  leaves your series as they were, rather than emptying the row.
+- **The service's own mark sits beside each row's name**, so a row reads as "Netflix: popular" at a
+  glance instead of having to be read.
+
+## 1.9.7 — Choosing a picture actually saves it
+
+- **Fixed: on a server that had been running since 1.9.1, picking a picture did nothing.** That version
+  made the table with one picture per title and `ref NOT NULL`; 1.9.5 made it two and began inserting
+  the row before filling a column, naming neither picture. On a new database both have defaults and all
+  was well. On an upgraded one the insert broke the constraint — and because it was `INSERT OR IGNORE`
+  the breakage was swallowed, the update then found no row, and the server answered "ok" to a request
+  that had changed nothing. Every column is now named, and a save that changes no row is reported as a
+  failure rather than a success.
+- **The dialog closes the moment you pick a picture**, instead of waiting for the server to answer. What
+  it says afterwards is still the truth: "Picture changed", or the reason it could not be.
+- **New test file for upgrading a server that is already running.** Every other test starts from an
+  empty folder and so gets the current schema — the one shape no real server has. This one builds the
+  old tables by hand and works them, which is the only way that bug was ever going to be seen.
+
+## 1.9.6 — The picture chooser, laid out properly
+
+- **Fixed: the chooser was a mess.** It reused the metadata editor's styles, which describe a different
+  shape — a rail of tabs beside a panel — so its two-column grid took each block of this dialog and put
+  it in a cell: tabs top left, pictures top right, the link box under the tabs, the buttons adrift in
+  the middle, and every thumbnail squeezed into a strip. The markup was fine; it was being laid out by
+  someone else's plan. It has its own styles now: tabs, then the pictures, then the fields and buttons.
+- The thumbnails keep their shape before they load, so the grid no longer jumps about as they arrive.
+- The test suite now measures where the pieces of that dialog actually land — that everything was
+  present and every assertion passed is exactly how the first version got through.
+
+## 1.9.5 — Pick the picture, don't paste a link
+
+- **The pencil on a streaming tile now shows what TMDB has.** Every poster and backdrop it holds for
+  that title, best first, as thumbnails you click. Pasting a link or choosing a file is still there,
+  underneath, for when none of them is right — but it is no longer the only way.
+- **Wide and upright are chosen separately.** A row can be drawn either way, and a wide picture put in a
+  poster's place is cropped to a strip. The dialog opens on whichever shape your rows are actually
+  using, and setting one leaves the other alone.
+- When TMDB cannot be asked at all, the dialog says so and why, instead of claiming the title has no
+  artwork.
+
+## 1.9.4 — Streaming tiles take the shape of the tiles around them
+
+- **The rows now follow your artwork setting.** With wide artwork chosen, a streaming row is wide
+  pictures like the rest of Home, rather than a row of portraits between two rows of landscapes. The
+  services present their own catalogues this way too, so the wide picture is also the truer one.
+- The wide picture is fetched and kept alongside the poster, and a title with no wide artwork falls back
+  to its poster behind glass — the same thing a title of your own does in that row.
+- A picture you chose yourself stands in for both shapes, since you chose it for that tile whatever
+  shape the tile happens to be.
+- **Fixed, found while testing:** the card named its local service mark `badge`, which is also the name
+  of a function the module uses for every other card. The local name hid the function for the whole
+  card, and Home failed to draw with "Cannot access 'badge' before initialization". Renamed.
+
+## 1.9.3 — A click opens the film, not a search for it
+
+- **Netflix titles now open on their own address.** Netflix addresses a film by a number —
+  `netflix.com/watch/81757047` — so one click starts it rather than landing you on a search for its
+  name. A series opens on its own page instead, because `/watch` on a series starts whichever episode
+  Netflix picks rather than the one you wanted.
+- **Where the number comes from**, since neither Netflix nor TMDB publishes it: Wikidata does, as
+  property P1874, filled in by people for the titles they care about. TMDB already knows each title's
+  Wikidata number, so LENTA asks TMDB for that and Wikidata for the Netflix one. The whole row is looked
+  up in a single Wikidata call, not one per title.
+- **It is asked once.** A number found is kept for good — Netflix does not renumber its catalogue — and a
+  title looked up and not found is remembered too, so the same fruitless question is not asked every
+  night. That one is tried again after a month, in case somebody has added it since.
+- Coverage is partial and always will be: P1874 is volunteer work, thorough for well-known films and
+  thin elsewhere. A title without a number opens the service's search for its exact name, as before. The
+  search link is a floor, not a fallback nobody reaches.
+
+## 1.9.2 — Streaming tiles: the pencil, the link, and the small print
+
+- **Fixed: no pencil on a streaming tile.** On a desktop with a mouse LENTA hides a card's tools
+  entirely, because a title you own shows its actions in the hover preview instead. A streaming tile has
+  no preview — there is nothing of it here to preview — so the tools were its only way in, and they were
+  being hidden. They now show on these tiles, bottom right, clear of the service's mark.
+- **A title now opens the service itself.** It was going to TMDB's "where to watch" page: a detour
+  through a third site to reach the one you already pay for. It now opens Netflix (or Max, Disney+,
+  SkyShowtime, Nova Play and the rest) searched for that exact title. The services do not publish the
+  ids used in their own addresses and TMDB does not carry them, so a search for the exact title is as
+  close to the title's own page as can honestly be reached.
+- This also removed a TMDB call per title per day, so a refresh is quicker and costs less quota.
+- **The JustWatch line is off the rows.** The credit is required and is kept — on *Settings › Streaming
+  services*, where somebody looking for it would go, and in `THIRD-PARTY-NOTICES.md` — but no longer as
+  a line of small print above your pictures.
+
+## 1.9.1 — The streaming tiles, finished properly
+
+- **The tiles are your tiles now.** In the Netflix look on a phone, LENTA draws its cards through a
+  renderer of its own, and the streaming tiles were skipping it — so they came out a different size
+  with different corners from everything beside them. They now go through the same path and measure
+  exactly the same.
+- **The picture can be changed.** A pencil in the corner of a streaming tile, the same one a title you
+  own has, takes a link or a file. Your choice is kept in a table of its own so it survives the nightly
+  refresh that throws every fetched title away and gets them again.
+- **Languages you would rather not be offered can be left out.** A service's catalogue in any country
+  carries a great deal that simply is not what you watch. *Settings › Streaming services* now lists the
+  languages that actually turned up in your rows, with how many of each, and you tick the ones to drop.
+  Nothing is decided for you and nothing is hardcoded — the list is built from what you were shown.
+- With a language filter on, a second page is fetched from each service so the rows still fill up
+  rather than quietly going short. Not when the first page came back short, since there is no more to
+  have and the call would be spent learning that.
+
+## 1.9.0 — What the services you pay for are showing
+
+- **A row on Home for each streaming service you subscribe to.** Tick them in *Settings › Streaming
+  services* and Home gains *Popular on Netflix*, *Popular series on Max* and so on — what that service
+  is carrying in your country, not globally. Clicking a title opens the service in a new tab. Nothing
+  plays in LENTA, nothing is downloaded, and nothing of theirs is kept beyond a title, a picture and a
+  link.
+- **No new key and no new account**: it works through the TMDB key you already have, and the country
+  comes from the one already set in *Settings › Metadata*.
+- **The services offered are the ones available where you are**, in the order JustWatch ranks them
+  locally — so Bulgaria is offered Nova Play and the United States is offered Hulu, with nothing about
+  either written into LENTA.
+- **Anything already on your server is left out**, matched by TMDB number. Being sent to Netflix for a
+  film on your own disk is the one thing a media server should never do. It can be switched off.
+- **The rows are named *Popular on …*, not *Top 10*.** TMDB cannot see a service's own chart, so LENTA
+  does not print a rank it would be inventing. What it can see is popularity across its own catalogue,
+  narrowed to that service and that country, and that is what the rows are.
+- Home never waits on any of it: a row is drawn from the database, and a background refresh fetches
+  twice a day. If TMDB is unreachable the rows show what they showed yesterday.
+- The rows are ordinary Home sections, so they rename, reorder and hide in *Settings › Home screen*.
+  They are left off televisions, where there is no second tab to open them in.
+- The availability data is JustWatch's, supplied through TMDB on the condition that they are credited.
+  That credit sits beside each row and on the settings page; it is why the data can be shown at all.
+
 ## 1.8.17 — The TV app stops fighting the television
 
 - **Live TV would not start on the TV, and the whole app was slow.** One cause for both: the player

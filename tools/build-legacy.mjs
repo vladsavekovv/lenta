@@ -101,6 +101,19 @@ css += `
   html.no-sticky body.rail-collapsed .view { margin-left: 68px; }
 }
 `;
+css += `
+/* The Top 10 row on engines with no custom properties (html.no-vars). Every measurement in that row is
+   calc() over properties the card sets on itself — how wide the tile is, how wide the big hollow
+   number is, how much of it the poster covers. An engine that has never heard of them is left with no
+   width and no height at all: the number is drawn at whatever size it happens to be and the poster
+   lands on top of it, which is the mess on a 2017 set. Plain posters there instead. The row still says
+   what is best rated; it just does not count them out in six-foot numerals. */
+html.no-vars .card.rank .rank-num { display: none; }
+html.no-vars .card.rank { width: 132px; }
+html.no-vars .card.rank .frame-link { position: relative; display: block; height: 198px; }
+html.no-vars .card.rank .frame { position: static; width: 132px; height: 198px; box-shadow: none; }
+html.no-vars .track.top10 { gap: 16px; }
+`;
 css += '\n/* flex gap for older engines (LENTA adds html.no-flexgap when needed) */\n' + gaps.join('\n') + '\n';
 
 const targets = { chrome: CHROME << 16 };
@@ -115,8 +128,78 @@ const fills = `
 import 'core-js/stable';
 (function () {
   var E = Element.prototype;
-  if (!E.replaceChildren) E.replaceChildren = function () { while (this.firstChild) this.removeChild(this.firstChild); this.append.apply(this, arguments); };
+  // append/prepend/before/after/replaceWith arrived in Chromium 54 — a 2017 Samsung set runs 47 and has
+  // none of them. They are not exotic: this is how the app puts anything on the page, so without these
+  // whole views die on their first line. Each takes nodes or strings, so the arguments are gathered into
+  // a fragment first — which also lifts out any node that was already a child, before the clearing below
+  // could throw it away.
+  var frag = function (args) {
+    var f = document.createDocumentFragment();
+    for (var i = 0; i < args.length; i++) {
+      var n = args[i];
+      f.appendChild(n && n.nodeType ? n : document.createTextNode(String(n)));
+    }
+    return f;
+  };
+  var parents = [E, Document.prototype, DocumentFragment.prototype];
+  for (var pi = 0; pi < parents.length; pi++) {
+    var P = parents[pi];
+    if (!P.append) P.append = function () { this.appendChild(frag(arguments)); };
+    if (!P.prepend) P.prepend = function () { this.insertBefore(frag(arguments), this.firstChild); };
+    // Chromium 86, and it must not be written in terms of append: on these engines that is the fill above
+    if (!P.replaceChildren) P.replaceChildren = function () {
+      var f = frag(arguments);
+      while (this.firstChild) this.removeChild(this.firstChild);
+      this.appendChild(f);
+    };
+  }
+  var kids = [E, CharacterData.prototype];
+  for (var ki = 0; ki < kids.length; ki++) {
+    var C = kids[ki];
+    if (!C.before) C.before = function () { if (this.parentNode) this.parentNode.insertBefore(frag(arguments), this); };
+    if (!C.after) C.after = function () { if (this.parentNode) this.parentNode.insertBefore(frag(arguments), this.nextSibling); };
+    if (!C.replaceWith) C.replaceWith = function () { if (this.parentNode) this.parentNode.replaceChild(frag(arguments), this); };
+  }
   if (!E.toggleAttribute) E.toggleAttribute = function (n, f) { var on = f === undefined ? !this.hasAttribute(n) : !!f; if (on) this.setAttribute(n, ''); else this.removeAttribute(n); return on; };
+  // Scrolling an element by script arrived in Chromium 61, and so did the settings object for
+  // scrollIntoView. Both matter on a television: the arrows at the end of a row call scrollBy, and the
+  // focus ring asks to be brought into view "nearest" after every press. An engine that cannot read the
+  // settings takes the object as plain truthiness and yanks whatever has focus to the top of the screen.
+  var scroll = function (node, x, y, by) {
+    if (x && typeof x === 'object') { y = x.top; x = x.left; }
+    if (typeof x === 'number') node.scrollLeft = by ? node.scrollLeft + x : x;
+    if (typeof y === 'number') node.scrollTop = by ? node.scrollTop + y : y;
+  };
+  if (!E.scrollTo) E.scrollTo = function (x, y) { scroll(this, x, y, false); };
+  if (!E.scrollBy) E.scrollBy = function (x, y) { scroll(this, x, y, true); };
+  var readsSettings = false;
+  try {
+    document.createElement('div').scrollIntoView({ get block() { readsSettings = true; return 'nearest'; } });
+  } catch (e) { /* an engine that refuses the object outright: it cannot read it either */ }
+  if (!readsSettings) {
+    var plain = E.scrollIntoView;
+    E.scrollIntoView = function (how) {
+      if (how == null || typeof how !== 'object') return plain.call(this, how);
+      var midY = how.block === 'center', midX = how.inline === 'center', box;
+      // every scrolling box between here and the page, innermost first
+      for (var p = this.parentNode; p && p.nodeType === 1; p = p.parentNode) {
+        if (p === document.body || p === document.documentElement) break;
+        var canY = p.scrollHeight > p.clientHeight, canX = p.scrollWidth > p.clientWidth;
+        if (!canY && !canX) continue;
+        var frame = p.getBoundingClientRect();
+        box = this.getBoundingClientRect();
+        if (canY) p.scrollTop += midY ? (box.top + box.height / 2) - (frame.top + frame.height / 2)
+          : box.top < frame.top ? box.top - frame.top : box.bottom > frame.bottom ? box.bottom - frame.bottom : 0;
+        if (canX) p.scrollLeft += midX ? (box.left + box.width / 2) - (frame.left + frame.width / 2)
+          : box.left < frame.left ? box.left - frame.left : box.right > frame.right ? box.right - frame.right : 0;
+      }
+      box = this.getBoundingClientRect();
+      var h = window.innerHeight, w = window.innerWidth;
+      var dy = midY ? (box.top + box.height / 2) - h / 2 : box.top < 0 ? box.top : box.bottom > h ? box.bottom - h : 0;
+      var dx = midX ? (box.left + box.width / 2) - w / 2 : box.left < 0 ? box.left : box.right > w ? box.right - w : 0;
+      if (dx || dy) window.scrollBy(dx, dy);
+    };
+  }
   if (!('isConnected' in Node.prototype)) Object.defineProperty(Node.prototype, 'isConnected', { get: function () { return document.documentElement.contains(this); } });
   if (!window.IntersectionObserver) {
     window.IntersectionObserver = function (cb) { this.cb = cb; this.els = []; };

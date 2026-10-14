@@ -204,6 +204,59 @@ CREATE TABLE IF NOT EXISTS tv_programmes (
 CREATE INDEX IF NOT EXISTS idx_tv_programmes_when ON tv_programmes(source_id, uid, start);
 CREATE INDEX IF NOT EXISTS idx_tv_programmes_stop ON tv_programmes(stop);
 
+CREATE TABLE IF NOT EXISTS stream_providers (  -- streaming services available here (TMDB, data by JustWatch)
+    provider_id INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL,
+    logo        TEXT NOT NULL DEFAULT '',
+    priority    INTEGER NOT NULL DEFAULT 0,   -- JustWatch's own ordering: the services people here actually use
+    region      TEXT NOT NULL DEFAULT '',
+    fetched_at  REAL NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS stream_titles (     -- what each service is showing, refreshed once a day
+    provider_id INTEGER NOT NULL,
+    kind        TEXT NOT NULL,                 -- movie | show
+    tmdb_id     INTEGER NOT NULL,
+    rank        INTEGER NOT NULL,              -- TMDB's popularity order, not the service's own chart
+    title       TEXT NOT NULL DEFAULT '',
+    year        INTEGER,
+    poster      TEXT NOT NULL DEFAULT '',
+    overview    TEXT NOT NULL DEFAULT '',
+    rating      REAL,
+    link        TEXT NOT NULL DEFAULT '',      -- where to watch it; opened in a new tab, never played here
+    language    TEXT NOT NULL DEFAULT '',      -- the language it was made in (TMDB's original_language)
+    backdrop    TEXT NOT NULL DEFAULT '',      -- the wide picture, for rows drawn in the landscape style
+    fetched_at  REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (provider_id, kind, tmdb_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stream_titles_row ON stream_titles(provider_id, kind, rank);
+
+CREATE TABLE IF NOT EXISTS stream_genres (   -- TMDB's own genre numbers, fetched rather than written
+    kind       TEXT NOT NULL,                  -- down here: films and series use different ones, and
+    genre_id   INTEGER NOT NULL,               -- a number guessed from memory filters the wrong thing
+    name       TEXT NOT NULL,
+    fetched_at REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (kind, genre_id)
+);
+
+CREATE TABLE IF NOT EXISTS stream_ids (      -- a title's number on the service, so a click opens it
+    tmdb_id    INTEGER NOT NULL,              -- rather than a search for its name. Looked up once and
+    kind       TEXT NOT NULL,                 -- kept: these numbers do not change.
+    netflix_id TEXT NOT NULL DEFAULT '',      -- '' means looked and not found, which is worth remembering
+    checked_at REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (tmdb_id, kind)
+);
+
+CREATE TABLE IF NOT EXISTS stream_art (       -- a picture you chose yourself, instead of the one TMDB has
+    tmdb_id      INTEGER NOT NULL,            -- kept apart from stream_titles, which is wiped on every
+    kind         TEXT NOT NULL,               -- refresh: your choice has to outlive the data it sits on
+    ref          TEXT NOT NULL DEFAULT '',    -- the upright one
+    backdrop_ref TEXT NOT NULL DEFAULT '',    -- the wide one; a row drawn either way needs its own
+    set_at       REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (tmdb_id, kind)
+);
+
 CREATE TABLE IF NOT EXISTS watchlist (
     user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     item_id  INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
@@ -225,6 +278,10 @@ SETTING_DEFAULTS = {
     "show_users_on_login": "1",
     "jwt_secret": "",
     "default_theme": "projector",        # theme for the sign-in screen and new users
+    "streaming_services": "",    # JSON list of TMDB provider ids whose rows Home shows
+    "streaming_hide_owned": "1",  # leave out anything already on this server
+    "streaming_languages_off": "",  # JSON list of original-language codes to leave out of the rows
+    "streaming_genres": "",       # JSON list of genre names to narrow the rows to; empty means everything
     "opensubtitles_api_key": "",
     "opensubtitles_username": "",
     "opensubtitles_password": "",
@@ -275,6 +332,16 @@ def init_db() -> None:
         con = _connect()
         con.execute("PRAGMA journal_mode = WAL")
         con.executescript(SCHEMA)
+        # 1.9.1: what language a title was made in, so rows can leave some out. The table is created by
+        # the line above on a new server, but one that already ran 1.9.0 has it without this column.
+        sc = {r[1] for r in con.execute("PRAGMA table_info(stream_titles)")}
+        if sc and "language" not in sc:
+            con.execute("ALTER TABLE stream_titles ADD COLUMN language TEXT NOT NULL DEFAULT ''")
+        if sc and "backdrop" not in sc:      # 1.9.4: wide artwork, for rows drawn the way your own are
+            con.execute("ALTER TABLE stream_titles ADD COLUMN backdrop TEXT NOT NULL DEFAULT ''")
+        ac = {r[1] for r in con.execute("PRAGMA table_info(stream_art)")}
+        if ac and "backdrop_ref" not in ac:  # 1.9.5: a picture chosen per shape, not one for both
+            con.execute("ALTER TABLE stream_art ADD COLUMN backdrop_ref TEXT NOT NULL DEFAULT ''")
         cols = {r[1] for r in con.execute("PRAGMA table_info(libraries)")}
         if "scan_report" not in cols:   # outcome of the last scan: counts, skipped files, errors (JSON)
             con.execute("ALTER TABLE libraries ADD COLUMN scan_report TEXT")

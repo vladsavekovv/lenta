@@ -1,6 +1,7 @@
 // Administrative dashboard: overview, libraries, users, metadata fixes, settings, logs.
 import { api } from './api.js';
 import { renderLiveTv } from './livetv.js';
+import { renderStreaming } from './streaming.js';
 import { openEditor, refreshMetadata } from './editor.js';
 import { state, loadLibraries, refreshView, renderRail, THEMES } from './app.js';
 import {
@@ -44,6 +45,7 @@ export async function renderAdminPage(page, body, q = new URLSearchParams()) {
   if (page === 'fix-matches') return metadata(body, q);
   if (page === 'logs') return logs(body);
   if (page === 'livetv') return renderLiveTv(body);
+  if (page === 'streaming') return renderStreaming(body);
   return settings(body, SETTINGS_PAGES[page] ? page : 'general');
 }
 

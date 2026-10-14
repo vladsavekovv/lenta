@@ -4,7 +4,7 @@ import { pauseMusic } from './music.js';
 import { dockMount, dockRefresh, dockRegister, dockUnmount, dockUpdate } from './dock.js';
 import { state } from './app.js';
 import { langName, subtitleSearch } from './subtitles.js';
-import { tvMode } from './tv.js';
+import { tvMode, tvNote } from './tv.js';
 import { $, channels, fmtTime, html, icon, img, isTouch, mount, popMenu, restoreOverlays, toast } from './ui.js';
 
 const sameLang = (a, b) => !!a && !!b && (a === b || a.split('-')[0] === b.split('-')[0]);
@@ -334,6 +334,17 @@ window.lentaPipClosed = () => { if (P && !P.video.paused) P.video.pause(); };
 // music or an audiobook starts: a minimised video makes way (one thing plays at a time)
 window.addEventListener('lenta:music-start', () => { if (P?.mini) closePlayer({ navigate: false }); });
 
+// The Back key of a television, sent by tv.js. The player has no Back button of its own: on a laptop
+// you press Escape or leave full screen, and Stop lives in the … menu, which is no way out at all with
+// a remote in your hand. Answering here keeps the knowledge of what Back should close — a settings
+// panel first, the player itself after — with the player that owns both.
+window.addEventListener('lenta:back', (e) => {
+  if (!P) return;
+  if (P.panel) { closePanel(); e.detail && (e.detail.did = 'closed the panel'); }
+  else { closePlayer(); e.detail && (e.detail.did = 'left the player'); }
+  e.preventDefault();                       // tells tv.js this was dealt with, rather than ignored
+});
+
 export function closePlayer({ navigate = true } = {}) {
   if (!P) return;
   const returnTo = P.returnTo;
@@ -650,6 +661,33 @@ async function load(position, { keepPaused = false } = {}) {
   if (P.speed) { video.defaultPlaybackRate = P.speed; video.playbackRate = P.speed; }
   if (!keepPaused) video.play().catch(() => { /* autoplay blocked: user presses play */ });
   if (P.stats) renderStats();
+  watchStart(video, seq, position);
+}
+
+/** Say, in the key watcher, how this film was handed to the screen and whether it ever arrived.
+ *
+ *  Which of the four routes above a given television takes is not something that can be worked out from
+ *  anywhere but that television, and a set that shows a black rectangle looks the same whichever one
+ *  failed. Written only when the watcher is on, so it costs nothing the rest of the time.
+ */
+function watchStart(video, seq, asked) {
+  const route = P.mode === 'direct' ? 'the file itself'
+    : P.hls ? 'hls.js' : playsHlsItself(video) ? 'the set plays the playlist itself' : 'the playlist, natively';
+  tvNote('play', `${P.mode} via ${route}; asked for ${Math.round(asked)}s, stream starts at ${Math.round(P.offset)}s`);
+  clearTimeout(P.startTimer);
+  const look = (secs) => setTimeout(() => {
+    if (!P || seq !== P.loadSeq) return;
+    const v = P.video;
+    const err = v.error ? ` error ${v.error.code} ${v.error.message || ''}` : '';
+    if (v.readyState >= 2 && v.currentTime > 0 && !v.paused) {
+      tvNote('play', `playing after ${secs}s, at ${Math.round(position())}s of the film`);
+      return;
+    }
+    tvNote('play', `${secs}s later: still nothing — readyState ${v.readyState}, at ${Math.round(v.currentTime)}s,`
+      + ` ${v.paused ? 'paused' : 'running'}${err}`);
+    if (secs < 20) P.startTimer = look(20);
+  }, secs * 1000);
+  P.startTimer = look(6);
 }
 
 function policy(ttfb, retries) {
@@ -718,9 +756,18 @@ function poke() {
   if (!el || P.mini) return;
   el.classList.remove('idle');
   clearTimeout(P.idleTimer);
+  // A mouse keeps the controls up by resting on them, and takes itself away when it is done. A remote
+  // has nothing to rest and nothing to take away, so the ring sits on a button and the controls never
+  // leave the picture. They get a longer run while the ring is on them — long enough that they are
+  // not snatched away mid-thought — and are then let go, with the ring taken off them so the arrows
+  // go back to meaning what they mean over the picture. ▲ or ▼ brings both back at once.
+  const onThem = () => { const a = document.activeElement; return !!(a && a !== el && el.contains(a)); };
   P.idleTimer = setTimeout(() => {
-    if (P && !P.video.paused && !P.panel && !P.dragging && !el.querySelector('.top:hover, .bottom:hover') && !document.querySelector('.menu')) el.classList.add('idle');
-  }, 3000);
+    if (!P || P.video.paused || P.panel || P.dragging
+        || el.querySelector('.top:hover, .bottom:hover') || document.querySelector('.menu')) return;
+    if (onThem()) document.activeElement.blur();
+    el.classList.add('idle');
+  }, onThem() ? 8000 : 3000);
 }
 
 // ---------------------------------------------------------------- subtitles
@@ -1146,7 +1193,9 @@ function wire() {
     else closePlayer();
   });
   v.addEventListener('error', () => {
-    if (!P || P.hls) return;
+    if (!P) return;
+    tvNote('play', `the picture reported error ${v.error?.code ?? '?'} ${v.error?.message || ''}`);
+    if (P.hls) return;
     if (P.mode === 'direct' && !P.forceHls) {   // the browser refused the file: let the server repackage it
       P.forceHls = true;
       load(position());

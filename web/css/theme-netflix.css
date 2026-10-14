@@ -44,11 +44,17 @@
   html.topnav body .rail a[href="#/"] { order: 1; }
   html.topnav body .rail .lib-list { order: 2; }
   html.topnav body .rail a[href="#/mylist"] { order: 3; }
-  html.topnav body .rail .brand-row { display: flex; align-items: center; margin-right: 26px; flex: none; }
+  /* The menu down the side keeps the name clear of the first link with fourteen pixels underneath it.
+     In a bar those fourteen pixels are inside the thing being centred, so the name rides seven
+     pixels above the line the menu sits on — plainly visible from a sofa, and the old remedy was a
+     margin on the picture that only halved it. */
+  html.topnav body .rail .brand-row { display: flex; align-items: center; margin-right: 26px; flex: none; padding: 0; }
   html.topnav body .rail .brand-mark-link, html.topnav body .rail .rail-toggle { display: none !important; }
   html.topnav body .rail .brand, html.topnav body .rail .brand-text { display: flex !important; align-items: center; padding: 0; margin: 0; }
   html.topnav body .rail .brand small { display: none; }
-  html.topnav body .rail .brand-word { width: 120px; height: auto; max-height: 30px; object-fit: contain; margin-top: 8px; }
+  /* No nudge: in a row centred on its items, a margin on the picture moves the ink off the line the
+     menu sits on, and on a television three pixels of that is plainly visible. */
+  html.topnav body .rail .brand-word { width: 120px; height: auto; max-height: 30px; object-fit: contain; }
   html.topnav body .rail .group { display: none; }
   html.topnav body .rail .lib-list { display: flex; flex-direction: row; align-items: center; gap: 4px; flex-wrap: nowrap; }
   html.topnav body .rail .lib-item > a { padding-right: 9px; }

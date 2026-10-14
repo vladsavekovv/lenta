@@ -11,7 +11,7 @@
 https://github.com/user-attachments/assets/ecd20a9b-4fea-4781-9b54-c5688e15229c
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.8.17-8a5cf6">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.10.13-8a5cf6">
   <img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-24.04%20%7C%2026.04-E95420?logo=ubuntu&logoColor=white">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="Android" src="https://img.shields.io/badge/Android-8%2B-3DDC84?logo=android&logoColor=white">
@@ -97,6 +97,14 @@ HTTP and HTTPS run side by side out of the box, with LENTA's own certificate or 
 <sub>Film posters, artwork and stills in these screenshots belong to their respective owners and are shown only
 to illustrate how LENTA displays your own library. They are not part of LENTA and not covered by its license.</sub>
 
+## 🆕 What's new in 1.9
+
+- 🍿 **What the streaming services you pay for are showing**, as a row on Home for each one — in your
+  country, not globally. A title opens the service in a new tab; nothing plays in LENTA and nothing is
+  downloaded. Anything already on your server is left out, so you are never sent out for a film you own.
+  It needs no new key: it works through the TMDB key you already have.
+  (*Settings › Streaming services*. Availability data from JustWatch.)
+
 ## 🆕 What's new in 1.8
 
 Everything since 1.2 has gone into two things: **live television**, and **watching on a TV**.
@@ -152,6 +160,8 @@ Everything since 1.2 has gone into two things: **live television**, and **watchi
   covers and descriptions from Google Books and Open Library (no key needed)
 - 🎨 Seven dark themes, two of them modelled on services you know — a **Netflix** one and an **HBO Max** one,
   both with the menu as a bar along the top — plus poster or landscape artwork, grid, detail and table views
+- 🍿 **Streaming services**: a Home row of what Netflix, Max, Disney+ and the rest are showing where you
+  live, with anything you already own left out; a title opens that service in a new tab
 - ⚙️ One Settings page with a sidebar (yours and the server's), every page rearrangeable
 
 **Your library, done for you**
@@ -206,7 +216,7 @@ permissions, NAS shares, graphics cards, phones, remote access, updates, backups
 | [**Install guide**](docs/INSTALL.md) | Requirements, installation, first setup, GPU, NAS, remote access, updating, backups, uninstalling, troubleshooting, FAQ |
 | [**User guide**](docs/USER-GUIDE.md) | Naming your files, libraries, the apps, themes, subtitles, trailers, metadata and artwork, users, shortcuts, API |
 | [**Samsung TV**](docs/SAMSUNG-TV.md) | !! WORK IN PROGRESS !! Watching on a Samsung TV: the TV's browser, or the LENTA TV app installed from your server |
-| [**Contributing**](CONTRIBUTING.md) | Running from source, project layout, rebuilding the Android app (WORK IN PROGRESS), sending changes |
+| [**Contributing**](CONTRIBUTING.md) | Running from source, project layout, rebuilding the Android app, sending changes |
 | [**Third-party notices**](THIRD-PARTY-NOTICES.md) | The open-source pieces and data services LENTA uses |
 
 ## 🧩 How it fits together

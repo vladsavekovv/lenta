@@ -19,7 +19,7 @@ open a terminal on the server and type commands.
 7. [Connect to TMDB for posters and descriptions](#7-connect-to-tmdb-for-posters-and-descriptions)
 8. [Add your libraries](#8-add-your-libraries)
 9. [Optional extras](#9-optional-extras)
-10. [Watch on phones, tablets and TVs - WORK IN PROGRESS](#10-watch-on-phones-tablets-and-tvs-work-in-progress)
+10. [Watch on phones, tablets and TVs](#10-watch-on-phones-tablets-and-tvs)
 
 Then: [GPU transcoding](#gpu-hardware-transcoding) ·
 [Media on a NAS](#media-on-a-nas) ·
@@ -299,7 +299,7 @@ pencil), tick **Show the trailer in the Home banner** at the bottom of the **Gen
 
 ---
 
-## 10. Watch on phones, tablets and TVs (WORK IN PROGRESS!!)
+## 10. Watch on phones, tablets and TVs
 
 - **Any device with a browser:** open `http://<server-address>:8484`. Phones get a layout made for touch.
 - **iPhone / iPad:** in Safari, Share › **Add to Home Screen** for a full-screen app with its own icon.
@@ -307,7 +307,7 @@ pencil), tick **Show the trailer in the Home banner** at the bottom of the **Gen
   Android app (APK)**, open the file and allow the install. Then type your server's address, e.g.
   `192.168.1.50:8484`, and tap **Connect**. Details in the
   [User Guide](USER-GUIDE.md#android-app-apk).
-- **Samsung TV (2017 or newer):** open the LENTA address in the TV's Internet app, or install the LENTA TV app
+- **Samsung TV (2017 or newer) — work in progress:** open the LENTA address in the TV's Internet app, or install the LENTA TV app
   with one command: `sudo /opt/lenta/deploy/install-tv.sh <TV's IP>`. Step by step: [Samsung TV guide](SAMSUNG-TV.md).
 - **Other smart TVs:** use the TV's browser (LENTA switches to remote-control mode), or cast a browser tab.
 

@@ -86,6 +86,7 @@ function startTrailer(d, thisPop) {
     layer.className = 'hc-trailer';
     mine.player = trailerPlayer(t.key, { muted: true,
       onState: (st) => mine.onState?.(st), onTime: (s) => { mine.time = s; mine.timeAt = performance.now(); } });
+    if (!mine.player) return;              // a television: no trailer behind the preview
     layer.append(mine.player.el);
     art.append(layer);
     mine.layer = layer;

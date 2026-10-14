@@ -8,6 +8,7 @@ Everything LENTA can do once it is installed. New here? Start with the
 - [Audiobooks](#audiobooks)
 - [Phones and tablets](#phones-and-tablets-the-lenta-app)
 - [Live TV](#live-tv) · [the programme guide](#the-programme-guide) · [your own channels on Home](#your-own-channels-on-home)
+- [Streaming services](#streaming-services)
 - [Libraries](#libraries-in-the-menu)
 - [Looks](#looks-seven-dark-themes)
 - [Settings](#settings)
@@ -367,6 +368,69 @@ Esc clears the selection.
 **Pictures of TV episodes.** In Continue watching, Next up and the rows of new episodes, an episode shows its
 show's picture with the show's title logo, like a movie (the season, number and name stay below it). **Settings ›
 Look › Pictures of TV episodes** switches back to a picture from the episode itself.
+
+## Streaming services
+
+LENTA holds your own media. This holds none of it: it is a shop window onto the services you already pay
+for. Tick them in *Settings › Streaming services* and Home gains a row for each — *Popular on Netflix*,
+*Popular series on Max* — showing what that service is carrying **in your country**. Clicking a title
+opens the service in a new tab. Nothing is played in LENTA, nothing is downloaded, and nothing of theirs
+is stored beyond a title, the picture TMDB publishes, and a link.
+
+**It needs no new account or key.** The data comes through the TMDB key you already use for everything
+else, and the country comes from *Settings › Metadata › TMDB and language*. Getting that country wrong is
+not a small mistake — a service carries different things in different places, and the wrong one offers
+titles you cannot actually watch.
+
+**The list of services is not ours.** It is what TMDB says is available where you are, in the order
+JustWatch ranks them locally, so a household in Bulgaria is offered Nova Play and one in the United
+States is offered Hulu, without LENTA knowing anything about either.
+
+**Anything you already own is left out**, matched on TMDB number so it works whatever your files are
+called. Being sent to Netflix for a film sitting on your own disk is the one thing a media server should
+never do. You can switch this off if you would rather see everything.
+
+**The rows say *Popular on*, not *Top 10*.** TMDB knows its own popularity across its whole catalogue,
+which LENTA narrows to that service and your country. The services' own published charts are not
+something TMDB can see, so LENTA does not print a position it would be making up.
+
+**The rows can be narrowed to the genres you watch.** Fifteen of them in *Settings › Streaming
+services* — tick Action, Horror, Science Fiction or whichever, and the rows show those rather than
+whatever is most popular overall; tick none and nothing is narrowed. The numbers behind them are fetched
+from TMDB so they match what it holds. TMDB files series differently from films: it keeps one *Sci-Fi &
+Fantasy* where films have two, one *Action & Adventure* likewise, and no Horror, Romance or Thriller for
+series at all. Those three are marked *films only* — picking one narrows your films and leaves your
+series as they were.
+
+**Languages you would rather not see can be left out.** What a service carries where you live is not all
+for you — not bad, just not what you watch. *Settings › Streaming services* lists the languages that
+actually turned up in your rows, with how many titles of each, and you tick the ones to drop. The list is
+built from what you were shown rather than decided in advance, so it stays useful as the rows change.
+While any are ticked LENTA fetches a second page from each service, so the rows still fill up.
+
+**The tiles are drawn like your own.** If your artwork style is wide pictures, so are these; if it is
+posters, they are posters.
+
+**The picture on a tile can be changed**, like any title you own. The pencil in the corner shows every
+poster and backdrop TMDB holds for that title — click one — and takes a link or a file as well, for when
+none of them is right. Wide and upright are chosen separately, since a row can be drawn either way and a
+wide picture in a poster's place is cropped to a strip. What you pick is kept when the rows refresh. TMDB's choice is sometimes the wrong one, or just an ugly one. What you pick is kept
+separately from the titles themselves, so it survives the nightly refresh.
+
+These rows are ordinary Home sections: rename, reorder or hide them in *Settings › Home screen*. They are
+left off televisions, where there is no second tab for them to open.
+
+**Clicking a title opens it on the service.** Netflix addresses a film by a number —
+`netflix.com/watch/81757047` — and where that number can be found, the card uses it: one click and the
+film is playing, with a series opening on its own page so you choose the episode. Netflix does not
+publish those numbers and TMDB does not carry them; **Wikidata** does, as a property volunteers fill in,
+and LENTA looks it up once per title and keeps it. Coverage is good for well-known titles and thin
+elsewhere, so anything without a number opens the service's search for its exact name instead — still
+inside Netflix, on the right result, never on a page about the film somewhere else.
+
+**The data is JustWatch's**, supplied through TMDB on the condition that it is credited to them. That
+credit is on the *Settings › Streaming services* page and in `THIRD-PARTY-NOTICES.md`. It is a condition
+of being allowed the data at all, so keep it somewhere a person can find it.
 
 ## Looks: seven dark themes
 

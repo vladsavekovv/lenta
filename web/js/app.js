@@ -9,7 +9,7 @@ import { views } from './views.js';
 import { libraryMenu } from './admin.js';
 import { openPlayer, openLiveChannel, closePlayer, expandPlayer, minimizePlayer, playerIsLive, playerItem, playerMini, playerOpen } from './player.js';
 import { ADMIN_TABS, renderSettingsPage } from './settings-shell.js';
-import { initTv, inTvApp, changeServer } from './tv.js';
+import { applyKeyWatch, initTv, inTvApp, changeServer } from './tv.js';
 import { runCleanups } from './extras.js';
 
 export const state = { user: null, server: null, libraries: [], prefs: {}, features: {}, languages: [] };
@@ -387,6 +387,9 @@ export async function startSession() {
   setArtStyle(state.prefs.card_style);
   setEpisodeArt(state.prefs.episode_art);
   applyMenuDefault(state.prefs.menu_default);
+  // Switched on from any browser, it appears on the television — which is the point: the set whose
+  // remote is misbehaving is the worst place to go hunting through settings for the switch.
+  applyKeyWatch(state.prefs.tv_key_watch === '1');
   api.get('/api/languages').then(l => { state.languages = l; }).catch(() => {});
   state.server = { ...(state.server || {}), name: state.user.server_name };
   document.title = state.user.server_name || 'LENTA';

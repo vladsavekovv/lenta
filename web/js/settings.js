@@ -5,6 +5,7 @@ import { changePasswordDialog } from './auth.js';
 import { ensureLanguages, languageOptions } from './subtitles.js';
 import { $, html, icon, modal, mount, raw, setArtStyle, setEpisodeArt, toast } from './ui.js';
 import { inAndroidApp, installAvailable, installHelp, isAndroid, onInstallChange, promptInstall } from './pwa.js';
+import { keyWatching, setKeyWatch, tvMode } from './tv.js';
 import { blockLayout, layoutBar, layoutButtons, pageLayout } from './layout.js';
 
 // Colours for the theme previews (kept here so a card can show a theme that isn't active).
@@ -142,6 +143,13 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
           ${isAndroid() ? html`<p class="lead" style="margin-top:16px">Or get the Android app: it opens LENTA full screen and needs no browser settings.
             In the app, type this server's address: <b>${location.host}</b></p>
             <a class="btn" href="/download/lenta.apk" download>${icon('download')}Download the Android app (APK)</a>` : ''}`}
+        <div id="p-keywatch-box" style="margin-top:18px">
+          <label class="check"><input type="checkbox" id="p-keywatch"><span>Show what the remote sends (televisions)</span></label>
+          <p class="lead">Puts a panel in the corner <b>on your televisions</b> showing the number each remote
+            key sends and what LENTA makes of it — for when a key does nothing and nobody can say why, since
+            the sets disagree about the numbers. Switch it on here, then open LENTA on the TV and press the
+            key. Remember to switch it off afterwards.</p>
+        </div>
         <p class="lead" style="margin-top:16px"><b>Samsung TV</b> (2017 or newer): open <b>${location.origin}</b> in the TV's Internet browser,
           or install the LENTA TV app from this server: switch the TV to Developer Mode, then on the server run
           <code>sudo /opt/lenta/deploy/install-tv.sh &lt;TV's IP address&gt;</code>. Step-by-step guide: docs/SAMSUNG-TV.md.</p></section>
@@ -154,6 +162,23 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
   // only this page's blocks are shown; the others stay (hidden) so every control keeps working
   const keep = PAGE_PANELS[page] || ['look'];
   [...view.querySelectorAll('.settings-cols > .panel')].forEach(p => { if (!keep.includes(p.dataset.panel)) view.querySelector('#p-hidden').append(p); });
+
+  // The key watcher: on at once, off at once, no Save — it is a torch, not a setting.
+  const kw = view.querySelector('#p-keywatch');
+  if (kw) {
+    kw.checked = state.prefs?.tv_key_watch === '1';
+    kw.addEventListener('change', async () => {
+      const on = kw.checked;
+      setKeyWatch(on);                                  // here and now, if this is a television
+      try {
+        await api.put('/api/me/prefs', { tv_key_watch: on ? '1' : '0' });
+        state.prefs.tv_key_watch = on ? '1' : '0';      // and on the television, next time it opens
+        toast(on ? 'The key panel will show on your televisions' : 'Key panel off');
+      } catch (ex) {
+        toast(ex.message || 'Not saved');
+      }
+    });
+  }
 
   let lay = null;
   const isDirty = () => Object.keys(draft).some(k => String(draft[k]) !== String(saved[k]));

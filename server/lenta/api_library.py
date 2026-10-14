@@ -299,6 +299,12 @@ def _section_specs(user: dict, libs: list[dict], con) -> list[dict]:
             title = {"music": "Recently added music", "audiobooks": f"Recently added to {l['name']}"}.get(
                 l["kind"], f"Latest in {l['name']}")
             specs.append({"id": f"recent-{l['id']}", "type": "recent", "title": title, "libs": [l["id"]]})
+    # What the services you subscribe to are showing. These come last because they are not yours: a row
+    # of things you cannot watch without leaving should not sit above your own films. They can be moved,
+    # renamed and hidden like any other, since they are ordinary sections with ordinary ids.
+    from . import streaming
+    specs += [{"id": r["id"], "type": "streaming", "title": r["title"], "libs": [],
+               "provider_id": r["provider_id"], "media": r["media"]} for r in streaming.rows_for_home()]
     return specs
 
 
@@ -377,7 +383,7 @@ def home_sections(default: bool = False, user: dict = Depends(auth.current_user)
             f"WHERE i.library_id IN ({','.join('?' * len(ids)) or 'NULL'}) AND i.kind IN ('movie','show') "
             f"GROUP BY g.value ORDER BY n DESC", ids)] if ids else []
     keep = ("id", "title", "default_title", "default_libs", "type", "rule", "genre", "channels",
-            "libs", "custom", "hidden", "renamed", "libs_changed")
+            "libs", "custom", "hidden", "renamed", "libs_changed", "provider_id", "media")
     return {"sections": [{k: r.get(k) for k in keep} for r in rows],
             "libraries": [{"id": l["id"], "name": l["name"], "kind": l["kind"]} for l in libs],
             "genres": genres}
@@ -436,6 +442,11 @@ def _home_rows(user: dict, sections: bool = False):
                 elif sp.get("rule") == "channels":
                     row["items"] = _channel_cards(sp.get("channels") or [])
                     row["style"] = "channel"
+                elif t == "streaming":
+                    from . import streaming
+                    row["items"] = streaming.cards(sp["provider_id"], sp["media"])
+                    row["style"] = "streaming"
+                    row["logo"] = (row["items"][0] or {}).get("service_logo") if row["items"] else None
                 else:
                     rule = sp.get("rule") or {"recent": "recent", "top": "top", "genre": "genre"}[t]
                     items = _section_items(con, uid, libs, sp["libs"], rule, sp.get("genre") or "", seed=sp["id"])

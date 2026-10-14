@@ -297,6 +297,58 @@ export function channelCard(item) {
   </div>`;
 }
 
+// A title on a streaming service — not ours, not here, and not played here. The card says plainly whose
+// it is and goes out to them in a new tab, because everything about pretending otherwise is wrong: it
+// would be a promise LENTA cannot keep and a use of their catalogue nobody granted.
+const labelFor = (item) => {
+  const sub = [item.year, item.service].filter(Boolean).join(' \u00b7 ');
+  return `${item.title}${sub ? ` \u2014 ${sub}` : ''} \u2014 opens in a new tab`;
+};
+
+/** The same tile in the landscape style: the wide picture, and a poster behind glass when there is
+ *  none, exactly as wideCard does for a title you own. */
+function streamingWideCard(item, { mark, edit, label }) {
+  const art = item.backdrop;
+  const picture = art ? html`<img loading="lazy" src="${img(art, 500)}" alt="${item.title}">`
+    : item.poster ? html`<span class="wide-fill" style="background-image:url('${img(item.poster, 185)}')"></span><img class="wide-poster" loading="lazy" src="${img(item.poster, 342)}" alt="${item.title}">`
+    : genPoster(item);
+  return html`<div class="card landscape wide streaming${art ? ' has-art' : ''}" data-kind="streaming" data-id="${item.id}">
+    <a class="frame-link" href="${item.link}" target="_blank" rel="noopener noreferrer"
+       title="${label}" aria-label="Watch ${label}">
+      <div class="frame">${picture}${mark}${edit}</div></a>
+  </div>`;
+}
+
+export function streamingCard(item) {
+  const src = item.poster ? img(item.poster, 342) : null;
+  const sub = [item.year, item.service].filter(Boolean).join(' \u00b7 ');
+  // Whatever the surrounding tiles are, this is one of them. The Netflix theme styles its cards
+  // through a class of its own, so without it a streaming tile would be the one thing on the page
+  // that does not match — different corners, different hover, different size.
+  const themed = nfx() ? ' nfx-card' : '';
+  // The same pencil, in the same corner, as on a title you own. A picture TMDB publishes is sometimes
+  // the wrong one, or just an ugly one, and there is no reason this should be the row you cannot fix.
+  const edit = cardTools ? html`<span class="card-tools"><span class="ct-btn ct-edit" role="button" tabindex="0"
+      data-stream-art="${item.tmdb_id}:${item.media}" title="Use a different picture"
+      aria-label="Use a different picture for ${item.title}">${icon('edit')}</span></span>` : '';
+  const mark = item.service_logo
+    ? html`<img class="sv-logo" loading="lazy" src="${item.service_logo}" alt="${item.service}" title="On ${item.service}">`
+    : html`<span class="sv-name">${item.service}</span>`;
+  // Drawn the way the rest of Home is drawn. If your own rows are wide pictures, these are too —
+  // a row of portraits between two rows of landscapes is the thing that looks bolted on. The services
+  // themselves present their catalogues this way, so the wide picture is also the truer one.
+  if (wideArt() && !nfx()) return streamingWideCard(item, { mark, edit, label: labelFor(item) });
+  // No name underneath: a poster carries its own title, which is why nothing else on Home has one
+  // either. The name still has to exist for anyone not reading the picture, so it is the link's name.
+  // rel="noopener" matters: without it the page we open can reach back into this one through window.opener.
+  const label = labelFor(item);
+  return html`<div class="card poster streaming${themed}" data-kind="streaming" data-id="${item.id}">
+    <a class="frame-link" href="${item.link}" target="_blank" rel="noopener noreferrer"
+       title="${label}" aria-label="Watch ${label}">
+      <div class="frame">${src ? html`<img loading="lazy" src="${src}" alt="${item.title}">` : genPoster(item)}${mark}${edit}</div></a>
+  </div>`;
+}
+
 export function squareCard(item) {
   const src = item.poster ? img(item.poster, 342) : null;
   const book = item.kind === 'book';
@@ -406,6 +458,7 @@ export const nfxViewer = () => viewer;
 
 export function cardFor(item, style, index = 0) {
   if (item.kind === 'channel') return channelCard(item);
+  if (item.kind === 'streaming') return streamingCard(item);
   if (style === 'top10') return rankCard(item, index + 1);
   if (nfx()) {
     if (style === 'continue') return nfxContinueCard(item);
@@ -421,6 +474,9 @@ export function cardFor(item, style, index = 0) {
 
 export function rowStyle(row) {
   if (row.items[0]?.kind === 'channel') return 'channel';
+  // Streaming rows take the same artwork style as the rest of Home, so they sit in the page rather
+  // than on top of it.
+  if (row.items[0]?.kind === 'streaming') return wideArt() && !nfx() ? 'landscape' : 'poster';
   if (nfx() && row.style !== 'top10') {
     const k = row.items[0]?.kind;
     if (row.style !== 'continue' && (k === 'album' || k === 'book')) return 'square';
@@ -439,7 +495,15 @@ export function row(rowData) {
   const style = rowStyle(rowData);
   const name = nfx() && rowData.style === 'continue' && viewer ? `Continue Watching for ${viewer}` : rowData.title;
   const title = rowData.library_id ? html`<a href="#/library/${rowData.library_id}">${name}</a>` : name;
-  return html`<section class="row" aria-label="${rowData.title}"><h2>${title}</h2>
+  // A row may say where its content came from. Nothing does at the moment: the streaming rows used to
+  // carry their JustWatch credit here, and it now lives on Settings › Streaming services and in
+  // THIRD-PARTY-NOTICES instead — present and findable, without a line of small print over every row.
+  const credit = rowData.attribution ? html`<span class="row-credit">${rowData.attribution}</span>` : '';
+  // The service's own mark beside its name. Small, before the words, so the row reads as "Netflix:
+  // popular" at a glance rather than needing to be read at all.
+  const mark = rowData.logo
+    ? html`<img class="row-logo" loading="lazy" src="${img(rowData.logo, 92)}" alt="">` : '';
+  return html`<section class="row" aria-label="${rowData.title}"><h2>${mark}${title}${credit}</h2>
     <div class="scroller">
       <button class="scroll-btn prev" data-scroll="-1" aria-label="Scroll left">${icon('back')}</button>
       <div class="track ${style}">${rowData.items.map((i, n) => cardFor(i, rowData.style, n))}</div>

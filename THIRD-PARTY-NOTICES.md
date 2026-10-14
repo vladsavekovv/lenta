@@ -59,6 +59,7 @@ off or get a license from the service.
 | Service | Used for | Terms |
 |---|---|---|
 | [TMDB](https://www.themoviedb.org) | Titles, descriptions, artwork, cast, trailers list | [API terms](https://www.themoviedb.org/api-terms-of-use). *This product uses the TMDB API but is not endorsed or certified by TMDB.* |
+| [JustWatch](https://www.justwatch.com) | Which streaming services carry a title, per country (reached through TMDB's watch-provider endpoints, and shown in Settings › Streaming services and the Home rows) | TMDB supplies this on one condition: **"In order to use this data you must attribute the source of the data as JustWatch"**, and says access is revoked where it is not. LENTA shows that credit on the settings page and on every row built from it. If you change how those rows look, keep it. |
 | [IMDb Non-Commercial Datasets](https://developer.imdb.com/non-commercial-datasets/) | IMDb ratings and votes | Personal and non-commercial use only. Information courtesy of IMDb (https://www.imdb.com). Used with permission. |
 | [Wikipedia](https://www.wikipedia.org) / [Wikidata](https://www.wikidata.org) | Summaries in the About panel | Text under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), shown with a link to the article |
 | [OMDb API](https://www.omdbapi.com) | Rotten Tomatoes, Metacritic, awards, posters (own key) | [OMDb terms](https://www.omdbapi.com/legal.htm) |

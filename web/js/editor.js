@@ -3,7 +3,7 @@
 import { api } from './api.js';
 import { refreshView, state } from './app.js';
 import { trailerPlayer } from './extras.js';
-import { $, esc, fmtBytes, fmtRuntime, html, icon, modal, mount, popMenu, raw, setCardTools, toast } from './ui.js';
+import { $, esc, fmtBytes, fmtRuntime, html, icon, modal, mount, popMenu, raw, setCardTools, toast, wideArt } from './ui.js';
 
 const LABELS = {
   title: 'Title', sort_title: 'Sort title', original_title: 'Original title', edition: 'Edition',
@@ -22,6 +22,13 @@ export function initCardTools() {
 }
 
 function cardClick(e) {
+  const art = e.target.closest('[data-stream-art]');
+  if (art) {                       // a streaming tile: the picture is the only thing here to change
+    e.preventDefault();
+    e.stopPropagation();
+    const [id, kind] = art.dataset.streamArt.split(':');
+    return streamArtDialog(Number(id), kind);
+  }
   const edit = e.target.closest('[data-card-edit]');
   const more = e.target.closest('[data-card-menu]');
   if (!edit && !more) return;
@@ -33,8 +40,123 @@ function cardClick(e) {
 }
 document.addEventListener('click', cardClick, true);
 document.addEventListener('keydown', (e) => {
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[data-card-edit], [data-card-menu]')) cardClick(e);
+  if ((e.key === 'Enter' || e.key === ' ')
+      && e.target.matches?.('[data-card-edit], [data-card-menu], [data-stream-art]')) cardClick(e);
 }, true);
+
+/** The picture on a streaming tile.
+ *
+ *  Not a metadata editor — there is nothing here to own, only somebody else's catalogue entry and the
+ *  one thing about it we change for ourselves. But "paste a link" was a poor offer when TMDB already
+ *  holds every poster and backdrop it has for the title, so this shows them and you pick one.
+ *
+ *  Upright and wide are chosen separately, because a row can be drawn either way and a wide picture
+ *  squeezed into a poster's place is cropped to a strip.
+ */
+function streamArtDialog(tmdbId, kind) {
+  let shape = wideArt() ? 'backdrop' : 'poster';     // start on the one this server is actually showing
+  let choices = null;
+  let failed = '';          // "TMDB has none" and "TMDB could not be asked" are different sentences
+  // Its own classes throughout. The metadata editor's ed-* styles describe a different shape — a
+  // sidebar of tabs beside a panel — and borrowing them put each block of this dialog into a cell of
+  // that grid: tabs top left, pictures top right, the link box underneath the tabs, the buttons adrift
+  // in the middle. Nothing was wrong with the markup; it was being laid out by someone else's plan.
+  const m = modal(html`<div class="sa-head"><h3>Picture</h3></div>
+    <div class="sa-body"></div>`, { wide: true });
+  const body = m.box.querySelector('.sa-body');
+
+  const draw = () => {
+    const list = (choices || {})[shape] || [];
+    mount(body, html`
+      <div class="sa-tabs">
+        <button class="sa-tab${shape === 'backdrop' ? ' on' : ''}" data-shape="backdrop">Wide</button>
+        <button class="sa-tab${shape === 'poster' ? ' on' : ''}" data-shape="poster">Upright</button>
+      </div>
+      ${choices === null ? html`<p class="lead">Asking TMDB what it has…</p>`
+        : failed ? html`<p class="lead">TMDB could not be asked: ${failed}. A link or a file below still works.</p>`
+        : !list.length ? html`<p class="lead">TMDB has no ${shape === 'backdrop' ? 'wide' : 'upright'} picture
+            for this title. You can still use a link or a file below.</p>`
+        : html`<div class="sa-grid ${shape}">
+            ${list.map(c => html`<button class="sa-pick" data-ref="${c.ref}" title="${c.width}\u00d7${c.height}${c.lang ? ` \u00b7 ${c.lang}` : ''}">
+              <img loading="lazy" src="${c.url}?w=342" alt=""></button>`)}
+          </div>`}
+      <div class="sa-rest">
+        <div class="sa-fields">
+          <label class="sa-fld"><span>…or a link to an image</span>
+            <input id="sa-url" type="url" placeholder="https://…/picture.jpg" autocomplete="off"></label>
+          <label class="sa-fld"><span>…or a file from this computer</span>
+            <input id="sa-file" type="file" accept="image/*"></label>
+        </div>
+        <p class="sa-note">Your choice is kept when the rows are refreshed overnight.</p>
+        <div class="sa-actions">
+          <button class="btn" id="sa-reset">Use the original</button>
+          <span class="sa-gap"></span>
+          <button class="btn" id="sa-cancel">Close</button>
+          <button class="btn primary" id="sa-save">Save link or file</button>
+        </div>
+      </div>`);
+    wire();
+  };
+
+  const done = async (p, keepOpen = false) => {
+    try {
+      await p;
+      if (!keepOpen) m.close();
+      toast('Picture changed');
+      refreshView();
+    } catch (ex) {
+      toast(ex.message || 'That did not work');
+    }
+  };
+
+  const wire = () => {
+    body.querySelectorAll('[data-shape]').forEach(b => b.addEventListener('click', () => {
+      shape = b.dataset.shape;
+      draw();
+    }));
+    // Picking a picture is one unambiguous act, so the dialog goes at once rather than sitting there
+    // through the round trip. Nothing is claimed before it is known: the message that follows says what
+    // actually happened, including when it did not work.
+    body.querySelectorAll('[data-ref]').forEach(b => b.addEventListener('click', async () => {
+      m.close();
+      try {
+        await api.post('/api/admin/streaming/art', { tmdb_id: tmdbId, kind, shape, ref: b.dataset.ref });
+        toast('Picture changed');
+        refreshView();
+      } catch (ex) {
+        toast(ex.message || 'That picture could not be saved');
+      }
+    }));
+    body.querySelector('#sa-cancel').addEventListener('click', () => m.close());
+    body.querySelector('#sa-reset').addEventListener('click', () =>
+      done(api.post('/api/admin/streaming/art', { tmdb_id: tmdbId, kind, shape, reset: true })));
+    body.querySelector('#sa-save').addEventListener('click', () => {
+      const file = body.querySelector('#sa-file').files?.[0];
+      const url = body.querySelector('#sa-url').value.trim();
+      if (file) {
+        // The same shape as the artwork upload above: raw bytes, not a form, with the real type on it.
+        return done((async () => {
+          const res = await fetch(
+            `/api/admin/streaming/art/upload?tmdb_id=${tmdbId}&kind=${kind}&shape=${shape}`,
+            { method: 'POST', credentials: 'same-origin', body: file,
+              headers: { 'Content-Type': file.type || 'application/octet-stream' } });
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Upload failed');
+        })());
+      }
+      if (!url) return toast('Pick a picture, or paste a link, or choose a file');
+      return done(api.post('/api/admin/streaming/art', { tmdb_id: tmdbId, kind, shape, url }));
+    });
+  };
+
+  draw();
+  api.get(`/api/admin/streaming/art/choices?tmdb_id=${tmdbId}&kind=${kind}`)
+    .then(got => { choices = got; draw(); })
+    .catch(ex => {
+      choices = {};
+      failed = (ex.message || 'it did not answer').replace(/\.$/, '');     // the sentence ends below
+      draw();
+    });
+}
 
 export async function refreshMetadata(id) {
   toast('Refreshing metadata…');

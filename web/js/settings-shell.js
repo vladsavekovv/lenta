@@ -42,6 +42,7 @@ export const NAV = [
     { id: 'subtitles', label: 'Subtitles', icon: 'subs' },
     { id: 'previews', label: 'Previews and intros', icon: 'image' },
     { id: 'livetv', label: 'Live TV', icon: 'live' },
+    { id: 'streaming', label: 'Streaming services', icon: 'film' },
   ] },
   { title: 'Advanced', admin: true, items: [
     { id: 'logs', label: 'Logs', icon: 'doc' },
