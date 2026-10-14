@@ -6,7 +6,7 @@ database and are edited from the admin dashboard; see db.SETTING_DEFAULTS.
 import os
 from pathlib import Path
 
-VERSION = "1.10.13"
+VERSION = "1.11.1"
 APP_NAME = "LENTA Media Server"
 
 _ROOT = Path(__file__).resolve().parents[2]  # .../lenta

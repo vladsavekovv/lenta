@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.11.1 — Refreshing the page no longer throws the film away
+
+- **The mini player survives a refresh.** With something playing in the bar at the bottom, pressing F5
+  used to lose it: the bar went with the page, and getting back meant finding the title again and
+  pressing Resume. A browser keeps nothing of a video across a page load, so LENTA now writes down the
+  little it takes to build one again — which title, which file, and the position at the moment the page
+  went away — and puts the bar back where it was.
+- **It comes back paused, with the picture already there.** A page that starts making noise by itself
+  is not what anyone pressing refresh asked for. One press of play carries on from the same place.
+- **It belongs to the tab it was playing in.** The place is kept in the tab's own store, so a second
+  tab does not sprout a player of its own, and closing the tab forgets it rather than producing last
+  night's episode a week later. Closing the mini player, or opening it back out to full screen, forgets
+  it too — refreshing the full-screen player opens the full-screen player, as it always did.
+- Live TV is deliberately not kept: a broadcast has no position to come back to, and the tuner was
+  handed back when the page went away.
+
+## 1.11.0 — Settings can now say what this actually is
+
+- **There is an About page.** Until now LENTA never told you its own version anywhere you could get at
+  it without being an administrator — the number was on the admin dashboard and nowhere else, which is
+  the one place you cannot reach from a television while something is going wrong on it. Settings ›
+  About now says the version, the licence, how long the server has been up, what the library holds and
+  how large it is, what the machine is, whether transcoding is on the graphics card or the processor,
+  and what everything is built on: Python, FastAPI, SQLite, FFmpeg, with their versions.
+- **It also says which of the two clients the device in front of you was given.** A 2017 television and
+  a 2024 one run different builds of the same app, and almost every television fault starts with not
+  knowing which one is on the screen. The page names it — "Standard build" or "Compatibility build —
+  for televisions from 2017 to 2022" — along with the screen size, whether it is in television mode,
+  and, on an older engine, which of CSS variables, grid, sticky position and flex gap it has to do
+  without. One photograph of that page now answers the first three questions of any TV problem.
+- **Everyone can read it, and nobody reads more than they should.** The counts are the libraries that
+  account is allowed to open, so a restricted account cannot use the page to measure the rest of the
+  server. Paths, free space, the service account, the listening address and the number of accounts are
+  shown to administrators only, and no key, token or password is anywhere in what the page asks for.
+- **The credits are on it, where they belong.** The Movie Database, JustWatch for what is on which
+  streaming service, KinoCheck and YouTube for trailers, OpenSubtitles, Wikipedia and OMDb, and the
+  broadcast's own tables for the Live TV guide — with the attribution TMDB asks for and the one
+  JustWatch requires. And the licence in plain words: public domain, nothing to ask anyone for.
+- It is read-only. There is no Save button on it, because there is nothing on it to save.
+
 ## 1.10.13 — The ring, the logo, the controls, and the two columns of Settings
 
 - **The focus ring is white on a television, in every theme and on every set.** It used to be painted

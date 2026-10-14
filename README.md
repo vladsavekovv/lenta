@@ -11,7 +11,7 @@
 https://github.com/user-attachments/assets/ecd20a9b-4fea-4781-9b54-c5688e15229c
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.10.13-8a5cf6">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.11.1-8a5cf6">
   <img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-24.04%20%7C%2026.04-E95420?logo=ubuntu&logoColor=white">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="Android" src="https://img.shields.io/badge/Android-8%2B-3DDC84?logo=android&logoColor=white">

@@ -188,7 +188,7 @@ export async function openPlayer(itemId, opts = {}) {
   let start = 0;
   if (opts.start != null) start = Number(opts.start) || 0;
   else if (!opts.restart && detail.progress && !detail.progress.completed) start = detail.progress.position || 0;
-  await load(start);
+  await load(start, { keepPaused: !!opts.paused });
   if (choice.subtitle) selectSubtitle(choice.subtitle.key);
   else if (choice.download) autoDownload(file, choice.download);
 }
@@ -226,6 +226,53 @@ async function autoDownload(file, language) {
   } catch { /* playback goes on without them */ }
 }
 
+// ---- surviving a reload ----------------------------------------------------------------------------
+// Pressing refresh with the mini player at the bottom of the screen used to throw the film away: the bar
+// went with the page, and finding your place again meant going back to the title and pressing Resume.
+// A browser keeps nothing of a <video> across a load, so what is kept is the little it takes to build
+// one again — which title, which file, and where it had got to.
+//
+// In sessionStorage, deliberately, because that is the store that belongs to this tab and survives a
+// reload of it: a second tab does not open a player of its own, and closing the tab does not leave one
+// waiting to appear next week. What comes back is paused, because a page that starts making noise on
+// its own is a page nobody asked to refresh.
+//
+// Live TV is not kept. There is no position to come back to in a broadcast, and the tuner was handed
+// back when the page went away.
+const KEEP = 'lenta.miniPlayer';
+const keep = {
+  read() { try { return JSON.parse(sessionStorage.getItem(KEEP) || 'null'); } catch { return null; } },
+  write(v) { try { sessionStorage.setItem(KEEP, JSON.stringify(v)); } catch { /* private mode */ } },
+  clear() { try { sessionStorage.removeItem(KEEP); } catch { /* private mode */ } },
+};
+
+/** Write down where the mini player has got to (throttled by its caller). */
+function keepMini() {
+  if (!P || !P.mini || P.live || !P.info) return;
+  P.keptAt = Date.now();
+  keep.write({ item: P.itemId, file: P.fileId, at: position() });
+}
+
+/** Nothing to come back to: the player was closed, or opened out to the full screen. */
+function forgetMini() { keep.clear(); }
+
+// The page going away is the last chance to write down exactly where it had got to, and the moment it
+// matters most — refreshing is precisely this event. The timer above stays as well, for the times this
+// never arrives: a tab killed for memory, a television cutting the power to its browser.
+window.addEventListener('pagehide', keepMini);
+document.addEventListener('visibilitychange', () => { if (document.hidden) keepMini(); });
+
+/** After signing in: put back the mini player this tab had before the page was reloaded, paused.
+ *  Does nothing if a player is already open — a refresh of the full-screen player is the router's. */
+export async function restoreMiniPlayer() {
+  const k = keep.read();
+  if (!k || !k.item || playerOpen()) return false;
+  keep.clear();        // one attempt: a title that will not play must not come back at every refresh
+  await openPlayer(k.item, { mini: true, file: k.file, start: k.at, paused: true,
+                             returnTo: location.hash || '#/' });
+  return playerMini();
+}
+
 // ---- mini player (like Plex): the video goes on in the bar at the bottom while you browse ----------------------------
 export const playerMini = () => !!P?.mini;
 export const playerIsLive = () => !!P?.live;
@@ -244,6 +291,7 @@ export function minimizePlayer({ navigate = true } = {}) {
   document.body.classList.add('mini-player');
   document.documentElement.classList.remove('player-open');   // browsing again: the page scrolls
   dockRefresh();
+  keepMini();                                 // from here on, a refresh brings it back
   window.dispatchEvent(new CustomEvent('lenta:player-mini'));  // pages may play trailers again (muted)
   if (navigate) {                              // back to the page you came from (or Home)
     if (P.returnTo === 'back') history.back();
@@ -262,6 +310,7 @@ function openDetails() {
 export function expandPlayer({ navigate = true } = {}) {
   if (!P || !P.mini) return;
   P.mini = false;
+  forgetMini();              // full screen again: a refresh here is the router's business, not ours
   P.root.querySelector('.player').classList.remove('mini');
   document.body.classList.remove('mini-player');
   document.documentElement.classList.add('player-open');
@@ -458,6 +507,7 @@ function keepAwake(on) { try { window.LentaApp?.keepScreenOn(on); } catch { /* n
 
 function teardown(reason, { quiet = false } = {}) {
   if (!P) return;
+  forgetMini();
   dockUnmount(P.dock);
   keepAwake(false);
   report(reason);
@@ -730,6 +780,7 @@ function updateTime() {
   if (!P?.info) return;
   const pos = position(), dur = duration();
   if (P.live) return;                   // no subtitles of our own yet, and nothing comes up next
+  if (P.mini && Date.now() - (P.keptAt || 0) > 4000) keepMini();     // so a refresh lands within four seconds
   renderSubs(pos);
   upNext(pos, dur);
   if (Date.now() - P.lastReport > 10000 && !P.video.paused) report('playing');
@@ -1179,8 +1230,8 @@ function wire() {
   P.pinchedAt = () => pinchEnd;
 
   const playIcons = (name) => ['#pplay2'].forEach(id => { const b = $(id); if (b) mount(b, icon(name)); });
-  v.addEventListener('play', () => { playIcons('pause'); poke(); keepAwake(true); });
-  v.addEventListener('pause', () => { playIcons('play'); el.classList.remove('idle'); report('paused'); keepAwake(false); });
+  v.addEventListener('play', () => { playIcons('pause'); poke(); keepAwake(true); keepMini(); });
+  v.addEventListener('pause', () => { playIcons('play'); el.classList.remove('idle'); report('paused'); keepAwake(false); keepMini(); });
   v.addEventListener('waiting', () => showSpinner(true));
   v.addEventListener('seeking', () => showSpinner(true));
   v.addEventListener('playing', () => showSpinner(false));

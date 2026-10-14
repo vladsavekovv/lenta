@@ -7,7 +7,7 @@ import { inAndroidApp, installAvailable, promptInstall } from './pwa.js';
 import { renderAuth, changePasswordDialog } from './auth.js';
 import { views } from './views.js';
 import { libraryMenu } from './admin.js';
-import { openPlayer, openLiveChannel, closePlayer, expandPlayer, minimizePlayer, playerIsLive, playerItem, playerMini, playerOpen } from './player.js';
+import { openPlayer, openLiveChannel, closePlayer, expandPlayer, minimizePlayer, playerIsLive, playerItem, playerMini, playerOpen, restoreMiniPlayer } from './player.js';
 import { ADMIN_TABS, renderSettingsPage } from './settings-shell.js';
 import { applyKeyWatch, initTv, inTvApp, changeServer } from './tv.js';
 import { runCleanups } from './extras.js';
@@ -397,6 +397,9 @@ export async function startSession() {
   await loadLibraries();
   lastViewKey = null;
   await route();
+  // The page was reloaded with something playing in the bar at the bottom: put it back, paused.
+  // After the page it belongs to, so the film lands on top of the right page rather than an empty one.
+  restoreMiniPlayer().catch(() => { /* the title has gone, or the server said no: just browse */ });
 }
 
 async function boot() {

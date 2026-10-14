@@ -4,6 +4,7 @@
 import { renderRail, state } from './app.js';
 import { renderSettings } from './settings.js';
 import { renderAdminPage } from './admin.js';
+import { renderAbout } from './sysinfo.js';
 import { $, html, icon, mount } from './ui.js';
 
 export const NAV = [
@@ -17,6 +18,7 @@ export const NAV = [
     ] },
     { id: 'app', label: 'LENTA app', icon: 'phone' },
     { id: 'account', label: 'Account', icon: 'user' },
+    { id: 'about', label: 'About', icon: 'info' },
   ] },
   { title: 'Server', admin: true, items: [
     { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
@@ -142,6 +144,7 @@ export async function renderSettingsPage(page, q = new URLSearchParams()) {
     view.querySelector('.sset').classList.toggle('menu-open', open);
   });
   const body = $('#sset-body');
-  if (USER_PAGES.has(page)) await renderSettings(body, page);
+  if (page === 'about') await renderAbout(body);      // read-only: not one of the settings pages, no Save bar
+  else if (USER_PAGES.has(page)) await renderSettings(body, page);
   else await renderAdminPage(page, body, q);
 }

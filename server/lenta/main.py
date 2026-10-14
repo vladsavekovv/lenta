@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import (about, api_admin, api_auth, api_editor, api_extras, api_library, api_livetv, api_network, api_playback,
-               api_prefs, api_streaming, api_subtitles, epg, intros, livestream, livetv, logs, scanner,
+               api_prefs, api_streaming, api_subtitles, api_system, epg, intros, livestream, livetv, logs, scanner,
                streaming, trailers, transcode, trickplay, watcher)
 from .config import APP_NAME, VERSION, WEB_DIR, ensure_dirs
 from .db import get_setting, init_db
@@ -77,6 +77,7 @@ app.include_router(api_prefs.router)
 app.include_router(api_subtitles.router)
 app.include_router(api_extras.router)
 app.include_router(about.router)
+app.include_router(api_system.router)
 app.include_router(api_editor.router)
 app.include_router(api_network.router)
 app.include_router(api_streaming.router)

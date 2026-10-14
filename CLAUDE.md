@@ -93,26 +93,29 @@ tar tzf out/lenta.tar.gz | grep -c '\.pem$'      # must print 0
 - Every fix gets a test that **fails on the previous version** – check that it does, and say so.
 
 ## Pick up here (next session, in order)
-1. **Publish to GitHub.** `origin/main` is at **1.8.17** plus four README edits Vlad made on github.com
-   on 13 Oct; **1.9.0 → 1.10.13 are unpublished**. The package in his hands is built on the current
-   remote (`.github-base` = `769ba2e`) with those edits already merged, so `tools/github-update.sh`
-   will accept it. If more time passes, check the remote again before building another package –
-   the script stops rather than overwrite anything he has changed on github.com.
-2. **Two faults waiting on his photographs**, not on code: which Settings page leaves Save greyed, and
+1. **Two faults waiting on his photographs**, not on code: which Settings page leaves Save greyed, and
    the `play:` lines from a film that will not start on the 2017 set. Ask; do not guess a fix.
-3. **The library grid is the one page the 1.10.12 work does not help.** Home and the guide are built
+2. **The library grid is the one page the 1.10.12 work does not help.** Home and the guide are built
    from rows, so a press can rule out whole rows at once; a grid is a single block, so every card on it
    is still measured. If he says a library page feels slower than Home, that is why.
-4. **Live TV**: cache channel PIDs to skip the PAT/PMT read; `DMX_OUT_TSDEMUX_TAP` to reach 5 cached
+3. **Live TV**: cache channel PIDs to skip the PAT/PMT read; `DMX_OUT_TSDEMUX_TAP` to reach 5 cached
    channels on one multiplex. The frequencies that will not lock are a signal problem on his line, not
    code – see the vault note before offering a software fix.
-5. Small: stop the `em28xx` driver polling an infrared receiver the card says it does not have; the
+4. Small: stop the `em28xx` driver polling an infrared receiver the card says it does not have; the
    README still wants a photograph of the TV app.
+5. The newest README section is still **"What's new in 1.9"** – 1.10 and 1.11 have no entry. Offer;
+   it is his README and his call.
 
-## State at this handoff (14 Oct 2026)
-- Version **1.10.13**. All 18 test files pass.
-- **GitHub**: `origin/main` = `769ba2e` = **1.8.17** plus four of his README edits (13 Oct).
-  **1.9.0 → 1.10.13 are unpublished.** `.github-base` in the tree records that commit.
+## State at this handoff (14 Oct 2026, late)
+- Version **1.11.1** — Settings › About (`web/js/sysinfo.js` + `server/lenta/api_system.py`,
+  `GET /api/system`), and the mini player surviving a refresh (`keepMini` / `restoreMiniPlayer` in
+  `web/js/player.js`, kept in **sessionStorage** so it belongs to the one tab). All 20 test files
+  pass. **1.10.13 is what is installed on `svkplex`**; 1.11.0 and 1.11.1 were sent, not yet confirmed
+  installed.
+- **GitHub is at 1.10.13**, `origin/main` = `5d26556`, verified (`VERSION`, badge, no `.pem`).
+  `.github-base` records it. **1.11.0 and 1.11.1 are unpublished** — he asks for a publish explicitly.
+- Check the remote again (`cd /tmp/pub && git fetch -q origin`) before building the next publish
+  package – he edits `README.md` on github.com directly, and the script stops rather than overwrite him.
 - Open: a Save button in Settings reported to stay greyed until you leave the page and return – not
   reproduced on any page, with mouse or remote, on either client; the page and control are unknown.
 - Open: films that will not start on the 2017 set – the key watcher now prints `play:` lines naming the

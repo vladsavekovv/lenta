@@ -224,3 +224,17 @@ html.tv .card .frame-link:focus + .caption .t,
 html.tv .card:focus-within .caption .t { color: #fff !important; }
 /* A line filled white needs no edge at all: the fill is the signal. */
 html.tv .pset-dd:focus, html.tv .menu button:focus { box-shadow: none !important; outline: none !important; }
+
+/* ---- 9. Settings › About, read from a sofa ----------------------------------------
+   This is the page somebody photographs when a television misbehaves, and the page they
+   read out over the phone. Both happen from across a room, where the 14px the browser
+   settings use is a smudge. Nothing moves — only the type grows. The gaps are left alone
+   on purpose: on an engine with no grid the facts list becomes flex, and its spacing is
+   the fallback the legacy build worked out from the plain stylesheet. */
+html.tv .about-lenta .facts { font-size: 20px !important; }
+html.tv .about-hero h2 { font-size: 34px !important; }
+html.tv .about-ver { font-size: 20px !important; }
+html.tv .about-note { font-size: 18px !important; }
+html.tv .about-ua { font-size: 13px !important; }
+html.tv .about-logo { width: 104px !important; }
+html.tv .about-lenta .panel h3 { font-size: 24px !important; }
