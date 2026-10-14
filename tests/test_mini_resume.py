@@ -1,14 +1,18 @@
-"""The mini player survives a refresh — paused, where it was.
+"""The mini player survives a refresh and a closed tab — paused, where it was.
 
-A browser keeps nothing of a <video> across a page load, so until now pressing F5 with a film running
-in the bar at the bottom simply lost it: the bar went, and getting back meant finding the title again
-and pressing Resume. What is kept now is the little it takes to rebuild one — which title, which file,
-and the position at the moment the page went away.
+A browser keeps nothing of a <video> across a page load, so pressing F5 with a film running in the bar
+at the bottom simply lost it: the bar went, and getting back meant finding the title again and pressing
+Resume. What is kept now is the little it takes to rebuild one — which title, which file, and the
+position at the moment the page went away — in localStorage, which outlives the tab.
 
-The two decisions worth a test are where it is kept and what state it comes back in. It is kept in
-sessionStorage, which belongs to the tab: a second tab must not sprout a player of its own, and the
-place is forgotten when the tab is closed rather than ambushing him a week later. And it comes back
-**paused**, because a page that starts making noise by itself is not what anybody pressing refresh
+Outliving the tab is what the awkward cases in here are about. A store that outlives a tab is shared
+with every other tab, and with everyone else who signs in on that browser, so this checks the three
+rules that keep it from being a nuisance: a second tab opened while the first still has the film leaves
+it alone; a tab closed and reopened picks it straight up; and the record names the user it belongs to,
+because a household shares a browser and the next person to sign in should not be handed what the last
+one was watching. Anything older than a day is not "where I left off" and is dropped.
+
+And it comes back **paused** — a page that starts making noise by itself is not what anybody opening it
 asked for — but ready, so one press of play carries on.
 
 Live TV is deliberately not kept: a broadcast has no position to return to, and the tuner was handed
@@ -33,11 +37,20 @@ def check(name, ok):
 
 print("1. where it is kept, and when it is forgotten")
 src = (ROOT / "web" / "js" / "player.js").read_text()
-check("the place is kept in sessionStorage, not localStorage",
-      "sessionStorage.setItem(KEEP" in src and "localStorage.setItem(KEEP" not in src)
+check("the place outlives the tab (localStorage, not sessionStorage)",
+      "localStorage.setItem(KEEP" in src and "sessionStorage.setItem(KEEP" not in src)
+check("the tab's own id is the one thing that dies with the tab",
+      "sessionStorage.setItem(TAB" in src)
 check("every read and write is wrapped, for a browser in private mode",
-      len(re.findall(r"try \{[^}]*sessionStorage", src)) >= 3)
-check("a broadcast is never kept", re.search(r"function keepMini\(\)[^}]*P\.live", src) is not None)
+      len(re.findall(r"try \{[^}]*(local|session)Storage", src)) >= 4)
+check("the record names the user it belongs to", "user: state.user?.id" in src)
+check("and a film is never handed to another user", "k.user !== state.user.id" in src)
+check("a record older than a day is dropped", "STALE" in src and "24 * 60 * 60 * 1000" in src)
+check("a tab asks the others rather than guessing from a clock",
+      "anotherTabHasIt" in src and "addEventListener('storage'" in src)
+check("and only a tab actually showing the film answers",
+      re.search(r"e\.key !== PING \|\| !P \|\| !P\.mini", src) is not None)
+check("a broadcast is never kept", re.search(r"function keepMini\([^)]*\)[^}]*P\.live", src) is not None)
 def within(name, needle, lines=12):
     """Is `needle` in the first few lines of the function called `name`?"""
     at = src.find(f"function {name}(")
@@ -48,6 +61,7 @@ check("opening the player out to full screen forgets it", within("expandPlayer",
 check("and closing it forgets it", within("teardown", "forgetMini()"))
 check("the page going away is the last chance to write the position down",
       "addEventListener('pagehide', keepMini)" in src)
+check("and that covers a closed tab as much as a refresh", "pagehide" in src)
 check("so is the page being hidden", "visibilitychange" in src and "document.hidden" in src)
 app = (ROOT / "web" / "js" / "app.js").read_text()
 check("the restore runs after the page it belongs to is drawn",
@@ -153,14 +167,32 @@ with sync_playwright() as pw:
         check(f"one press of play and it goes on ({went['clock']}s)",
               not went["paused"] and went["clock"] > now["clock"])
 
-    print("\n3. and it stays out of the way the rest of the time")
-    # Another tab of the same browser: signed in, same cookies, but its own sessionStorage.
+    print("\n3. one film, however many tabs")
+    # A second tab opened while this one still has the film: it must leave it alone.
     other = ctx.new_page()
     sign_in(other)
-    other.wait_for_timeout(2500)
-    check("a second tab does not open a player of its own", not bar(other)["bar"])
+    other.wait_for_timeout(3000)
+    check("a second tab does not take the film off the first", not bar(other)["bar"])
+    check("and the first tab still has it", bar(page)["bar"])
     other.close()
 
+    print("\n4. closing the tab and coming back")
+    page.close()                     # the tab goes: pagehide says so, and localStorage outlives it
+    fresh = ctx.new_page()
+    sign_in(fresh)
+    try:
+        fresh.wait_for_selector(".player.mini", timeout=30000)
+        fresh.wait_for_function("document.querySelector('#pv') && document.querySelector('#pv').readyState >= 2",
+                                timeout=40000)
+        back = bar(fresh)
+    except PwTimeout:
+        back = {"bar": False, "mini": False, "paused": None, "clock": None, "title": "", "play": ""}
+    check("a new tab picks the film up where the closed one left it", back["bar"] and back["mini"])
+    check("paused, as before", back["paused"] is True)
+    check(f"the same title ({back['title']})", back["title"] == was["title"])
+    page = fresh                     # carry on in the tab that has the player
+
+    print("\n5. and it stays gone when it should")
     # Stopped by hand, then refreshed: it should stay gone.
     page.evaluate("document.querySelector('#musicbar [data-dk=\"stop\"], #musicbar [data-dk=\"close\"]')?.click()")
     page.wait_for_timeout(600)

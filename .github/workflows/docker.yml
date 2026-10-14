@@ -1,0 +1,97 @@
+# Builds the container image and publishes it to this repository's own registry (ghcr.io).
+#
+# When it runs:
+#   * every push to main          -> rebuilt and tagged :edge, so the image is never stale
+#   * a tag like v1.12.0          -> published as :1.12.0, :1.12, :1 and :latest
+#   * the "Run workflow" button   -> builds without publishing, for trying a change
+#   * any pull request            -> builds without publishing, so a broken Dockerfile is caught
+#
+# No secrets to set up: GITHUB_TOKEN is issued to the job and is allowed to write to this repository's
+# packages. The first published image is private by default — make it public once from
+# github.com/vladsavekovv/lenta -> Packages -> lenta -> Package settings.
+name: Container image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # A pull request from a fork cannot be trusted with a token, and nothing is published from one.
+      - name: Sign in to ghcr.io
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out the tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          labels: |
+            org.opencontainers.image.title=LENTA Media Server
+            org.opencontainers.image.licenses=Unlicense
+
+      # linux/amd64 only for now: the FFmpeg build the image carries is x86_64, and an arm64 image
+      # would go out untested. Adding it means setup-qemu-action and platforms: linux/amd64,linux/arm64
+      # — and someone with an arm64 machine actually watching something on it first.
+      - name: Build, and publish on a push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The image is no use if it cannot start. Run the one just built and wait for the server to
+      # answer for itself, the same way the image's own health check does.
+      - name: Does it actually start?
+        run: |
+          set -eux
+          docker build -t lenta:test .
+          docker run -d --name lenta-test -e PUID=1000 -e PGID=1000 -p 8484:8484 lenta:test
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8484/api/server > /tmp/server.json; then break; fi
+            sleep 2
+          done
+          cat /tmp/server.json
+          grep -q '"version"' /tmp/server.json
+          # The server must not be running as root. The entrypoint execs setpriv, which execs the
+          # server, so PID 1 inside the container IS the server and /proc says who it belongs to.
+          docker exec lenta-test grep ^Uid: /proc/1/status
+          test "$(docker exec lenta-test sh -c 'grep ^Uid: /proc/1/status | awk "{print \$2}"')" = "1000"
+          docker exec lenta-test /opt/ffmpeg/ffmpeg -version | head -1
+          # and no signing key can have reached a layer
+          ! docker run --rm --entrypoint sh lenta:test -c 'ls /app/android 2>/dev/null; find / -name "*.pem" -not -path "/opt/venv/*" -not -path "/usr/lib/*" -not -path "/etc/ssl/*" 2>/dev/null' | grep -q 'lenta-release'
+          docker rm -f lenta-test

@@ -1,0 +1,73 @@
+# LENTA, the short way:
+#
+#   docker compose up -d        then open http://<this machine>:8484 and make the first account
+#
+# Everything below the media mounts is optional. Read it once, uncomment what your machine has.
+# The long version, with what each line does and how to tell whether it worked: docs/DOCKER.md
+
+services:
+  lenta:
+    image: ghcr.io/vladsavekovv/lenta:latest
+    # To build it yourself from a clone instead of pulling:  docker compose up -d --build
+    # build: .
+    container_name: lenta
+    restart: unless-stopped
+
+    ports:
+      - "8484:8484"       # http
+      # - "8443:8443"     # https, once it is switched on in Settings › Network
+
+    environment:
+      # The account on THIS machine that owns your media and should own LENTA's data folder.
+      # `id -u` and `id -g` tell you yours. On Synology and Unraid this is usually not 1000.
+      # The container starts as root only long enough to hand ./data to this account and become it.
+      PUID: 1000
+      PGID: 1000
+      TZ: Europe/Sofia
+
+    # Rather not have root in the picture at all? Start as the account instead, and make sure ./data
+    # already belongs to it. PUID/PGID above are then ignored — this line has already done their job.
+    # user: "1000:1000"
+
+    volumes:
+      # LENTA's own data: database, artwork, downloaded subtitles, transcoding scratch space.
+      - ./data:/data
+      # Your media. Add a line per folder; read-only, because a media server has no business
+      # changing what it plays. The path on the right is what you type when you add a library.
+      - /srv/media/films:/media/films:ro
+      - /srv/media/shows:/media/shows:ro
+
+    # ---- Hardware transcoding (optional) -------------------------------------------------------
+    # LENTA installs no drivers, here or on a host. It uses the one this machine already has, so
+    # pass the card in and nothing else is needed.
+    #
+    # NVIDIA — needs the NVIDIA Container Toolkit on the host:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu, video]
+    #
+    # Intel Quick Sync or AMD (VA-API) — pass the render node instead:
+    # devices:
+    #   - /dev/dri:/dev/dri
+    # group_add:
+    #   - "44"            # video  — `getent group video render` on the host gives yours
+    #   - "993"           # render
+
+    # ---- Live TV from a tuner (optional) -------------------------------------------------------
+    # A DVB-C / DVB-T / DVB-S stick plugged into this machine. Both lines are needed: the device
+    # itself, and membership of the group that owns it.
+    # devices:
+    #   - /dev/dvb:/dev/dvb
+    # group_add:
+    #   - "44"            # the group /dev/dvb/adapter0/frontend0 belongs to, usually video
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8484/api/server',timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.12.0 — LENTA in a container, so it can be installed by people who are not me
+
+- **`docker compose up -d` and it runs.** Until now the only way in was a clone and a sudo script on
+  Ubuntu 24.04 or 26.04, x86-64. That is a wall for most of the people who would otherwise try this:
+  they run a Synology, an Unraid box, a Proxmox container, a mini PC with whatever is on it. There is
+  now an image, a compose file with two media lines to edit, and nothing else to decide.
+- **The same promise about drivers, kept in the container too.** No NVIDIA, Mesa or VA-API package is
+  installed anywhere in the image. FFmpeg is the same self-contained build the bare-metal installer
+  uses, and the card comes from the host — `--gpus all` for NVIDIA, a passed-in `/dev/dri` for Intel
+  and AMD. A test greps the Dockerfile for driver packages, because a promise made in two places is a
+  promise that can be broken in one of them.
+- **A tuner works in a container.** Pass in `/dev/dvb` and the group that owns it and Live TV scans,
+  locks and builds its guide exactly as it does on a host. `tv-check.py` runs inside the container too,
+  for the frequency that finds a carrier and will not lock.
+- **It does not run as root.** The container starts as root for one job — giving the data folder to
+  the account that owns your media, which on a NAS is rarely uid 1000 — and then becomes that account.
+  The server itself refuses to be root, here as everywhere else. Start the container as a user instead
+  and that step is skipped entirely.
+- **The signing key cannot reach a published image.** `android/` is out of the build context, `*.pem`
+  with it, and the workflow greps the image it just built for the key before publishing anything.
+- **The image builds itself.** Every push builds it, every version tag publishes it to ghcr.io, and
+  every build starts the thing and waits for the server to answer for itself before any of it counts.
+
+## 1.11.2 — The mini player survives a closed tab too, without two tabs fighting over it
+
+- **Close the tab, open LENTA again, and the film is still in the bar.** 1.11.1 only survived a refresh:
+  where it was kept belonged to the tab and died with it. It now outlives the tab — same title, same
+  place, still paused, one press of play away.
+- **Opening a second tab does not steal the film from the first.** The place is now somewhere every tab
+  can see, so a tab that finds a film there asks the others out loud whether one of them is showing it,
+  and any tab that is answers within a moment. An answer means leave it alone; silence means nobody has
+  it and this tab may pick it up. Asking beats guessing from a timestamp: a closed tab stops answering
+  at once, so closing one and opening another carries the film straight across with no waiting, while
+  two tabs open side by side never end up playing the same film at each other.
+- **It is nobody else's business what you were watching.** The place now names the account it belongs
+  to, and is not handed to a different one signing in on the same browser.
+- **A day old is too old.** Past that it is not where you left off, it is last week, and Continue
+  watching is the right place to pick that up from.
+
 ## 1.11.1 — Refreshing the page no longer throws the film away
 
 - **The mini player survives a refresh.** With something playing in the bar at the bottom, pressing F5

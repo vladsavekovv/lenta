@@ -11,7 +11,7 @@
 https://github.com/user-attachments/assets/ecd20a9b-4fea-4781-9b54-c5688e15229c
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.11.1-8a5cf6">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.12.0-8a5cf6">
   <img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-24.04%20%7C%2026.04-E95420?logo=ubuntu&logoColor=white">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="Android" src="https://img.shields.io/badge/Android-8%2B-3DDC84?logo=android&logoColor=white">
@@ -191,13 +191,25 @@ Everything since 1.2 has gone into two things: **live television**, and **watchi
 
 ## 🚀 Quick start
 
-On Ubuntu 24.04 or 26.04 (64-bit x86):
+**With Docker**, on anything that runs it — a NAS, a mini PC, a Raspberry Pi 5, an old laptop:
+
+```bash
+mkdir lenta && cd lenta
+curl -fsSLO https://raw.githubusercontent.com/vladsavekovv/lenta/main/compose.yaml
+# point the two media lines in compose.yaml at your own folders, then:
+docker compose up -d
+```
+
+**Or straight onto Ubuntu** 24.04 / 26.04 (64-bit x86), with no container in the way:
 
 ```bash
 git clone https://github.com/vladsavekovv/lenta.git
 cd lenta
 sudo ./deploy/install.sh
 ```
+
+Same server either way, same FFmpeg, same data folder you can move later. Graphics card and TV tuner
+work in both: [**the container guide**](docs/DOCKER.md) says which lines to uncomment.
 
 Then:
 
@@ -214,6 +226,7 @@ permissions, NAS shares, graphics cards, phones, remote access, updates, backups
 | Guide | What's in it |
 |---|---|
 | [**Install guide**](docs/INSTALL.md) | Requirements, installation, first setup, GPU, NAS, remote access, updating, backups, uninstalling, troubleshooting, FAQ |
+| [**Docker**](docs/DOCKER.md) | Running it in a container: compose file, user ids, passing in a graphics card or a DVB tuner, updating, building it yourself |
 | [**User guide**](docs/USER-GUIDE.md) | Naming your files, libraries, the apps, themes, subtitles, trailers, metadata and artwork, users, shortcuts, API |
 | [**Samsung TV**](docs/SAMSUNG-TV.md) | !! WORK IN PROGRESS !! Watching on a Samsung TV: the TV's browser, or the LENTA TV app installed from your server |
 | [**Contributing**](CONTRIBUTING.md) | Running from source, project layout, rebuilding the Android app, sending changes |

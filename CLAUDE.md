@@ -19,6 +19,7 @@ Update the matching note at the end of a session – one note per topic, never a
 | Samsung TV app shell | `tizen/` |
 | Tests – standalone scripts, not pytest | `tests/test_*.py` |
 | Installer and tools run on the server | `deploy/` |
+| Container image | `Dockerfile`, `.dockerignore`, `compose.yaml`, `docker/entrypoint.sh`, `docs/DOCKER.md`, `.github/workflows/docker.yml` |
 | Docs Vlad maintains himself | `README.md`, `docs/INSTALL.md`, `docs/SAMSUNG-TV.md`, `docs/USER-GUIDE.md` |
 
 ## Where it runs
@@ -68,6 +69,10 @@ tar tzf out/lenta.tar.gz | grep -c '\.pem$'      # must print 0
 - Licence **Unlicense** – public domain, free for everyone, no copyright claimed.
 - Never print or repeat his API keys (TMDB, KinoCheck, OpenSubtitles).
 - Never overwrite his own edits to `README.md` / `docs/`.
+- **The container image makes the same promises as the installer**: no driver packages in it, the
+  signing key out of the build context (`.dockerignore`), the server never root. `tests/test_docker.py`
+  enforces all three. No registry is reachable from this sandbox, so the image cannot be built or run
+  here — `.github/workflows/docker.yml` is what proves it, on every push and on demand.
 
 ## Televisions – read before touching `web/js/tv.js` or `web/css/tv.css`
 - Two clients: 2023+ sets get the normal one; **2017–2022 sets get `web/legacy/`**. The choice tests a
@@ -93,27 +98,40 @@ tar tzf out/lenta.tar.gz | grep -c '\.pem$'      # must print 0
 - Every fix gets a test that **fails on the previous version** – check that it does, and say so.
 
 ## Pick up here (next session, in order)
-1. **Two faults waiting on his photographs**, not on code: which Settings page leaves Save greyed, and
+1. **The container image has never been built.** Ask him to run the "Container image" workflow
+   (Actions → Run workflow) once; the build and the start-up check there are the first real proof.
+   Then: make the package public once in Packages → lenta → Package settings. After that, the
+   popularising list — awesome-selfhosted PR, selfh.st submission, an Unraid CA template, then one
+   r/selfhosted post built on the two things nobody else does well (a DVB tuner that works, and the
+   2017–2022 Samsung client).
+2. **Two faults waiting on his photographs**, not on code: which Settings page leaves Save greyed, and
    the `play:` lines from a film that will not start on the 2017 set. Ask; do not guess a fix.
-2. **The library grid is the one page the 1.10.12 work does not help.** Home and the guide are built
+3. **The library grid is the one page the 1.10.12 work does not help.** Home and the guide are built
    from rows, so a press can rule out whole rows at once; a grid is a single block, so every card on it
    is still measured. If he says a library page feels slower than Home, that is why.
-3. **Live TV**: cache channel PIDs to skip the PAT/PMT read; `DMX_OUT_TSDEMUX_TAP` to reach 5 cached
+4. **Live TV**: cache channel PIDs to skip the PAT/PMT read; `DMX_OUT_TSDEMUX_TAP` to reach 5 cached
    channels on one multiplex. The frequencies that will not lock are a signal problem on his line, not
    code – see the vault note before offering a software fix.
-4. Small: stop the `em28xx` driver polling an infrared receiver the card says it does not have; the
+5. Small: stop the `em28xx` driver polling an infrared receiver the card says it does not have; the
    README still wants a photograph of the TV app.
-5. The newest README section is still **"What's new in 1.9"** – 1.10 and 1.11 have no entry. Offer;
+6. The newest README section is still **"What's new in 1.9"** – 1.10 and 1.11 have no entry. Offer;
    it is his README and his call.
 
 ## State at this handoff (14 Oct 2026, late)
-- Version **1.11.1** — Settings › About (`web/js/sysinfo.js` + `server/lenta/api_system.py`,
-  `GET /api/system`), and the mini player surviving a refresh (`keepMini` / `restoreMiniPlayer` in
-  `web/js/player.js`, kept in **sessionStorage** so it belongs to the one tab). All 20 test files
-  pass. **1.10.13 is what is installed on `svkplex`**; 1.11.0 and 1.11.1 were sent, not yet confirmed
-  installed.
-- **GitHub is at 1.10.13**, `origin/main` = `5d26556`, verified (`VERSION`, badge, no `.pem`).
-  `.github-base` records it. **1.11.0 and 1.11.1 are unpublished** — he asks for a publish explicitly.
+- Version **1.12.0** — the container image (see the tree table) on top of 1.11.x. Settings › About (`web/js/sysinfo.js` + `server/lenta/api_system.py`,
+  `GET /api/system`), and the mini player surviving a refresh **and a closed tab** (`keepMini` /
+  `restoreMiniPlayer` in `web/js/player.js`). The record lives in **localStorage** and carries the user
+  and the tab that owns it; a tab that finds another tab's stamp asks over a `storage` event whether
+  anyone is still showing the film, and claims it only on silence — do not replace that handshake with
+  a timestamp, `pagehide` does not fire reliably when a tab is closed. All 20 test files pass.
+  **1.11.0 is what Vlad says he is running**; 1.11.1, 1.11.2 and 1.12.0 were sent, not confirmed
+  installed. The image has never been built anywhere yet — its first real test is his first CI run.
+- **GitHub is at 1.11.1**, `origin/main` = `62c874b` — he published it himself on 15 Oct; verified
+  (`VERSION`, badge, changelog, no `.pem`, and his own `docs/SAMSUNG-TV.md` title intact).
+  `.github-base` records `62c874b`.
+- **1.11.2 is deliberately not published.** He decided on 15 Oct to let it ride along with the next
+  release rather than publish a release of its own; its `CHANGELOG.md` entry is already in the tree and
+  goes out with that publish. Do not offer to publish it again — wait until he asks.
 - Check the remote again (`cd /tmp/pub && git fetch -q origin`) before building the next publish
   package – he edits `README.md` on github.com directly, and the script stops rather than overwrite him.
 - Open: a Save button in Settings reported to stay greyed until you leave the page and return – not

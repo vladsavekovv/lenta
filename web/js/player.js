@@ -226,47 +226,96 @@ async function autoDownload(file, language) {
   } catch { /* playback goes on without them */ }
 }
 
-// ---- surviving a reload ----------------------------------------------------------------------------
-// Pressing refresh with the mini player at the bottom of the screen used to throw the film away: the bar
-// went with the page, and finding your place again meant going back to the title and pressing Resume.
-// A browser keeps nothing of a <video> across a load, so what is kept is the little it takes to build
-// one again — which title, which file, and where it had got to.
+// ---- surviving a refresh, and a closed tab -----------------------------------------------------------
+// Pressing refresh — or closing the tab and coming back — used to throw the film away: the bar went with
+// the page, and finding your place again meant going back to the title and pressing Resume. A browser
+// keeps nothing of a <video> across a page load, so what is kept is the little it takes to build one
+// again: which title, which file, and where it had got to.
 //
-// In sessionStorage, deliberately, because that is the store that belongs to this tab and survives a
-// reload of it: a second tab does not open a player of its own, and closing the tab does not leave one
-// waiting to appear next week. What comes back is paused, because a page that starts making noise on
-// its own is a page nobody asked to refresh.
+// It is kept in localStorage, which outlives the tab. That raises three questions a per-tab store would
+// never have asked, and each is answered here rather than left to luck:
 //
-// Live TV is not kept. There is no position to come back to in a broadcast, and the tuner was handed
-// back when the page went away.
+//   * Whose is it? The record carries the user it belongs to. A household shares a browser, and the next
+//     person to sign in should not be handed what the last one was watching.
+//   * Is another tab already showing it? Each tab stamps the record with an id of its own. A tab that
+//     finds somebody else's stamp asks out loud — one key written to localStorage, which every other tab
+//     of this browser is listening for — and any tab actually showing the film answers within a moment.
+//     An answer means leave it alone; silence means nobody has it and this tab may pick it up. Asking
+//     beats guessing from a timestamp: a tab that is closed stops answering at once, so closing one and
+//     opening another carries the film straight across, while two tabs open together never fight over it.
+//   * How old is too old? A day. Past that it is not where you left off, it is last week, and Continue
+//     watching is the right place to pick it up from.
+//
+// What comes back is paused, because a page that starts making noise on its own is not what anybody
+// opening it asked for. Live TV is not kept at all: a broadcast has no position to come back to, and the
+// tuner was handed back when the page went away.
 const KEEP = 'lenta.miniPlayer';
+const TAB = 'lenta.tab';
+const PING = 'lenta.miniAsk';           // "is anybody showing this?"  —  written to be heard, not read
+const PONG = 'lenta.miniYes';           // "I am"
+const STALE = 24 * 60 * 60 * 1000;      // older than this is not "where I left off" any more
 const keep = {
-  read() { try { return JSON.parse(sessionStorage.getItem(KEEP) || 'null'); } catch { return null; } },
-  write(v) { try { sessionStorage.setItem(KEEP, JSON.stringify(v)); } catch { /* private mode */ } },
-  clear() { try { sessionStorage.removeItem(KEEP); } catch { /* private mode */ } },
+  read() { try { return JSON.parse(localStorage.getItem(KEEP) || 'null'); } catch { return null; } },
+  write(v) { try { localStorage.setItem(KEEP, JSON.stringify(v)); } catch { /* private mode */ } },
+  clear() { try { localStorage.removeItem(KEEP); } catch { /* private mode */ } },
 };
 
-/** Write down where the mini player has got to (throttled by its caller). */
+/** This tab's own id: made once, kept in the one store that belongs to a tab and dies with it. */
+function tabId() {
+  try {
+    let id = sessionStorage.getItem(TAB);
+    if (!id) { id = Math.random().toString(36).slice(2); sessionStorage.setItem(TAB, id); }
+    return id;
+  } catch { return 'single'; }           // private mode: behave as though there is only one tab
+}
+
+// Answer the question, but only while actually showing the film. A storage event is raised in every
+// other tab of this browser and never in the one that wrote it, which is exactly the conversation
+// wanted here. The value is the time, so that two questions in a row are two different values and
+// each one is heard.
+window.addEventListener('storage', (e) => {
+  if (e.key !== PING || !P || !P.mini) return;
+  try { localStorage.setItem(PONG, String(Date.now())); } catch { /* private mode */ }
+});
+
+/** Ask the other tabs whether one of them is showing the mini player, and give them a moment to say so. */
+function anotherTabHasIt() {
+  return new Promise((resolve) => {
+    let answered = false;
+    const hear = (e) => { if (e.key === PONG) answered = true; };
+    window.addEventListener('storage', hear);
+    try { localStorage.setItem(PING, String(Date.now())); } catch { resolve(false); return; }
+    setTimeout(() => { window.removeEventListener('storage', hear); resolve(answered); }, 300);
+  });
+}
+
+/** Write down where the mini player has got to, and that this tab is the one holding it. */
 function keepMini() {
   if (!P || !P.mini || P.live || !P.info) return;
   P.keptAt = Date.now();
-  keep.write({ item: P.itemId, file: P.fileId, at: position() });
+  keep.write({ item: P.itemId, file: P.fileId, at: position(), user: state.user?.id ?? null,
+               tab: tabId(), saved: Date.now() });
 }
 
 /** Nothing to come back to: the player was closed, or opened out to the full screen. */
 function forgetMini() { keep.clear(); }
 
 // The page going away is the last chance to write down exactly where it had got to, and the moment it
-// matters most — refreshing is precisely this event. The timer above stays as well, for the times this
-// never arrives: a tab killed for memory, a television cutting the power to its browser.
+// matters most — refreshing and closing a tab are both precisely this event. The timer in updateTime()
+// stays as well, for the times this never arrives: a tab killed for memory, a television cut off at
+// the wall.
 window.addEventListener('pagehide', keepMini);
 document.addEventListener('visibilitychange', () => { if (document.hidden) keepMini(); });
 
-/** After signing in: put back the mini player this tab had before the page was reloaded, paused.
+/** Put back the mini player, paused, after a refresh or a closed tab.
  *  Does nothing if a player is already open — a refresh of the full-screen player is the router's. */
 export async function restoreMiniPlayer() {
   const k = keep.read();
   if (!k || !k.item || playerOpen()) return false;
+  if (Date.now() - (k.saved || 0) > STALE) { keep.clear(); return false; }   // last week, not last minute
+  if (k.user != null && state.user && k.user !== state.user.id) return false;   // somebody else's film
+  // Another tab of this browser is showing it right now: leave the film where it is playing.
+  if (k.tab !== tabId() && await anotherTabHasIt()) return false;
   keep.clear();        // one attempt: a title that will not play must not come back at every refresh
   await openPlayer(k.item, { mini: true, file: k.file, start: k.at, paused: true,
                              returnTo: location.hash || '#/' });
