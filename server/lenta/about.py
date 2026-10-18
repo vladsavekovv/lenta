@@ -275,10 +275,18 @@ def item_about(item_id: int, user: dict = Depends(auth.current_user)):
     out = {"details": details, "wiki": _public(wiki_for(item, extra)), "omdb": _public(omdb_for(item, extra)), "collection": None}
     coll = extra.get("collection")
     if coll and coll.get("id"):
+        # The rest of the collection, **from libraries this person may open**. The entry to this
+        # function is gated by `get_item` → `check_item_access`, and until 1.19.0 this query then went
+        # looking across every library on the server: a viewer allowed one shelf was shown cards —
+        # title, year, overview, rating, artwork — for films on all the others. Every comparable query
+        # in api_library.py scopes itself; this was the one that did not.
+        where, params = auth.library_filter(user)
         with db() as con:
             rows = con.execute(
-                "SELECT * FROM items WHERE kind = 'movie' AND id != ? AND json_extract(extra, '$.collection.id') = ? "
-                "ORDER BY year, sort_title LIMIT 24", (item["id"], coll["id"])).fetchall()
+                f"SELECT * FROM items WHERE kind = 'movie' AND id != :id "
+                f"AND json_extract(extra, '$.collection.id') = :coll AND {where} "
+                f"ORDER BY year, sort_title LIMIT 24",
+                {"id": item["id"], "coll": coll["id"], **params}).fetchall()
         out["collection"] = {"name": coll.get("name"), "items": cards(rows, user["id"])}
     return out
 

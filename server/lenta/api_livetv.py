@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import time
+import urllib.parse
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -12,11 +13,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
-from . import auth, dvb, epg, livestream, livetv, logos
+from . import auth, dvb, epg, livestream, livetv, logos, safefetch
 from .db import db, get_setting, set_setting
 
 router = APIRouter(prefix="/api/admin/livetv", dependencies=[Depends(auth.admin_user)])
-read = APIRouter(prefix="/api/livetv")          # channel list: any signed-in user
+# Anyone with a live TV library — not merely anyone signed in, which is what it used to be. The guard
+# is on the router so that the next endpoint added here inherits it (see auth.live_tv_viewer).
+read = APIRouter(prefix="/api/livetv", dependencies=[Depends(auth.live_tv_viewer)])
 
 
 class PlaylistBody(BaseModel):
@@ -246,7 +249,15 @@ def channel_logo(cid: int, request: Request, user: dict = Depends(auth.current_u
         raise HTTPException(404, "That channel is gone.")
     logo = (ch.get("logo") or "").strip()
     if logo.startswith(("http://", "https://")):
-        return RedirectResponse(logo, status_code=302)
+        # A 302 to an address **the playlist provider chose** made this an open redirector on LENTA's
+        # own origin, and sent every viewer's browser to a third party to fetch a picture. Checked
+        # against the same policy as any other link out of somebody else's answer, so at minimum it
+        # cannot be used to aim a browser at this network; an ordinary external logo still redirects.
+        try:
+            safefetch.check(logo)
+            return RedirectResponse(logo, status_code=302)
+        except safefetch.Blocked:
+            pass                    # falls through to the monogram below, as a channel with no logo does
     # The address of a channel's artwork never changes, but what it answers with does: a monogram today
     # and the station's real logo the moment one is found. Cached outright, that first monogram would
     # outlive the logo that replaced it and no amount of reloading would shift it. So the browser is
@@ -350,22 +361,53 @@ def watch_channel(cid: int, user: dict = Depends(auth.current_user)) -> dict:
     return {"id": feed.id, "token": token, "url": f"/api/livetv/live/{feed.id}/index.m3u8",
             "channel": {"id": ch["id"], "name": ch["name"], "number": ch.get("number"),
                         "logo": ch.get("logo")},
-            "info": feed.info()}
+            "info": feed.info(admin=bool(user["is_admin"]))}
+
+
+def _watching(fid: str, token: str):
+    """The feed this viewer is actually watching. A feed's id is not a permission (see known_viewer)."""
+    f = _feed_for(fid)
+    if not livestream.known_viewer(f, token):
+        raise HTTPException(404, "That stream is not yours to watch. Choose the channel again.")
+    return f
 
 
 @read.get("/live/{fid}/index.m3u8")
 def live_playlist(fid: str, token: str = "", user: dict = Depends(auth.current_user)):
-    f = _feed_for(fid)
+    f = _watching(fid, token)
     livestream.touch(f, token)
     path = f.directory / "index.m3u8"
     if not path.exists():
         raise HTTPException(404, f.error[-400:] if f.error else "The stream is not ready.")
-    return PlainTextResponse(path.read_text(), media_type="application/vnd.apple.mpegurl",
+    return PlainTextResponse(_with_token(path.read_text(), token), media_type="application/vnd.apple.mpegurl",
                              headers={"Cache-Control": "no-cache"})
 
 
-@read.get("/live/{fid}/log")
-def live_log(fid: str, user: dict = Depends(auth.current_user)) -> dict:
+def _with_token(playlist: str, token: str) -> str:
+    """Carry the viewer's token onto every segment the playlist names.
+
+    FFmpeg writes bare filenames — `seg00001.ts` — which a player resolves against the playlist's own
+    address, **dropping its query string**. So now that a segment actually requires the token (it did
+    not before 1.19.0), the token has to be written into the playlist. This is how token-authenticated
+    HLS is normally done, and it works for hls.js and for a television's own decoder alike, neither of
+    which can be asked to add a header.
+    """
+    if not token:
+        return playlist
+    q = f"?token={urllib.parse.quote(token, safe='')}"
+    out = []
+    for line in playlist.splitlines():
+        if line.startswith("#EXT-X-MAP:"):
+            out.append(re.sub(r'URI="([^"]+)"', lambda m: f'URI="{m.group(1)}{q}"', line))
+        elif line and not line.startswith("#"):
+            out.append(line + q)
+        else:
+            out.append(line)
+    return "\n".join(out) + "\n"
+
+
+@router.get("/live/{fid}/log")
+def live_log(fid: str, user: dict = Depends(auth.admin_user)) -> dict:
     """What this stream is doing, in FFmpeg's own words. The answer when a channel stutters."""
     f = _feed_for(fid)
     return {"info": f.info(), "lines": list(f.notes)}
@@ -375,7 +417,7 @@ def live_log(fid: str, user: dict = Depends(auth.current_user)) -> dict:
 def live_segment(fid: str, segment: str, token: str = "", user: dict = Depends(auth.current_user)):
     if not re.fullmatch(r"seg\d{5}\.(ts|m4s)|init\.mp4", segment):
         raise HTTPException(404, "Unknown segment")
-    f = _feed_for(fid)
+    f = _watching(fid, token)
     livestream.touch(f, token)
     path = f.directory / segment
     if not path.exists():                  # live segments are deleted as the window slides past them
@@ -393,14 +435,14 @@ def live_leave(fid: str, token: str = "", user: dict = Depends(auth.current_user
     return {"ok": True}
 
 
-@read.get("/live-failures")
-def live_failures(user: dict = Depends(auth.current_user)) -> dict:
+@router.get("/live-failures")
+def live_failures(user: dict = Depends(auth.admin_user)) -> dict:
     """The last few channels that would not start, with what FFmpeg said about each."""
     return {"failures": livestream.failures()}
 
 
-@read.get("/live")
-def live_now(user: dict = Depends(auth.current_user)) -> dict:
+@router.get("/live")
+def live_now(user: dict = Depends(auth.admin_user)) -> dict:
     """What is on and which input each one holds — the page shows this before offering to scan."""
     return {"feeds": [f.info() for f in livestream.active()]}
 

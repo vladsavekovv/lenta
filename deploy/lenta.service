@@ -24,5 +24,34 @@ PrivateTmp=true
 # Filled in from LENTA_DATA_DIR (and LENTA_TRANSCODE_DIR when it lives elsewhere).
 ReadWritePaths=@DATA_DIR@@EXTRA_RW@
 
+# None of the below changes what LENTA can do; they decide how far a compromise of it could reach.
+# LENTA is a Python web server that reads files, talks to ffmpeg and opens sockets — it needs no
+# capability, no other address family, no namespace of its own and no kernel knob.
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectProc=invisible
+ProcSubset=pid
+ProtectClock=true
+ProtectHostname=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Deliberately NOT set, and each for a reason:
+#   PrivateDevices — the DVB tuner (/dev/dvb) and the graphics card (/dev/dri, nvidia) are the job.
+#   MemoryDenyWriteExecute — CPython's own allocator and some ffmpeg builds need writable-executable
+#     pages, so it would stop the server starting rather than protect it.
+#   ProtectSystem=strict — it would have to be unpicked again with ReadWritePaths for every media
+#     folder on the machine, including network mounts that come and go. `full` keeps /usr and /boot
+#     read-only, which is the part that matters.
+
 [Install]
 WantedBy=multi-user.target

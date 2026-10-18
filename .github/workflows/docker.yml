@@ -27,7 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+      # Writable only on a push, which is the only event that publishes. A pull request builds and
+      # runs the start-up check with a read-only token, so a branch cannot touch the registry even by
+      # accident. (GitHub already downgrades a fork's token, but a branch in this repository is not a
+      # fork, and this is the half that was relying on the `if:` on the login step alone.)
+      packages: ${{ github.event_name == 'push' && 'write' || 'none' }}
 
     steps:
       - name: Check out

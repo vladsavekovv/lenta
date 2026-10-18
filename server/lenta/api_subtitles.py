@@ -1,4 +1,5 @@
 """Online subtitles: search and download from OpenSubtitles, automatic download during playback."""
+import re
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -101,6 +102,11 @@ def _store(f: dict, user: dict, provider_id: str, language: str, release: str | 
                                (f["id"], provider_id)).fetchone()
     if existing:
         return next(s for s in subtitles.downloaded(f["id"]) if s["dl_id"] == existing["id"])
+    # `provider_id` comes from the client and becomes a filename below. It is the provider's numeric
+    # id and nothing else: `../../x` would otherwise escape the data directory outright, and the only
+    # thing stopping it was an int() conversion inside opensubtitles.download.
+    if not re.fullmatch(r"[0-9]{1,20}", str(provider_id)):
+        raise HTTPException(400, "That is not a subtitle id")
     data, name = client.download(provider_id)
     ext = (name.rsplit(".", 1)[-1] if "." in name else "srt").lower()
     if ext not in ("srt", "vtt", "ass", "ssa"):

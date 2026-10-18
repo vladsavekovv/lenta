@@ -74,6 +74,21 @@ def summarize(path: str) -> dict:
             hdr = 1
         if any("Dolby Vision" in (sd.get("side_data_type") or "") for sd in video.get("side_data_list", [])):
             hdr = 1
+    # How hard this file is to decode, which is a different question from which codec it is. A television
+    # has a ceiling on each of these and Samsung say what happens above it: "Media with higher bit or
+    # frame rate than specifications can cause video or audio playback to stall." A stall, not an error —
+    # so nothing reports it and the screen simply stays black. ffprobe has had these all along; they come
+    # out of the -show_streams call already being made, at no cost.
+    #
+    # `level` is the codec's own number, not a decimal: H.264 level 4.1 is 41. HEVC counts differently,
+    # in thirtieths — its level 4.1 is 123 — so the two are never compared with the same ceiling.
+    fps = 0.0
+    if video:
+        try:
+            num, _, den = (video.get("r_frame_rate") or "0/1").partition("/")
+            fps = round(float(num) / float(den or 1), 3)
+        except (TypeError, ValueError, ZeroDivisionError):
+            fps = 0.0
     return {
         "container": container,
         "duration": duration,
@@ -82,6 +97,10 @@ def summarize(path: str) -> dict:
         "width": video.get("width") if video else None,
         "height": video.get("height") if video else None,
         "pix_fmt": video.get("pix_fmt") if video else None,
+        "profile": (video.get("profile") or None) if video else None,
+        "level": int(video["level"]) if video and isinstance(video.get("level"), int) and video["level"] > 0 else None,
+        "refs": int(video["refs"]) if video and isinstance(video.get("refs"), int) and video["refs"] > 0 else None,
+        "fps": fps or None,
         "hdr": hdr,
         "audio": audio,
         "subtitles": subs,

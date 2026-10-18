@@ -27,7 +27,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import dvb, livestream, logs
+from . import dvb, livestream, logs, safefetch
 from .db import db, get_setting
 
 log = logs.get("livetv")
@@ -533,10 +533,17 @@ def parse_m3u(text: str) -> list[dict]:
     return out
 
 
+PLAYLIST_MAX = 32_000_000       # a 200,000-channel M3U is about 20 MB; past this it is not a playlist
+
+
 def _fetch(url: str, timeout: int = 30) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", "replace")
+    """The playlist or Xtream answer. `allow_private` because this is an address he typed himself and
+    an IPTV box on his own network is a perfectly ordinary thing to point LENTA at. The **limit** is
+    the fix here: `resp.read()` had none, and a server that never stops sending was a way to take the
+    whole thing down from outside."""
+    data, _ctype = safefetch.get(url, allow_private=True, limit=PLAYLIST_MAX, timeout=timeout,
+                                 headers={"User-Agent": USER_AGENT})
+    return data.decode("utf-8", "replace")
 
 
 def scan_playlist(sid: int) -> dict:

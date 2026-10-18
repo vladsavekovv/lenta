@@ -108,9 +108,17 @@ def trailer_unavailable(body: dict, user: dict = Depends(auth.current_user)):
     key = str(body.get("key") or "")
     if not trailer_sources.mark_unavailable(key):
         raise HTTPException(400, "Not a YouTube trailer")
+    # Only the titles this person can actually see. The endpoint is honest in purpose — a player saying
+    # "that embed would not play here" has to be able to report it — but until 1.19.0 the report rewrote
+    # `items.extra` for **every matching title on the server** and fired a fresh TMDB and KinoCheck
+    # lookup for each, so one viewer could churn metadata in libraries he cannot open and spend the
+    # administrator's API quota doing it. A trailer that is blocked is blocked for everyone, so the
+    # other libraries will mend themselves the first time someone who can see them presses play.
+    where, params = auth.library_filter(user)
     with db() as con:
         rows = [dict(r) for r in con.execute(
-            "SELECT * FROM items WHERE kind IN ('movie','show') AND json_extract(extra, '$.trailer') = ?", (key,))]
+            f"SELECT * FROM items WHERE kind IN ('movie','show') "
+            f"AND json_extract(extra, '$.trailer') = :key AND {where}", {"key": key, **params})]
     replacement = None
     for item in rows:
         extra = jloads(item.get("extra"), {})

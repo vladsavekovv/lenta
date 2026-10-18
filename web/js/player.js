@@ -5,6 +5,7 @@ import { dockMount, dockRefresh, dockRegister, dockUnmount, dockUpdate } from '.
 import { state } from './app.js';
 import { langName, subtitleSearch } from './subtitles.js';
 import { tvMode, tvNote } from './tv.js';
+import { avplayElement, avplayOffered, tvProfile } from './avplay.js';
 import { $, channels, fmtTime, html, icon, img, isTouch, mount, popMenu, restoreOverlays, toast } from './ui.js';
 
 const sameLang = (a, b) => !!a && !!b && (a === b || a.split('-')[0] === b.split('-')[0]);
@@ -18,7 +19,22 @@ const store = {
 
 export const playerOpen = () => !!P;
 
+/** Whether to hand this film to the television's own player.
+ *
+ *  Off until it is switched on, deliberately. It cannot be tried anywhere but on a real set, so the
+ *  first television to run it is the first thing that has ever run it; a setting that starts off means
+ *  installing the app cannot take away a working player. Settings › About turns it on.
+ */
+export const useTvPlayer = () => avplayOffered() && state.prefs?.tv_player === '1';
+
 function capabilities(forceHls) {
+  // The television's player: what it can decode is not this engine's business, and asking the engine
+  // would give the wrong answer by a wide margin. Samsung publish it per model year; tvProfile() looks
+  // it up from the model the app's page read off the set.
+  if (useTvPlayer()) {
+    const p = tvProfile();
+    if (p) return p;
+  }
   const v = document.createElement('video');
   const can = (t) => v.canPlayType(t) !== '';
   const caps = { video: [], audio: [], containers: [], hdr: false };
@@ -38,7 +54,28 @@ function capabilities(forceHls) {
     if (can('video/webm')) caps.containers.push('webm');
   }
   caps.hdr = window.matchMedia?.('(dynamic-range: high)').matches && caps.video.includes('hevc');
+  Object.assign(caps, screenCeiling());
   return caps;
+}
+
+/** What this screen can manage, as opposed to which codecs it knows — the ceilings Samsung publish for
+ *  each model year, above which they say playback "can stall". A stall, not an error: the file is
+ *  handed over, nothing complains, and the picture never arrives. That is the shape of the fault
+ *  reported on the 2017 set, and nothing in the browser can see it coming.
+ *
+ *  There is no API that reports a television's panel — it says 1920×1080 whatever it is — so this comes
+ *  from Settings rather than from a guess. Nothing is sent until somebody states it, so a client that
+ *  says nothing behaves exactly as every client did before 1.18.0.
+ */
+function screenCeiling() {
+  const panel = tvMode() ? (state.prefs?.tv_panel || '') : '';
+  // Samsung's own per-model-year video specifications, which agree from 2017 to 2024 on these two:
+  // an FHD panel takes H.264 up to level 4.1 at 20 Mbps, a UHD panel up to level 5.1 at 60 Mbps.
+  // No reference-frame ceiling is sent, because Samsung do not publish one and inventing a number
+  // would refuse files for a reason nobody could check.
+  if (panel === 'fhd') return { max_height: 1080, max_bitrate: 20_000_000, max_level: 41 };
+  if (panel === 'uhd') return { max_height: 2160, max_bitrate: 60_000_000, max_level: 51 };
+  return {};
 }
 
 // ---------------------------------------------------------------- open / close
@@ -154,7 +191,13 @@ export async function openPlayer(itemId, opts = {}) {
     <div id="ppanel-root"></div><div id="pstats-root"></div><div id="pupnext-root"></div>
     <button type="button" class="skip-intro" id="pskip" hidden></button>
   </div>`);
-  const video = $('#pv');
+  // The television's own player, when the app offers it and this film is not a live channel. It is
+  // not an element: it is the set's decoder, driven over the app bridge and shaped like one. A film
+  // it refuses falls back to the element below, which is why the element is still in the page.
+  const tvPlayer = (!opts.live && useTvPlayer()) ? avplayElement($('#player')) : null;
+  const video = tvPlayer || $('#pv');
+  if (tvPlayer) $('#pv').hidden = true;
+  P.tvPlayer = tvPlayer;
   P.video = video;
   // iPhone Safari can't put a page element in full screen; the player already fills the screen there.
   if (!appFs() && !document.fullscreenEnabled && !document.webkitFullscreenEnabled) $('#pfs').hidden = true;
@@ -567,6 +610,8 @@ function teardown(reason, { quiet = false } = {}) {
   clearInterval(P.statsTimer);
   clearTimeout(P.trickTimer);
   if (P.hls) P.hls.destroy();
+  // The television keeps showing the last frame unless its player is stopped, so this is not optional.
+  if (P.tvPlayer) { P.tvPlayer.destroy(); P.tvPlayer = null; }
   if (P.sessionId) fetch(`/api/hls/${P.sessionId}`, { method: 'DELETE', credentials: 'same-origin', keepalive: true }).catch(() => {});
   // Say we have gone, so the tuner can be reclaimed rather than waiting for the viewer to time out.
   if (P.live?.feedId) fetch(`/api/livetv/live/${P.live.feedId}?token=${encodeURIComponent(P.live.token)}`,
@@ -784,7 +829,17 @@ function watchStart(video, seq, asked) {
     }
     tvNote('play', `${secs}s later: still nothing — readyState ${v.readyState}, at ${Math.round(v.currentTime)}s,`
       + ` ${v.paused ? 'paused' : 'running'}${err}`);
-    if (secs < 20) P.startTimer = look(20);
+    if (secs < 20) { P.startTimer = look(20); return; }
+    // Twenty seconds of a direct play with no frame. Until 1.18.0 this only wrote the line above and
+    // gave up, which is why a film that would not start stayed not started: a television that cannot
+    // manage a stream does not report an error, it simply stalls, so the error handler — which does
+    // know how to recover — never runs. Do what it would have done. The server repackages the file and
+    // the film starts, a few seconds late rather than never.
+    if (P.mode === 'direct' && !P.forceHls) {
+      tvNote('play', 'nothing arrived: asking the server to repackage it');
+      P.forceHls = true;
+      load(position());
+    }
   }, secs * 1000);
   P.startTimer = look(6);
 }

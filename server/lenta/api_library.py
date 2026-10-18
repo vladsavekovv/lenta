@@ -786,9 +786,10 @@ def person(name: str, user: dict = Depends(auth.current_user)):
             f"FROM items i, json_each(i.extra, '$.cast') c WHERE {where} AND i.kind IN ('movie','show') "
             f"AND json_extract(c.value, '$.name') = :name ORDER BY i.year DESC",
             {**params, "name": name}).fetchall()
-        profile = con.execute(
+        profile = con.execute(          # scoped like the two queries either side of it, which it wasn't
             f"SELECT json_extract(c.value, '$.profile') AS p FROM items i, json_each(i.extra, '$.cast') c "
-            f"WHERE json_extract(c.value, '$.name') = :name AND p IS NOT NULL LIMIT 1", {"name": name}).fetchone()
+            f"WHERE {where} AND json_extract(c.value, '$.name') = :name AND p IS NOT NULL LIMIT 1",
+            {**params, "name": name}).fetchone()
         crew = {}
         for key, role in CREW_ROLES:      # directors, writers, composers … link here from the About panel
             for r in con.execute(f"SELECT i.* FROM items i, json_each(i.extra, '$.{key}') c WHERE {where} "

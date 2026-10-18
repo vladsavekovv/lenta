@@ -1,6 +1,7 @@
 """LENTA Media Server: FastAPI application."""
 import asyncio
 import mimetypes
+import os
 import threading
 from contextlib import asynccontextmanager
 
@@ -78,8 +79,14 @@ async def lifespan(app: FastAPI):
     livestream.stop_all()               # let go of the tuners before the process goes away
 
 
-app = FastAPI(title=APP_NAME, version=VERSION, lifespan=lifespan, docs_url="/api/docs", redoc_url=None,
-              openapi_url="/api/openapi.json")
+# The schema and the documentation page answered **anyone**, signed in or not: a stranger on the network
+# got every path, parameter and schema in one request. That is not a hole by itself — it is the map an
+# attacker would otherwise have to draw by hand. They are off unless asked for, and nothing in the client
+# reads them. `LENTA_API_DOCS=1` brings them back for development.
+_DOCS = os.environ.get("LENTA_API_DOCS") == "1"
+app = FastAPI(title=APP_NAME, version=VERSION, lifespan=lifespan, redoc_url=None,
+              docs_url="/api/docs" if _DOCS else None,
+              openapi_url="/api/openapi.json" if _DOCS else None)
 app.include_router(api_auth.router)
 app.include_router(api_library.router)
 app.include_router(api_playback.router)
@@ -117,11 +124,61 @@ if WEB_DIR.exists():
     app.mount("/", StaticFiles(directory=WEB_DIR), name="web")
 
 
+# What the browser is told to enforce on LENTA's behalf. There was none of this before 1.19.0.
+#
+# `frame-ancestors 'none'` is the one with teeth: nothing may put LENTA in a frame, which closes
+# clickjacking and removes framing as a route to the client's own message listeners. `X-Frame-Options`
+# says the same thing to anything too old to read a CSP.
+#
+# `script-src` has to keep `'unsafe-inline'` **and** `'unsafe-eval'`, and both are load-bearing:
+# `web/index.html` bootstraps with inline script, and it chooses between the three television clients
+# by handing a snippet to `new Function()` to see whether the engine can parse it — which is the only
+# way to test for syntax without a parse error taking the whole page with it. Written without
+# `'unsafe-eval'`, this CSP made `new Function` throw, `parses()` answer false for everything, and
+# **every browser in the house fall through to the Chromium-47 bundle.** `tests/test_about_page.py`
+# caught it; it would otherwise have been a silent, total downgrade of the client.
+#
+# So the CSP does **not** stop an injected script, and it is not pretended that it does — `html`
+# escaping in `ui.js` and `safeUrl` on every link from a third party are what do that job. Since
+# `'unsafe-inline'` has to be there anyway, `'unsafe-eval'` alongside it costs nothing further. What
+# the directive still buys is that an injected `<script src>` can only name this server.
+#
+# `connect-src 'self'` keeps an injected script from posting what it reads to another host, and
+# `object-src 'none'` and `base-uri 'self'` close two old tricks for nothing.
+#
+# The media sources are LENTA's own; YouTube and Apple are framed for trailers and theme music, and
+# `blob:`/`data:` are needed by hls.js and by the artwork the client draws itself.
+CSP = ("default-src 'self'; "
+       "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+       "style-src 'self' 'unsafe-inline'; "
+       "img-src 'self' data: blob:; "
+       "media-src 'self' data: blob:; "
+       "font-src 'self' data:; "
+       "connect-src 'self'; "
+       "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com; "
+       "object-src 'none'; "
+       "base-uri 'self'; "
+       "form-action 'self'; "
+       "frame-ancestors 'none'")
+
+SECURITY_HEADERS = {
+    "Content-Security-Policy": CSP,
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    # A stream URL may legitimately carry ?token= (see auth.QUERY_TOKEN_PATHS), so no address LENTA
+    # serves may travel to another site in a Referer header.
+    "Referrer-Policy": "no-referrer",
+}
+
+
 @app.middleware("http")
 async def revalidate_web_files(request, call_next):
     """Browsers must check the web client's files on every load (a quick 304 when unchanged), so
-    an update is picked up by a normal refresh instead of an old cached copy hanging around."""
+    an update is picked up by a normal refresh instead of an old cached copy hanging around.
+    Also where LENTA states what the browser should enforce for it (see SECURITY_HEADERS)."""
     response = await call_next(request)
     if request.url.path.endswith((".js", ".css", ".html", "/")) and "cache-control" not in response.headers:
         response.headers["Cache-Control"] = "no-cache"
+    for header, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
     return response

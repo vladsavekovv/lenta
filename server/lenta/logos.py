@@ -22,7 +22,7 @@ import re
 import urllib.error
 import urllib.request
 
-from . import logs
+from . import logs, safefetch
 from .config import IMAGES_DIR
 
 log = logs.get("logos")
@@ -156,7 +156,7 @@ def fetch_index(url: str, prefer: str = "") -> dict[str, str]:
     Collections differ, so rather than guessing at filenames this reads whatever index the source
     offers — a GitHub tree listing, or a plain JSON mapping — and matches against what is really there.
     """
-    raw = _get(url)
+    raw = _get(url, mine=True)       # he typed this address, so his own machines are allowed
     if raw is None:
         return {}
     try:
@@ -246,11 +246,20 @@ def download(link: str) -> tuple[bytes, str] | None:
     return (raw, suffix) if suffix else None
 
 
-def _get(url: str, binary: bool = False) -> bytes | str | None:
-    req = urllib.request.Request(url, headers={"User-Agent": "LENTA", "Accept": "*/*"})
+def _get(url: str, binary: bool = False, *, mine: bool = False) -> bytes | str | None:
+    """Fetch, through the guard in `safefetch`. `mine=True` for an address the administrator typed.
+
+    This used plain `urllib.request.urlopen`, whose default opener handles **`file://` and `ftp://`** —
+    and the addresses it fetches are not all LENTA's own. The index names up to a hundred logo URLs and
+    LENTA fetched every one, so whoever served the index chose what this machine would open:
+    `file:///etc/passwd`, a port on localhost, a box on the LAN, a cloud instance's metadata address.
+    `safefetch` installs no handler for those schemes at all and refuses those addresses by policy.
+    """
     try:
-        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as r:
-            raw = r.read(8_000_000)
+        raw, _ctype = safefetch.get(url, allow_private=mine, limit=2_000_000, timeout=FETCH_TIMEOUT)
+    except safefetch.Blocked as ex:
+        _fail(url, str(ex))
+        return None
     except urllib.error.HTTPError as ex:
         # The body usually says what the server objected to — a rate limit, a moved repository, a
         # private one. Worth keeping: "it did not answer" sends someone looking in the wrong place.

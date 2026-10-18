@@ -432,7 +432,7 @@ function matchDialog(item, done) {
       const yr = box.querySelector('#my').value.trim();
       query = box.querySelector('#mq').value;
       const results = await api.get(`/api/admin/match?item_id=${item.id}&query=${encodeURIComponent(query)}${yr ? `&year=${yr}` : ''}`);
-      mount(res, results.length ? results.map(r => html`<button class="match-result${book ? ' book' : ''}" ${book ? raw(`data-book="${esc(r.book_id)}" data-source="${esc(r.source)}"`) : raw(`data-tmdb="${r.tmdb_id}"`)}>
+      mount(res, results.length ? results.map(r => html`<button class="match-result${book ? ' book' : ''}" ${book ? raw(`data-book="${esc(r.book_id)}" data-source="${esc(r.source)}"`) : raw(`data-tmdb="${esc(r.tmdb_id)}"`)}>
         ${r.poster ? html`<img src="${img(r.poster, 92)}" alt="">` : html`<span class="ph"></span>`}
         <span><b>${r.title}</b>${r.year ? ` (${r.year})` : ''}${r.authors?.length ? html`<div class="sub">${r.authors.join(', ')}${r.source === 'openlibrary' ? ' · Open Library' : ''}</div>` : ''}<p class="clamp-3">${r.overview || ''}</p></span></button>`)
         : html`<p style="color:var(--muted)">No results. ${book ? 'Try the title alone, or the title in the book\'s language.' : 'Try the original title or remove the year.'}</p>`);

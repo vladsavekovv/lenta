@@ -1,5 +1,152 @@
 # Changelog
 
+## 1.19.0 — Security release
+
+A security review of LENTA, and the fixes that came out of it. **Everyone should update**, and the
+details are deliberately not listed here: every installation still running an older version would be
+reading them too.
+
+Three things change in a way you will notice, and none of them is a fault:
+
+- **Signing out ends that account's sessions everywhere**, on every device. Sign in again where you
+  want to stay signed in.
+- **Repeated wrong passwords from the same address are made to wait** a few minutes. Get it right and
+  the count clears immediately, so nobody in the house will meet this.
+- **Live TV is a library like any other.** Someone who has not been given a live TV library no longer
+  sees the channel list or the guide. Give them that library in Server admin › Users and they do.
+
+Upgrading signs nobody out and needs no reinstall of the phone or television app. If you use the
+Android app over HTTPS on your own network, installing LENTA's CA certificate on the phone
+(`Settings › LENTA app`) is worth doing.
+
+## 1.18.0 — Films that would not start
+
+A film that never starts on the 2017 television has been open since 1.11, and it produces no error: the
+picture simply never arrives. That turns out to be exactly what Samsung say happens. They publish how
+hard a film each panel can decode — a **Full HD** set manages H.264 to **level 4.1 at 20 Mbps**, a **4K**
+one to level 5.1 at 50–60 Mbps — and above that, in their words, "media with higher bit or frame rate
+than specifications can cause video or audio playback to **stall**."
+
+A stall is not an event. Nothing fires, so nothing recovered, and LENTA could not have seen it coming
+anyway: it recorded a file's height and bitrate and nothing about how hard the stream is to decode.
+
+So, four things:
+
+**The numbers are stored.** Every file now keeps its profile, level, reference frames and frame rate.
+ffprobe has been returning all four, in the same call already being made, since the first scan — they
+were simply thrown away. An existing library is not rescanned to get them; they fill in as files are
+touched, and until then they are unknown, which is treated as unknown rather than as easy.
+
+**Settings asks which screen it is.** Settings › Playback, on a television: Don't know, Full HD, or 4K.
+Nothing changes until you say, because no television will tell us — there is no API for it. Yours is in
+Menu › Settings › Support › About This TV.
+
+**A film above the ceiling is converted instead of handed over.** Including one that was only going to
+be repackaged: a remux copies the picture through untouched, so it would stall in precisely the same
+way. And the conversion now lands inside the ceiling too, which it did not before — asking for original
+quality kept the source height, so a 4K film sent to a Full HD set was re-encoded at 4K and stalled
+exactly as the original would have. One related oddity fixed on the way: the CPU encoder stamped every
+film it made as level 5.1, even a straightforward 1080p one. A decoder reads that number, not the
+stream, so a set that stops at 4.1 could refuse an easy film because of what the file claimed about
+itself. It now says the level it actually needs.
+
+**And if a film still does not start, it recovers by itself.** Twenty seconds of a direct play with no
+picture and LENTA asks the server to repackage the file and tries again — which is what it has always
+done when the browser *refuses* a file outright. A stall is the case it never noticed. The film starts a
+few seconds late instead of not at all, whatever the reason, including a ceiling we have got wrong.
+
+Honest about the limits: none of this can be tested on a television from here, and the ceilings are
+Samsung's published numbers rather than something measured on his set. What is proven is that the right
+comparison is made with the right numbers and that the fallback runs — `tests/test_decode_ceiling.py`,
+40 of whose checks fail on 1.17.2.
+
+## 1.17.2 — The TV app back to what works
+
+The television app in 1.17.0 and 1.17.1 did not run. The LENTA splash appeared and then the set opened
+**Samsung Internet** on LENTA's address. A Tizen TV web app does not load a remote origin into a frame;
+the runtime hands it to the browser. Restoring `<tizen:allow-navigation>` in 1.17.1 changed nothing,
+which is how we know the navigation permission was never the cause. The app is back to opening LENTA
+directly, as it did in 1.16.0 and before.
+
+What that costs, and it is what 1.17.0 was for: the remote's Play, Pause and Stop still do not reach
+LENTA in the app, and the television still cannot decode a film itself. Both need the client to be on
+the app's own origin, and that turns out to be blocked by something underneath:
+
+**LENTA authenticates with a session cookie.** `api.js` sends `credentials: 'same-origin'`, so the
+moment the client sits on the app's origin rather than the server's — in a frame, in a packaged bundle,
+or by Samsung's documented way of loading the scripts across — it is talking to the server cross-origin,
+no cookie is sent, and nothing signs in. That is the real reason Plex and Jellyfin can package their
+clients and LENTA cannot: they use token auth. `auth.py` already accepts `?token=` as a fallback, so
+the server half exists; the client has never needed it.
+
+So a television app that can hold the device APIs needs token authentication first. That is the next
+piece of work, and it is a proper one rather than an evening.
+
+The research is kept rather than thrown away — `web/js/avplay.js` still holds what Samsung publish each
+model year decodes and the ceilings above which they say it stalls, and `tests/test_tv_profile.py`
+checks that lookup and records why it is dormant.
+
+## 1.17.1 — The TV app opened a browser
+
+1.17.0's app did not start on the television: it opened the set's own web browser on LENTA's address
+instead. My mistake, and a specific one. `config.xml` carries a content-security-policy element, which
+puts the runtime in **CSP mode**, and compliance requirement 0540 then refuses any navigation to an
+external address that is not listed in `<tizen:allow-navigation>` — and **an iframe loading the server
+is a navigation**. I had removed that element on the reasoning that navigating is what costs the app
+its device APIs. Navigating the *top-level document* is what costs them, and the app stopped doing that
+when it started framing the server instead of replacing itself with it. The element is back.
+
+`access` and `allow-navigation` do different jobs and the app needs both: one permits the requests, the
+other permits the navigation. The configuration file now says so at length, because the failure it
+causes looks nothing like its cause.
+
+The app also now says something when the frame never loads, rather than leaving a television showing a
+blank screen — it cannot stop the set opening its browser, but it can name the reason for whoever is
+looking at the screen rather than the configuration.
+
+## 1.17.0 — The television plays the film itself
+
+The TV app used to hand the set over to the server: it opened LENTA's address and that was the end of
+its involvement. That cost more than it looked. Tizen refuses the device APIs to any page outside the
+app's own origin, so once the set had navigated there was no `window.tizen` left — and `registerKeys()`
+in the client had been failing silently inside a `try/catch` since the day it was written. **The
+remote's Play, Pause, Stop, Rewind and Fast-forward have never reached LENTA in the app.** Nothing
+said so, because there was nothing to say it: a key that is never delivered looks exactly like a key
+that is ignored.
+
+The app keeps its own origin now and shows LENTA in a frame instead. The server still serves the
+client and the client still updates with the server — only the document it sits in has changed. What
+that gets back:
+
+- **The transport keys work.** Play, Pause, Stop, Rewind, Fast-forward and the channel keys are asked
+  for and arrive. `MediaPlayPause` deliberately is not: taking a key takes it away from the
+  television's own use of it, so the client borrows that one only while a film is open and hands it
+  straight back, and Samsung's own playback overlay keeps working everywhere else.
+- **The set says which television it is** — model, model code, panel and HDR. That matters because
+  **no API anywhere reports what a television can decode**: `webapis.avplay.getCodecInfo()` reads a
+  stream already open, and `tizen.systeminfo` has no codec keys at all. So LENTA asks which set it is
+  and applies what Samsung publish for that model year.
+- **And the television can decode the film itself** (Settings › Playback › Media pages). A Samsung set
+  plays MKV, MPEG-TS, AVI, MOV, WMV, MPEG-2, VC-1, AC-3 and E-AC-3; its web engine admits to almost
+  none of it, which is why the server has been converting files the set could have taken as they are.
+  Handing playback to the set is what Plex do on these televisions. It also means **the audio track can
+  be changed without converting anything**, which a `<video>` element cannot do at all — Plex's own
+  documentation says only the default audio stream direct-plays on a Samsung set, so this goes one
+  further than they do.
+
+**It starts switched off**, and that is deliberate. It has never run anywhere: no amount of work at a
+desk can play a film on a television, and the first set to try it will be the first thing that ever
+has. If a film will not start, turn it off and it plays the way it did before. What *was* checked, and
+is the only thing that could be, is that every call the app makes is real and made in a legal order —
+`tests/test_tizen_bridge.py` drives it against a stub that refuses anything out of sequence the way the
+real player does, which is the same trick that checked the Android app without a phone. It proves the
+app never asks the set to do something it would reject. It cannot prove a film plays.
+
+Also: Settings › About now reads out what this engine admits to playing and what the app could read
+off the set, so one photograph answers both.
+
+**30 test files, all pass.** `test_tizen_bridge.py` is new and goes red on 1.16.0.
+
 ## 1.16.0 — One Home screen, and a banner that stops when you scroll past it
 
 Five things reported from using it, four of them faults and one of them a decision about who owns the

@@ -313,6 +313,8 @@ def update_user(user_id: int, body: UserBody, admin: dict = Depends(auth.admin_u
         if body.password:
             con.execute("UPDATE users SET password_hash = ? WHERE id = ?", (auth.hash_password(body.password), user_id))
         _set_user_libraries(con, user_id, body.library_ids)
+    if body.password:
+        auth.revoke_tokens(user_id)     # a reset password means the old one's sessions end with it
     return {"ok": True}
 
 

@@ -8,7 +8,8 @@
 import { api } from './api.js';
 import { $, fmtBytes, html, icon, mount } from './ui.js';
 import { inAndroidApp, isStandalone } from './pwa.js';
-import { tvMode } from './tv.js';
+import { tvMode, tvPlatform } from './tv.js';
+import { state } from './app.js';
 
 const num = (n) => String(n ?? 0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
@@ -45,6 +46,46 @@ const BUILDS = {
   old: 'Compatibility build — for televisions from 2017 to 2018',
 };
 
+/** What this engine will admit to playing, for the photograph.
+ *
+ *  Worth having written down because it is the one number nobody can work out from a desk: a Samsung
+ *  set decodes far more than its browser will own up to, and how much more decides whether a film is
+ *  played as it is or converted first. canPlayType's three answers are kept as they come — "probably"
+ *  and "maybe" mean different things and flattening them to a tick would throw away the distinction.
+ */
+function codecFacts() {
+  const v = document.createElement('video');
+  const a = document.createElement('audio');
+  const say = (el, mime) => { try { return el.canPlayType(mime) || 'no'; } catch { return 'threw'; } };
+  const list = (pairs, el) => pairs.map(([name, mime]) => `${name} ${say(el, mime)}`).join(' · ');
+  return [
+    ['Video', list([['H.264', 'video/mp4; codecs="avc1.640028"'], ['HEVC', 'video/mp4; codecs="hvc1.2.4.L153.B0"'],
+                    ['VP9', 'video/webm; codecs="vp9"'], ['AV1', 'video/mp4; codecs="av01.0.08M.08"']], v)],
+    ['Containers', list([['MKV', 'video/x-matroska'], ['TS', 'video/mp2t'], ['AVI', 'video/x-msvideo'],
+                         ['HLS', 'application/vnd.apple.mpegurl']], v)],
+    ['Audio', list([['AAC', 'audio/mp4; codecs="mp4a.40.2"'], ['AC-3', 'audio/mp4; codecs="ac-3"'],
+                    ['E-AC-3', 'audio/mp4; codecs="ec-3"'], ['FLAC', 'audio/flac']], a)],
+  ];
+}
+
+/** What the app's own page could read off the television, when LENTA is running inside it. Empty in a
+ *  TV's web browser, and empty in the app until 1.17 — before that the client ran on the server's
+ *  origin, where Tizen grants no device API at all. */
+function tvFacts() {
+  const p = tvPlatform();
+  if (!p) return [];
+  const panel = { fhd: 'FHD', uhd: '4K', '8k': '8K' }[p.panel] || 'unknown';
+  return [
+    ['Television', [p.realModel || p.model, p.modelCode, p.firmware].filter(Boolean).join(' · ') || 'not readable'],
+    ['Panel', `${panel}${p.hdr ? ' · HDR' : ''}${p.tizenVersion ? ` · Tizen ${p.tizenVersion}` : ''}`],
+    ['Remote keys', p.registered?.length ? `${p.registered.length} registered (${p.registered.join(', ')})`
+      : 'none registered — only the arrows, OK and Back arrive'],
+    ['Set plays the film', !p.avplay ? 'not offered by this app'
+      : state.prefs?.tv_player === '1' ? 'on — the television decodes'
+      : 'available, switched off (Settings › Playback › Media pages)'],
+  ];
+}
+
 /** This device rather than the server: which of the three clients it was given, and the engine behind it. */
 function deviceFacts() {
   const root = document.documentElement;
@@ -55,6 +96,8 @@ function deviceFacts() {
     ['Running in', `${where}${tvMode() ? ' · television mode' : ''}`],
     ['Screen', `${window.screen?.width || 0} × ${window.screen?.height || 0}`],
     missing.length ? ['Engine lacks', missing.map(c => ({ 'no-vars': 'CSS variables', 'no-grid': 'CSS grid', 'no-sticky': 'sticky position', 'no-flexgap': 'flex gap' })[c]).join(', ')] : null,
+    ...(tvMode() ? codecFacts() : []),
+    ...tvFacts(),
   ].filter(Boolean);
 }
 

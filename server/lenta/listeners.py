@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import signal
 import socket
 
@@ -110,8 +111,14 @@ class Manager:
         kw = {}
         if files:
             kw = {"ssl_certfile": str(files[0]), "ssl_keyfile": str(files[1])}
+        # `forwarded_allow_ips` was `"*"`: any client's X-Forwarded-Proto was believed, and that header
+        # decides request.url.scheme, which in turn picks the cookie name and whether it is marked
+        # Secure. A network attacker could therefore make a plain-HTTP sign-in issue a Secure cookie
+        # the browser would never send back. Only a proxy on this machine is believed now;
+        # LENTA_TRUSTED_PROXIES widens it for someone genuinely running one in front.
+        trusted = os.environ.get("LENTA_TRUSTED_PROXIES", "127.0.0.1,::1")
         cfg = uvicorn.Config(self.app, host=HOST, port=port, lifespan="off", proxy_headers=True,
-                             forwarded_allow_ips="*", log_level="warning", timeout_keep_alive=30,
+                             forwarded_allow_ips=trusted, log_level="warning", timeout_keep_alive=30,
                              timeout_graceful_shutdown=3, **kw)
         try:
             cfg.load()

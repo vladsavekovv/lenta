@@ -6,6 +6,18 @@ export const raw = (s) => new Raw(s);
 export function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+// A link that came from somewhere else. `esc()` makes a URL safe to *put* in an attribute — it cannot
+// be broken out of — and says nothing about what the URL then does, so `javascript:alert(1)` survived
+// it intact. Four places interpolate an address LENTA did not write: a film's `homepage` from TMDB
+// (community-edited), a streaming provider's watch link, a Wikipedia URL, an Apple Music preview. One
+// click on any of those and the script runs on LENTA's own origin, as whoever clicked — an
+// administrator, if it was an administrator. Only http and https get through here; anything else
+// becomes a dead link rather than a live one.
+export function safeUrl(u) {
+  const s = String(u ?? '').trim();
+  return /^https?:\/\//i.test(s) ? s : '';
+}
+
 function renderVal(v) {
   if (v === null || v === undefined || v === false) return '';
   if (v instanceof Raw) return v.s;
@@ -313,7 +325,7 @@ function streamingWideCard(item, { mark, edit, label }) {
     : item.poster ? html`<span class="wide-fill" style="background-image:url('${img(item.poster, 185)}')"></span><img class="wide-poster" loading="lazy" src="${img(item.poster, 342)}" alt="${item.title}">`
     : genPoster(item);
   return html`<div class="card landscape wide streaming${art ? ' has-art' : ''}" data-kind="streaming" data-id="${item.id}">
-    <a class="frame-link" href="${item.link}" target="_blank" rel="noopener noreferrer"
+    <a class="frame-link" href="${safeUrl(item.link)}" target="_blank" rel="noopener noreferrer"
        title="${label}" aria-label="Watch ${label}">
       <div class="frame">${picture}${mark}${edit}</div></a>
   </div>`;
@@ -343,7 +355,7 @@ export function streamingCard(item) {
   // rel="noopener" matters: without it the page we open can reach back into this one through window.opener.
   const label = labelFor(item);
   return html`<div class="card poster streaming${themed}" data-kind="streaming" data-id="${item.id}">
-    <a class="frame-link" href="${item.link}" target="_blank" rel="noopener noreferrer"
+    <a class="frame-link" href="${safeUrl(item.link)}" target="_blank" rel="noopener noreferrer"
        title="${label}" aria-label="Watch ${label}">
       <div class="frame">${src ? html`<img loading="lazy" src="${src}" alt="${item.title}">` : genPoster(item)}${mark}${edit}</div></a>
   </div>`;

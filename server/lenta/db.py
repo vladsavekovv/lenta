@@ -25,7 +25,11 @@ CREATE TABLE IF NOT EXISTS users (
     is_admin      INTEGER NOT NULL DEFAULT 0,
     all_libraries INTEGER NOT NULL DEFAULT 1,
     color         TEXT,
-    created_at    REAL
+    created_at    REAL,
+    -- Bumped to invalidate every session token this account has already been issued: signing out,
+    -- changing the password, an administrator resetting it. A token carries the epoch it was made
+    -- under and is refused once the two disagree. See auth.issue_token / auth.user_from_request.
+    token_epoch   INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS libraries (
@@ -95,6 +99,10 @@ CREATE TABLE IF NOT EXISTS files (
     width       INTEGER,
     height      INTEGER,
     pix_fmt     TEXT,
+    profile     TEXT,                   -- H.264/HEVC profile name, e.g. "High"
+    level       INTEGER,                -- the codec's own number: H.264 4.1 is 41, HEVC 4.1 is 123
+    refs        INTEGER,                -- reference frames; an old hardware decoder has a ceiling
+    fps         REAL,
     hdr         INTEGER DEFAULT 0,
     audio       TEXT,                   -- JSON list of audio streams
     subtitles   TEXT,                   -- JSON list of subtitle streams (embedded + sidecar)
@@ -348,6 +356,21 @@ def init_db() -> None:
         if "position" not in cols:      # order in the menu and on Home, set by dragging in the menu
             con.execute("ALTER TABLE libraries ADD COLUMN position INTEGER")
         con.execute("UPDATE libraries SET position = id WHERE position IS NULL")
+        # 1.18.0: how hard a file is to decode, not just which codec it is. A television stalls rather
+        # than erroring above its ceiling, so these are what keep a file off a set that cannot take it.
+        # Existing rows are left NULL and filled by the next scan; a NULL is read as "unknown", which
+        # never blocks direct play, so nobody's library changes behaviour until it has been scanned.
+        fc = {r[1] for r in con.execute("PRAGMA table_info(files)")}
+        for col, kind in (("profile", "TEXT"), ("level", "INTEGER"), ("refs", "INTEGER"), ("fps", "REAL")):
+            if col not in fc:
+                con.execute(f"ALTER TABLE files ADD COLUMN {col} {kind}")
+
+        # 1.19.0: a session token can be withdrawn. Every existing token keeps working — they were all
+        # issued without an epoch and are read as epoch 0, which is what every account starts at — so
+        # nobody is signed out by the upgrade itself.
+        uc = {r[1] for r in con.execute("PRAGMA table_info(users)")}
+        if "token_epoch" not in uc:
+            con.execute("ALTER TABLE users ADD COLUMN token_epoch INTEGER NOT NULL DEFAULT 0")
         # Renamed from SAVEK: keep a custom server name, but update the old default.
         con.execute("UPDATE settings SET value = 'LENTA' WHERE key = 'server_name' AND value = 'SAVEK'")
         # The Redline theme is called Netflix from 1.3.1: keep everyone's choice working.

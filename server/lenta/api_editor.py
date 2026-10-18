@@ -2,6 +2,7 @@
 
 A field edited here is locked: online refreshes keep it (metadata.locked_fields / _update).
 """
+import urllib.error
 import io
 import json
 
@@ -9,7 +10,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from . import auth, images, logs, metadata
+from . import auth, images, logs, metadata, safefetch
 from .db import db, jloads, now
 
 log = logs.get("editor")
@@ -280,11 +281,12 @@ def set_artwork(item_id: int, body: ArtBody):
         if not body.url.startswith(("http://", "https://")):
             raise HTTPException(400, "Paste a link that starts with http:// or https://")
         try:
-            r = httpx.get(body.url, timeout=30, follow_redirects=True, headers={"User-Agent": "LENTA"})
-            r.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise HTTPException(400, f"Couldn't download that image: {exc}")
-        return _set_art(item_id, body.type, _store_image(r.content))
+            data, _ctype = safefetch.get(body.url, allow_private=True, limit=25_000_000, timeout=30)
+        except safefetch.Blocked as exc:
+            raise HTTPException(400, f"That link can't be fetched: {exc}") from exc
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            raise HTTPException(400, f"Couldn't download that image: {exc}") from exc
+        return _set_art(item_id, body.type, _store_image(data))
     raise HTTPException(400, "Choose an image")
 
 

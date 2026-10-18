@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { state } from './app.js';
 import { musicPlaying } from './music.js';
 import { dockPlaying } from './dock.js';
-import { $, html, icon, img, mount, onPageScroll, pageY } from './ui.js';
+import { $, html, icon, img, mount, onPageScroll, pageY, safeUrl } from './ui.js';
 import { tvMode } from './tv.js';
 
 const cleanups = [];
@@ -281,7 +281,7 @@ class ThemeMusic {
     const playing = !this.audio.paused;
     mount(chip, html`<span class="eq ${playing ? '' : 'paused'}"><i></i><i></i><i></i></span>
       <span class="lbl">${this.t.title || 'Theme'}${this.t.artist ? html`<small> · ${this.t.artist}</small>` : ''}</span>
-      ${this.t.link ? html`<a href="${this.t.link}" target="_blank" rel="noopener" title="Preview from Apple Music">Apple Music</a>` : ''}
+      ${safeUrl(this.t.link) ? html`<a href="${safeUrl(this.t.link)}" target="_blank" rel="noopener noreferrer" title="Preview from Apple Music">Apple Music</a>` : ''}
       <button type="button" aria-label="${playing ? 'Stop theme music' : 'Play theme music'}">${icon(playing ? 'pause' : 'play')}</button>`);
     chip.querySelector('button').onclick = () => {
       if (playing) { this.userPaused = true; this.pause(500); } else { this.userPaused = false; this.play(); }

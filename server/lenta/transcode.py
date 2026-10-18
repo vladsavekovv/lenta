@@ -304,9 +304,16 @@ def build_command(f: dict, out: Path, start: float, mode: str, quality: str,
         elif accel == "vaapi":
             cmd += ["-c:v", "h264_vaapi", *rate]
         else:
+            # The declared level follows the picture we are actually making, rather than being 5.1 on
+            # everything. A decoder reads the number in the stream, not the stream: a television that
+            # stops at level 4.1 can be handed an easy 1080p film and still refuse it because the file
+            # says 5.1. x264 trims its own reference frames to fit the level it is given, so asking for
+            # 4.1 on a 1080p encode costs nothing. nvenc has always chosen the level itself, which is
+            # why only this one path could say the wrong thing.
             cmd += ["-c:v", "libx264", "-preset", get_setting("x264_preset") or "veryfast", "-crf", "21",
                     "-maxrate", str(int(bitrate * 1.5)), "-bufsize", str(bitrate * 2),
-                    "-profile:v", "high", "-level:v", "5.1", "-sc_threshold", "0"]
+                    "-profile:v", "high", "-level:v", "4.1" if height <= 1080 else "5.1",
+                    "-sc_threshold", "0"]
         # Every SEGMENT_SECONDS from the first frame (t is the film's own time because of -copyts).
         cmd += ["-force_key_frames", f"expr:if(isnan(prev_forced_t),1,gte(t-prev_forced_t,{SEGMENT_SECONDS}))"]
 

@@ -308,13 +308,16 @@ def _upsert_item(con, library_id: int, kind: str, key: str, parent_id: int | Non
 def _insert_file(con, item_id: int, library_id: int, path: str, st: os.stat_result, info: dict) -> None:
     con.execute(
         "INSERT INTO files(item_id, library_id, path, size, mtime, container, duration, bitrate, video_codec, "
-        "width, height, pix_fmt, hdr, audio, subtitles, added_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+        "width, height, pix_fmt, profile, level, refs, fps, hdr, audio, subtitles, added_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(path) DO UPDATE SET item_id = excluded.item_id, size = excluded.size, mtime = excluded.mtime, "
         "container = excluded.container, duration = excluded.duration, bitrate = excluded.bitrate, "
         "video_codec = excluded.video_codec, width = excluded.width, height = excluded.height, "
-        "pix_fmt = excluded.pix_fmt, hdr = excluded.hdr, audio = excluded.audio, subtitles = excluded.subtitles",
+        "pix_fmt = excluded.pix_fmt, profile = excluded.profile, level = excluded.level, refs = excluded.refs, "
+        "fps = excluded.fps, hdr = excluded.hdr, audio = excluded.audio, subtitles = excluded.subtitles",
         (item_id, library_id, path, st.st_size, st.st_mtime, info.get("container"), info.get("duration"),
          info.get("bitrate"), info.get("video_codec"), info.get("width"), info.get("height"), info.get("pix_fmt"),
+         info.get("profile"), info.get("level"), info.get("refs"), info.get("fps"),
          info.get("hdr", 0), json.dumps(info.get("audio", [])), json.dumps(info.get("subtitles", [])), now()))
 
 

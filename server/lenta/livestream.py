@@ -104,9 +104,13 @@ class Feed:
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
-    def info(self) -> dict:
-        return {"id": self.id, "channel_id": self.channel_id, "name": self.name, "number": self.number,
-                "input": f"{self.adapter}.{self.index}", "device": self.device,
+    def info(self, *, admin: bool = True) -> dict:
+        """What this feed is doing. `admin=False` leaves out the two things a viewer must not be told:
+        the tuner's **device path**, which is a filesystem path, and the feed's **id**, which is the
+        only thing standing between somebody else and this stream (see `known_viewer`)."""
+        return {**({"id": self.id, "device": self.device} if admin else {}),
+                "channel_id": self.channel_id, "name": self.name, "number": self.number,
+                "input": f"{self.adapter}.{self.index}",
                 "frequency": self.frequency, "viewers": len(self.viewers), "mode": self.mode,
                 "video": self.video, "audio": self.audio, "running": self.alive(),
                 "created": self.created, "error": self.error, "segments": self.segments,
@@ -526,6 +530,19 @@ def wait_for_start(f: Feed, timeout: float = 0, want: int = 2) -> bool:
 
 
 # ---------------------------------------------------------------- viewers coming and going
+def known_viewer(f: Feed, token: str) -> bool:
+    """Was this token handed out for this feed? Until 1.19.0 nothing asked.
+
+    `touch` below updates a token it recognises and **silently does nothing otherwise**, which is the
+    right behaviour for a keep-alive and was quietly load-bearing as an access check. It is not one: the
+    playlist and the segments were served to anyone who named the feed, and `/api/livetv/live` handed
+    out every feed's id to any signed-in user. So one viewer could watch another's stream. The id is now
+    admin-only and the token is actually required.
+    """
+    with _lock:
+        return token in f.viewers
+
+
 def touch(f: Feed, token: str) -> None:
     with _lock:
         if token in f.viewers:

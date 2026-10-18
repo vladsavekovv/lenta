@@ -6,6 +6,7 @@ import { ensureLanguages, languageOptions } from './subtitles.js';
 import { $, html, icon, modal, mount, raw, setArtStyle, setEpisodeArt, toast } from './ui.js';
 import { inAndroidApp, installAvailable, installHelp, isAndroid, onInstallChange, promptInstall } from './pwa.js';
 import { keyWatching, setKeyWatch, tvMode } from './tv.js';
+import { avplayOffered } from './avplay.js';
 import { blockLayout, layoutBar, layoutButtons, pageLayout } from './layout.js';
 
 // Colours for the theme previews (kept here so a card can show a theme that isn't active).
@@ -37,6 +38,12 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
   // Home's shape is the server's, not each person's: only an administrator is offered the sections, the
   // banner's libraries, how often it changes and the 30 seconds limit. Everyone gets the sound switch.
   const owns = !!state.user.is_admin;
+  // Only a Samsung set whose app can reach its player is offered it; everywhere else the setting
+  // would be a switch with nothing behind it.
+  const tvOffersPlayer = avplayOffered();
+  // The panel size is a different question and is asked on any television, because the ceiling it
+  // sets applies to the ordinary browser player — the one that is actually running on his sets.
+  const onTv = tvMode();
   mount(view, html`<div class="lay-head">${layoutButtons()}</div>
     ${layoutBar()}
     <div class="settings"><div class="settings-cols">
@@ -135,6 +142,13 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
             html`<option value="${v}" ${v === (draft.trailer_skip || '0') ? raw('selected') : ''}>${l}</option>`)}</select></div>
         <p style="color:var(--muted);font-size:14px;margin:-6px 0 14px">Skips the green "approved for appropriate audiences" card many older trailers start with (5–8 seconds is usually enough).
           Applies to trailers on media pages, in previews, on Home and the Trailer button.</p>
+        ${onTv || tvOffersPlayer ? html`<h4 class="set-sub">This television</h4>` : ''}
+        ${onTv ? html`<div class="row-field"><label for="p-tvpanel">Screen</label>
+          <select class="input" id="p-tvpanel">${[['', "Don't know"], ['fhd', 'Full HD (1080p)'], ['uhd', '4K (2160p)']].map(([v, l]) =>
+            html`<option value="${v}" ${v === (draft.tv_panel || '') ? raw('selected') : ''}>${l}</option>`)}</select></div>
+        <p style="color:var(--muted);font-size:14px;margin:-6px 0 16px">Samsung publish how hard a film a set can decode, and it depends on the screen: a Full&nbsp;HD set stops at H.264 level&nbsp;4.1 and 20&nbsp;Mbps, a 4K one at level&nbsp;5.1 and 60&nbsp;Mbps. Above that they say playback <b>stalls</b> — no error, just a picture that never arrives. Tell LENTA which this is and it converts those films instead of handing them over. Your set's screen is in Menu › Settings › Support › About This TV.</p>` : ''}
+        ${tvOffersPlayer ? html`<label class="check" style="margin-bottom:6px"><input type="checkbox" id="p-tvplayer" ${draft.tv_player === '1' ? raw('checked') : ''}>Let the television decode films itself</label>
+        <p style="color:var(--muted);font-size:14px;margin:-4px 0 16px">Your set plays far more than its browser admits to — MKV, MPEG&#8209;2, VC&#8209;1, AC&#8209;3 — so films it can take are played as they are instead of being converted by the server first, and you can change the audio track without a conversion. It is new and only a real television can test it: if a film will not start, turn this off and it plays the old way.</p>` : ''}
         <label class="check" style="margin-bottom:10px"><input type="checkbox" id="p-music" ${draft.theme_music === '1' ? raw('checked') : ''}>Play theme music when I open a movie or show</label>
         <div class="row-field" style="margin-left:28px"><label for="p-vol">Theme music volume</label>
           <input class="range" type="range" id="p-vol" min="0.05" max="1" step="0.05" value="${draft.theme_music_volume}"></div>
@@ -261,6 +275,8 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
       state.prefs.settings_layout = all; draft.settings_layout = all; saved.settings_layout = all;   // not an unsaved setting
     } });
   bind('#p-music', 'theme_music', el => (el.checked ? '1' : '0'));
+  bind('#p-tvplayer', 'tv_player', el => (el.checked ? '1' : '0'));
+  bind('#p-tvpanel', 'tv_panel', el => el.value);
   bind('#p-home-30', 'home_trailer_30', el => (el.checked ? '1' : '0'));
   bind('#p-vol', 'theme_music_volume', el => el.value);
   $('#p-pass').addEventListener('click', changePasswordDialog);

@@ -12,11 +12,13 @@ import os
 import shutil
 import threading
 import time
+import urllib.error
 from pathlib import Path
 
 import httpx
 from PIL import Image, ImageOps
 
+from . import safefetch
 from .config import CACHE_DIR, IMAGES_DIR
 from . import logs
 
@@ -133,17 +135,24 @@ def _download_web(name: str) -> Path | None:
         if target.exists():
             return target
         target.parent.mkdir(parents=True, exist_ok=True)
+        # Through the guard: these addresses come out of **somebody else's answer** — Fanart, OMDb,
+        # AniList, Google Books — not out of LENTA, and a metadata provider has no business naming an
+        # address on this network. The body is also capped now; `r.content` had no limit, so an upstream
+        # that answered forever was a way to exhaust the server's memory.
         try:
-            with httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": "LENTA media server"}) as c:
-                r = c.get(row["url"])
-        except httpx.HTTPError as exc:
+            data, ctype = safefetch.get(row["url"], limit=25_000_000, timeout=30,
+                                        headers={"User-Agent": "LENTA media server"})
+        except safefetch.Blocked as exc:
+            log.warning("Image %s refused: %s", row["url"], exc)
+            return None
+        except (urllib.error.URLError, OSError, ValueError) as exc:
             log.warning("Image %s failed: %s", row["url"], exc)
             return None
-        if r.status_code != 200 or not r.content or not r.headers.get("content-type", "image").startswith("image"):
-            log.warning("Image %s: HTTP %s", row["url"], r.status_code)
+        if not data or not (ctype or "image").startswith("image"):
+            log.warning("Image %s: not an image (%s)", row["url"], ctype or "no type")
             return None
         tmp = target.with_suffix(target.suffix + ".tmp")
-        tmp.write_bytes(r.content)
+        tmp.write_bytes(data)
         tmp.replace(target)
         return target
 
@@ -180,7 +189,7 @@ def _resized(src: Path, kind: str, name: str, width: int) -> Path:
 
 def resolve(kind: str, name: str, width: int | None) -> Path | None:
     """Filesystem path for an image request, downloading/resizing as needed."""
-    if "/" in name or ".." in name:
+    if "/" in name or ".." in name or "\x00" in name:
         return None
     if kind == "tmdb":
         src = _download_tmdb(name)

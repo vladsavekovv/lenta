@@ -41,6 +41,8 @@ PREF_DEFAULTS = {
     "intro_skip": "button",
     "trailer_skip": "0",             # seconds cut from the start of trailers (the green "approved for appropriate audiences" card)          # TV intros: off | button ("Skip intro") | auto (skipped by itself)
     "tv_key_watch": "0",             # televisions: show the number each remote key sends (for diagnosing one)
+    "tv_player": "0",                # Samsung sets: let the television decode the film itself (AVPlay)
+    "tv_panel": "",                  # televisions: "" none stated | "fhd" | "uhd" — sets the decode ceiling
     "theme_music": "1",
     "theme_music_volume": "0.35",
 }
@@ -113,6 +115,8 @@ def _validate(key: str, value) -> str:
         raise HTTPException(400, "Unknown trailer start setting")
     if key == "intro_skip" and v not in ("off", "button", "auto"):
         raise HTTPException(400, "Unknown intro setting")
+    if key == "tv_panel" and v not in ("", "fhd", "uhd"):
+        raise HTTPException(400, "Unknown television panel")
     if key == "menu_default" and v not in ("collapsed", "open"):
         raise HTTPException(400, "Unknown menu setting")
     if key == "episode_art" and v not in ("show", "still"):
@@ -127,7 +131,7 @@ def _validate(key: str, value) -> str:
         raise HTTPException(400, "Unknown Home trailer setting")
     if key == "trailer_mode" and v not in TRAILER_MODES:
         raise HTTPException(400, "Unknown trailer option")
-    if key in ("auto_tracks", "subtitle_autodownload", "theme_music", "home_trailer_30"):
+    if key in ("auto_tracks", "subtitle_autodownload", "theme_music", "home_trailer_30", "tv_player"):
         v = "1" if v in ("1", "true", "True", "on") else "0"
     if key == "theme_music_volume":
         try:
@@ -189,5 +193,5 @@ def write_prefs(body: dict, user: dict = Depends(auth.current_user)):
 
 
 @router.get("/languages")
-def language_list():
+def language_list(user: dict = Depends(auth.current_user)):      # nothing asks for it before signing in
     return languages.as_list()

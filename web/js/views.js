@@ -8,7 +8,7 @@ import { openSubtitleDialog } from './subtitles.js';
 import { tvMode } from './tv.js';
 import {
   $, $$, cardFor, channels, esc, fmtBytes, fmtRuntime, fmtTime, genPoster, html, icon, img, itemHref, lang, mount,
-  popMenu, posterCard, raw, row, squareCard, landscapeCard, toast, modal, wideArt, nfx,
+  popMenu, posterCard, raw, row, safeUrl, squareCard, landscapeCard, toast, modal, wideArt, nfx,
 } from './ui.js';
 
 const view = () => $('#view');
@@ -571,7 +571,9 @@ function externalLinks(d, ex, wiki) {
   if (d.tmdb_id) links.push(['TMDB', `https://www.themoviedb.org/${d.tmdb_kind === 'tv' ? 'tv' : 'movie'}/${d.tmdb_id}`]);
   if (wiki?.url) links.push(['Wikipedia', wiki.url]);
   if (ex.homepage) links.push(['Official site', ex.homepage]);
-  return links.map(([n, u]) => html`<a href="${u}" target="_blank" rel="noopener noreferrer">${n} ${icon('external')}</a>`);
+  // TMDB's `homepage` and Wikipedia's URL are other people's fields: http(s) only (see safeUrl).
+  return links.filter(([, u]) => safeUrl(u))
+    .map(([n, u]) => html`<a href="${safeUrl(u)}" target="_blank" rel="noopener noreferrer">${n} ${icon('external')}</a>`);
 }
 
 async function loadAbout(d, ex) {
@@ -602,7 +604,7 @@ async function loadAbout(d, ex) {
   if (a.wiki) {
     mount($('#about-wiki'), html`<blockquote class="wiki">
       <p class="clamp-5" title="Show all">${a.wiki.extract}</p>
-      <footer>From Wikipedia${a.wiki.lang !== 'en' ? ` (${a.wiki.lang})` : ''} · <a href="${a.wiki.url}" target="_blank" rel="noopener noreferrer">Read the article</a> · CC BY-SA</footer></blockquote>`);
+      <footer>From Wikipedia${a.wiki.lang !== 'en' ? ` (${a.wiki.lang})` : ''} · <a href="${safeUrl(a.wiki.url)}" target="_blank" rel="noopener noreferrer">Read the article</a> · CC BY-SA</footer></blockquote>`);
     const p = $('#about-wiki p');
     p.addEventListener('click', () => p.classList.toggle('clamp-5'));
     mount($('#about-links'), externalLinks(d, ex, a.wiki));
@@ -957,7 +959,7 @@ function photoAlbumDetail(d, q) {
       <div class="page-head"><div><h1 class="page-title">${d.title}</h1>
         <div class="page-sub">${d.photos.length} photo${d.photos.length === 1 ? '' : 's'}${d.year ? ` · ${d.year}` : ''}</div></div></div>
       <div class="photo-grid">${d.photos.map((p, i) => html`<a href="#" data-i="${i}" aria-label="${p.title}">
-        <img loading="lazy" src="${p.thumb}?w=500" alt="" ${p.width && p.height ? raw(`width="${p.width}" height="${p.height}"`) : ''}></a>`)}</div></div></article>`);
+        <img loading="lazy" src="${p.thumb}?w=500" alt="" ${p.width && p.height ? raw(`width="${esc(p.width)}" height="${esc(p.height)}"`) : ''}></a>`)}</div></div></article>`);
   wireStage();
   view().querySelector('.photo-grid').addEventListener('click', (e) => {
     const a = e.target.closest('a[data-i]');

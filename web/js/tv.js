@@ -67,18 +67,50 @@ function keyName(e) {
 // The app opens LENTA as its page, so the TV's own functions (window.tizen) are here when the TV provides them.
 const tizen = () => window.tizen;
 
-function registerKeys() {
-  try {
-    const keys = ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop', 'MediaFastForward', 'MediaRewind',
-                  'ChannelUp', 'ChannelDown'];
-    const t = tizen();
-    if (t?.tvinputdevice) {
-      const have = new Set(t.tvinputdevice.getSupportedKeys().map(k => k.name));
-      const want = keys.filter(k => have.has(k));
-      if (t.tvinputdevice.registerKeyBatch) t.tvinputdevice.registerKeyBatch(want);
-      else want.forEach(k => t.tvinputdevice.registerKey(k));
-    }
-  } catch { /* an older TV: OK still plays and pauses */ }
+/** What the television said about itself, handed over by the app's own page.
+ *
+ *  Nothing here can ask the set directly. This page is served by LENTA, and Tizen refuses the device
+ *  APIs to any page outside the app's own origin (Web Runtime compliance, requirement 0380), so
+ *  `window.tizen` is undefined here however the app was opened. Until 1.17 this file called
+ *  `registerKeys()` anyway, inside a try/catch, and it has never once done anything — which is why the
+ *  remote's Play, Pause and Stop have never reached LENTA in the TV app.
+ *
+ *  The app's page keeps the origin now and sends this over, so the facts arrive instead of being
+ *  guessed. Empty until it does, and empty for good in a TV's own browser, which has no app page.
+ */
+let platform = null;
+export const tvPlatform = () => platform;
+
+/** Ask the app's page to take a key, or give it back. The television delivers a registered key to the
+ *  application instead of acting on it itself, so MediaPlayPause is only worth holding while a film is
+ *  open — otherwise Samsung's own playback overlay stops working everywhere else. */
+export function holdKey(name, on = true) {
+  if (window.parent === window) return;
+  parent.postMessage({ lenta: on ? 'register-key' : 'unregister-key', name }, '*');
+}
+
+/** A key the app's page saw and passed on. It forwards everything, because whether a registered key
+ *  also reaches a frame on another origin is not documented and not worth guessing; so a forwarded key
+ *  that already arrived here natively a moment ago is dropped, and the app works either way. */
+const seenNatively = new Map();
+function forwardedKey(d) {
+  const last = seenNatively.get(d.keyCode) || 0;
+  if (Date.now() - last < 120) return;                 // this page already had it: not twice
+  document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: d.keyCode, key: d.key, bubbles: true }));
+}
+
+function listenToHost() {
+  if (window.parent === window) return;
+  window.addEventListener('message', (e) => {
+    if (e.source !== window.parent) return;      // only the window hosting this page may speak
+    const d = e.data;
+    if (!d || !d.lenta) return;
+    if (d.lenta === 'platform') { platform = d.platform || null; return; }
+    if (d.lenta === 'key') forwardedKey(d);
+  });
+  // remember what arrived here by itself, so the same key forwarded by the app is not acted on twice
+  window.addEventListener('keydown', (e) => { seenNatively.set(e.keyCode, Date.now()); }, true);
+  parent.postMessage({ lenta: 'ready' }, '*');
 }
 
 // ---- what is this remote actually sending? -------------------------------------------------------
@@ -594,13 +626,28 @@ function chooseFromSelect(sel) {
   popMenu(sel, [{ heading: sel.getAttribute('aria-label') || 'Choose' }, ...items]);
 }
 
-// keys the TV app forwards (when the app frame, not LENTA, had the focus)
-window.addEventListener('message', (e) => {
-  const d = e.data;
-  if (!d || d.lenta !== 'key') return;
-  onKey({ keyCode: d.keyCode || 0, key: d.key || '', target: document.activeElement || document.body,
-    preventDefault() {}, stopPropagation() {} });
-});
+// Keys the TV app forwards, when the app's frame rather than LENTA's page had the focus.
+//
+// This used to be registered here, at module level, with **no check on where the message came from** —
+// so it was live in every browser, not only on a television, and any page that had opened LENTA in a
+// tab kept a handle to that window and could post into it. The opener cannot read anything back
+// (same-origin policy), but it could drive the focus ring blind: walk it, press Back, change the live
+// channel, and open a <select> and commit a choice, which is what `savePref` is wired to.
+//
+// Two conditions now. The listener only exists on a television (it is called from `initTv`), and a
+// message is only acted on if it came from the window that is **hosting** this page. There is no
+// legitimate sender other than that one: the TV app frames LENTA, so the sender is always the parent.
+// `extras.js`'s YouTube receiver has always done this correctly (`e.source !== frame.contentWindow`)
+// and is the model.
+function listenForForwardedKeys() {
+  window.addEventListener('message', (e) => {
+    if (window.parent === window || e.source !== window.parent) return;
+    const d = e.data;
+    if (!d || d.lenta !== 'key') return;
+    onKey({ keyCode: d.keyCode || 0, key: d.key || '', target: document.activeElement || document.body,
+      preventDefault() {}, stopPropagation() {} });
+  });
+}
 
 // After a page change, put the focus somewhere sensible so the remote works straight away.
 function settle() {
@@ -616,6 +663,7 @@ export function initTv() {
   if (!tvMode()) return;
   document.documentElement.classList.add('tv');
   wireHardwareKeys();
+  listenForForwardedKeys();
   // ?keys=1 on the address, or the switch in Settings › LENTA app for a set with no address bar.
   if (params.get('keys') === '1') { forcedKeyWatch = true; store('lenta-keys', '1'); }
   if (store('lenta-keys') === '1') keyWatch();
@@ -630,8 +678,5 @@ export function initTv() {
     }
   }).observe(document.body, { childList: true });
   settle();
-  if (inTvApp()) {
-    registerKeys();
-    if (window.parent !== window) parent.postMessage({ lenta: 'ready' }, '*');
-  }
+  if (inTvApp()) listenToHost();
 }

@@ -6,11 +6,12 @@ depends on.
 """
 from __future__ import annotations
 
+import urllib.error
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from . import auth, streaming
+from . import auth, streaming, safefetch
 from .api_editor import _store_image
 from .db import set_setting
 from .metadata import TMDBError
@@ -113,11 +114,12 @@ def set_art(body: Art) -> dict:
     if not body.url or not body.url.startswith(("http://", "https://")):
         raise HTTPException(400, "Paste a link that starts with http:// or https://")
     try:
-        r = httpx.get(body.url, timeout=30, follow_redirects=True, headers={"User-Agent": "LENTA"})
-        r.raise_for_status()
-    except httpx.HTTPError as exc:
+        data, _ctype = safefetch.get(body.url, allow_private=True, limit=25_000_000, timeout=30)
+    except safefetch.Blocked as exc:
+        raise HTTPException(400, f"That link can't be fetched: {exc}") from exc
+    except (urllib.error.URLError, OSError, ValueError) as exc:
         raise HTTPException(400, f"Couldn't download that image: {exc}") from exc
-    streaming.set_art(body.tmdb_id, body.kind, _store_image(r.content), shape)
+    streaming.set_art(body.tmdb_id, body.kind, _store_image(data), shape)
     return {"ok": True, "own_art": True}
 
 

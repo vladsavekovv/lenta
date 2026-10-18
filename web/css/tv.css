@@ -238,3 +238,17 @@ html.tv .about-note { font-size: 18px !important; }
 html.tv .about-ua { font-size: 13px !important; }
 html.tv .about-logo { width: 104px !important; }
 html.tv .about-lenta .panel h3 { font-size: 24px !important; }
+
+/* ---- 10. The television drawing the film itself -----------------------------------
+   AVPlay does not put the picture in the page: the set draws it on its own plane, behind
+   everything the browser paints. So where the film should be, the page has to be nothing
+   at all — not black, which would hide it. Only the controls stay, over the top.
+   Every rule here is scoped to html.tv like the rest of this file, and takes effect only
+   while html.av-on is set, which `avplayElement()` adds while the set is playing and
+   removes when it stops. */
+html.tv.av-on, html.tv.av-on body { background: transparent !important; }
+html.tv.av-on #view, html.tv.av-on .rail, html.tv.av-on .topbar { background: transparent !important; }
+html.tv.av-on .player { background: transparent !important; }
+html.tv.av-on .player > video { display: none !important; }
+/* the controls still need to be readable against whatever the film is showing */
+html.tv.av-on .player .chrome { background: linear-gradient(transparent 55%, rgba(0, 0, 0, .72)) !important; }

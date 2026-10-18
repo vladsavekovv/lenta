@@ -43,9 +43,38 @@ def _secret() -> str:
     return secret
 
 
+def _epoch(user_id: int) -> int:
+    with db() as con:
+        row = con.execute("SELECT token_epoch FROM users WHERE id = ?", (user_id,)).fetchone()
+    return int(row["token_epoch"]) if row else 0
+
+
+def revoke_tokens(user_id: int) -> None:
+    """Withdraw every token this account has already been issued.
+
+    There is no sessions table — a token is a signed statement, not a row — so until 1.19.0 **nothing
+    could take one back**. Signing out deleted the browser's cookie and left the token itself valid for
+    the rest of its thirty days, usable through `Authorization: Bearer` or `?token=`; changing the
+    password because you thought it had leaked achieved exactly nothing. Each token now carries the
+    epoch its account was on when it was minted, and bumping the epoch refuses the lot in one write.
+    """
+    with db() as con:
+        con.execute("UPDATE users SET token_epoch = token_epoch + 1 WHERE id = ?", (user_id,))
+
+
 def issue_token(user_id: int) -> str:
-    payload = {"sub": str(user_id), "iat": int(time.time()), "exp": int(time.time()) + TOKEN_DAYS * 86400}
+    payload = {"sub": str(user_id), "iat": int(time.time()), "ep": _epoch(user_id),
+               "exp": int(time.time()) + TOKEN_DAYS * 86400}
     return jwt.encode(payload, _secret(), algorithm="HS256")
+
+
+# A token in the query string is for the one job that cannot carry a header: handing a URL to a
+# television's own decoder, to hls.js, or to VLC. It is **not** a way to authenticate the API. Before
+# 1.19.0 it was accepted everywhere, so `GET /api/admin/users?token=…` worked — a full-privilege
+# credential travelling in URLs, which end up in browser history, bookmarks, a `Referer` header and
+# any access log somebody later turns up to INFO. These are the paths that need it, and GET only.
+QUERY_TOKEN_PATHS = ("/api/stream/", "/api/hls/", "/api/livetv/live/", "/api/subs/", "/api/photos/",
+                     "/api/files/", "/api/img/")
 
 
 def _token_from_request(request: Request) -> str | None:
@@ -55,8 +84,9 @@ def _token_from_request(request: Request) -> str | None:
     token = request.cookies.get(cookie_name(request))
     if token:
         return token
-    # Lets external players (VLC, mpv) open a stream URL directly.
-    return request.query_params.get("token")
+    if request.method in ("GET", "HEAD") and request.url.path.startswith(QUERY_TOKEN_PATHS):
+        return request.query_params.get("token")
+    return None
 
 
 def user_from_request(request: Request) -> dict | None:
@@ -67,10 +97,18 @@ def user_from_request(request: Request) -> dict | None:
         payload = jwt.decode(token, _secret(), algorithms=["HS256"])
     except jwt.PyJWTError:
         return None
+    try:
+        uid = int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
+        return None                     # a token we signed but cannot read is no token at all
     with db() as con:
-        row = con.execute("SELECT id, username, is_admin, all_libraries, color FROM users WHERE id = ?",
-                          (int(payload["sub"]),)).fetchone()
-    return dict(row) if row else None
+        row = con.execute("SELECT id, username, is_admin, all_libraries, color, token_epoch "
+                          "FROM users WHERE id = ?", (uid,)).fetchone()
+    if not row:
+        return None                     # a deleted account's token stops working at once, as it should
+    if int(payload.get("ep", 0)) != int(row["token_epoch"]):
+        return None                     # signed out, or the password changed, since this was issued
+    return dict(row)
 
 
 def current_user(request: Request) -> dict:
@@ -83,6 +121,33 @@ def current_user(request: Request) -> dict:
 def admin_user(user: dict = Depends(current_user)) -> dict:
     if not user["is_admin"]:
         raise HTTPException(403, "Only administrators can do this")
+    return user
+
+
+def live_tv_viewer(user: dict = Depends(current_user)) -> dict:
+    """Live television is a library like any other, and until 1.19.0 it was the one nobody checked.
+
+    `/api/livetv/*` asked only for a signed-in user, so a viewer granted one film library could list
+    every channel, read the whole guide, and **seize a tuner input** — taking it from whoever was
+    watching. The product never meant that: `libraries.kind` has a `livetv` value, `user_libraries`
+    maps people to it, the menu filters on it, and `api_library._home_rows` goes out of its way to drop
+    the channels row for a viewer who has none. Every one of those is a decision that the API then did
+    not keep. This is that decision, in the one place the whole router inherits it from.
+    """
+    allowed = allowed_libraries(user)
+    with db() as con:
+        if allowed is None:
+            row = con.execute("SELECT 1 FROM libraries WHERE kind = 'livetv' LIMIT 1").fetchone()
+        elif not allowed:
+            row = None
+        else:
+            marks = ",".join("?" * len(allowed))
+            row = con.execute(f"SELECT 1 FROM libraries WHERE kind = 'livetv' AND id IN ({marks}) LIMIT 1",
+                              allowed).fetchone()
+    if not row:
+        # 404, not 403, for the same reason check_item_access says 404: a refusal that distinguishes
+        # "not yours" from "not there" tells someone what exists.
+        raise HTTPException(404, "There is no live television here")
     return user
 
 

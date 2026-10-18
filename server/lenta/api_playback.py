@@ -32,6 +32,15 @@ class Caps(BaseModel):
     audio: list[str] = ["aac", "mp3"]
     containers: list[str] = ["mp4"]
     hdr: bool = False
+    # What this screen can decode, as opposed to which codecs it knows. A television has a ceiling on
+    # each of these, and Samsung say what happens above it: "Media with higher bit or frame rate than
+    # specifications can cause video or audio playback to stall." A stall, not an error — so the file is
+    # handed over, nothing complains, and the screen stays black. Zero means "no ceiling", which is what
+    # every browser sends and what every client sent before 1.18.0, so nothing changes unless it is set.
+    max_height: int = 0
+    max_bitrate: int = 0
+    max_level: int = 0           # the codec's own number: H.264 4.1 is 41 (HEVC counts in thirtieths)
+    max_refs: int = 0
 
 
 class PlaybackBody(BaseModel):
@@ -101,6 +110,51 @@ def _stream_start(path: str, t: float) -> tuple[float, float]:
     return t, origin
 
 
+def _beyond(f: dict, caps: Caps) -> str | None:
+    """Why this screen would stall on this file, or None if it would not.
+
+    Every ceiling is skipped when the client did not give one (0) or when the file never recorded the
+    number (NULL — a row scanned before 1.18.0). Unknown is never treated as too much: a library that
+    has not been rescanned goes on behaving exactly as it did, and only a file we have measured against
+    a limit we were told can be refused.
+    """
+    if caps.max_height and (f.get("height") or 0) > caps.max_height:
+        return f"This screen stops at {caps.max_height}p and the file is {f['height']}p"
+    if caps.max_bitrate and (f.get("bitrate") or 0) > caps.max_bitrate:
+        return (f"This screen stops at {caps.max_bitrate // 1_000_000} Mbps and the file is "
+                f"{(f['bitrate'] or 0) // 1_000_000} Mbps")
+    # The level is the codec's own number and the two codecs count differently — H.264 level 4.1 is 41,
+    # HEVC level 4.1 is 123 — so a ceiling given for one is never applied to the other.
+    if caps.max_level and f.get("level") and f.get("video_codec") == "h264" and f["level"] > caps.max_level:
+        return (f"This screen stops at H.264 level {caps.max_level / 10:.1f} and the file is "
+                f"level {f['level'] / 10:.1f}")
+    if caps.max_refs and (f.get("refs") or 0) > caps.max_refs:
+        return f"This screen manages {caps.max_refs} reference frames and the file uses {f['refs']}"
+    return None
+
+
+def clamp_quality(caps: Caps, quality: str, height: int = 0) -> str:
+    """The quality to encode at, never above what the screen says it can take.
+
+    Deciding to convert a file is only half of it. "original" keeps the source height and works out a
+    bitrate from it, so a 4K film sent to a Full HD set would be re-encoded at 4K and stall exactly as
+    the original would have. A screen that stated its height gets an encode that fits inside it.
+
+    `height` is the source's, and only matters for "original", which has no height of its own: a film
+    already inside the ceiling is encoded at its own size rather than being pushed down a step.
+    """
+    if not caps.max_height:
+        return quality
+    asked = transcode.QUALITIES.get(quality)
+    fits = (asked[0] if asked else height) <= caps.max_height
+    if fits:
+        return quality                      # what was asked for already fits: leave it exactly as asked
+    for name in ("1080p", "720p", "480p"):  # above the ceiling: down to the largest size that fits
+        if transcode.QUALITIES[name][0] <= caps.max_height:
+            return name
+    return "480p"
+
+
 def decide(f: dict, body: PlaybackBody) -> tuple[str, str]:
     """Return (mode, reason)."""
     caps = body.caps
@@ -118,13 +172,26 @@ def decide(f: dict, body: PlaybackBody) -> tuple[str, str]:
             and f["video_codec"] in caps.video
             and (not f["hdr"] or caps.hdr)
             and (chosen_audio is None or (chosen_audio["index"] == first_audio and chosen_audio["codec"] in caps.audio))):
-        return "direct", "Your browser plays this file as it is"
+        too_hard = _beyond(f, caps)
+        if not too_hard:
+            return "direct", "Your browser plays this file as it is"
+        # The codec and container are fine and the screen still cannot manage the stream. Repackaging
+        # would not help — a remux copies the video through untouched, same level, same bitrate, same
+        # stall — so this has to be re-encoded. The reason names the number, because "it does not play"
+        # is how this was reported and it explains nothing.
+        return "transcode", too_hard
     if burn:
         return "transcode", "Picture subtitles have to be drawn into the video"
     target = transcode.QUALITIES.get(body.quality)
     h264_ok = (f["video_codec"] == "h264" and (f["pix_fmt"] or "yuv420p") in ("yuv420p", "yuvj420p")
                and not f["hdr"])
     fits = target is None or ((f["height"] or 0) <= target[0] and (f["bitrate"] or 0) <= target[1] * 1.3)
+    # The same ceiling again, and for the same reason: a remux hands the video stream over exactly as it
+    # is. A file the screen would stall on must be re-encoded whichever route it took to get here, so
+    # the remux shortcut is closed for it too — otherwise an MKV above the ceiling would be repackaged
+    # into MP4 and stall just the same.
+    if h264_ok and fits and _beyond(f, caps):
+        return "transcode", _beyond(f, caps)
     if h264_ok and fits:
         if container not in caps.containers:
             return "remux", f"The {f['container'].upper()} container is repackaged; video is not re-encoded"
@@ -159,8 +226,20 @@ def start_playback(body: PlaybackBody, user: dict = Depends(auth.current_user)):
     mode, reason = decide(f, body)
     if DEV_VP9 and mode == "remux":
         mode, reason = "transcode", "Development VP9 mode"
+    # The quality the encoder is actually given. Only a converted stream is ours to size: a direct play
+    # is the file itself and a remux copies the picture, so neither has a quality to clamp.
+    quality = (clamp_quality(body.caps, body.quality, f["height"] or 0)
+               if mode == "transcode" else body.quality)
+    if quality != body.quality:
+        reason = f"{reason} — converted to {quality}, which is as much as this screen takes"
     if body.replace_session:
-        transcode.stop_session(body.replace_session)
+        # Only your own, and an administrator's anyone's — the same rule `DELETE /api/hls/{sid}` applies
+        # eleven lines further down. This one simply did not ask, which made it one line away from
+        # being the correct version of itself. The id is 72 random bits and only the administrator's
+        # overview lists them, so this was never easy; it was just unchecked.
+        victim = transcode.sessions.get(body.replace_session)
+        if victim and (victim.user_id == user["id"] or user["is_admin"]):
+            transcode.stop_session(body.replace_session)
     display = item["title"]
     subtitle = None
     if meta:
@@ -174,7 +253,7 @@ def start_playback(body: PlaybackBody, user: dict = Depends(auth.current_user)):
         "title": meta["show_title"] if meta else item["title"], "subtitle": subtitle,
         "next_id": next_episode_id(item["id"]) if item["kind"] == "episode" else None,
         "audio_index": body.audio_index if body.audio_index is not None else (f["audio"][0]["index"] if f["audio"] else None),
-        "quality": body.quality, "encoder": transcode.hw["encoder"] if mode == "transcode" else None,
+        "quality": quality, "encoder": transcode.hw["encoder"] if mode == "transcode" else None,
     }
     if mode == "direct":
         result.update(url=f"/api/stream/file/{f['id']}", offset=0, session_id=None)
@@ -190,7 +269,7 @@ def start_playback(body: PlaybackBody, user: dict = Depends(auth.current_user)):
         if sub and sub.get("image"):
             burn = sub["index"]
     session = transcode.start_session(user=user, item={**item, "display_title": display}, f=f, mode=mode,
-                                      quality=body.quality, start=start, audio_index=body.audio_index,
+                                      quality=quality, start=start, audio_index=body.audio_index,
                                       burn_sub_index=burn, origin=origin)
     result.update(url=f"/api/hls/{session.id}/index.m3u8", offset=start, lead=round(wanted - start, 3), origin=origin,
                   session_id=session.id,
@@ -360,7 +439,9 @@ class ProgressBody(BaseModel):
 @router.post("/progress")
 def report_progress(body: ProgressBody, user: dict = Depends(auth.current_user)):
     item = get_item(body.item_id, user)
-    key = body.play_id or f"{user['id']}-{body.item_id}"
+    # Namespaced to the caller. `play_id` comes from the client, so without the prefix one viewer could
+    # name another's key and delete or overwrite their entry in the administrator's Now Playing panel.
+    key = f"{user['id']}:{body.play_id}" if body.play_id else f"{user['id']}-{body.item_id}"
     with _np_lock:
         if body.state == "stopped":
             now_playing.pop(key, None)

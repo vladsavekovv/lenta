@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 
 import urllib.request
 
-from lenta import logos          # noqa: E402
+from lenta import logos, safefetch          # noqa: E402
 
 fails = []
 
@@ -48,7 +48,7 @@ listing = json.dumps([
     {"name": "readme.md", "type": "file", "download_url": "https://e/readme.md"},
     {"name": "subdir", "type": "dir"},
 ])
-logos._get = lambda url, binary=False: listing
+logos._get = lambda url, binary=False, mine=False: listing
 index = logos.fetch_index("https://e/listing")
 for name, want in [("bTV", "btv-bg.png"), ("BNT 1 HD", "bnt1.png"), ("Nova TV", "nova.png"),
                    ("Diema Sport 2", "ds2.png"), ("Star Life HD", None)]:
@@ -64,7 +64,7 @@ tree = json.dumps({"tree": [
     {"path": "countries/italy/btv-it.png", "type": "blob"},
     {"path": "README.md", "type": "blob"},
 ]})
-logos._get = lambda url, binary=False: tree
+logos._get = lambda url, binary=False, mine=False: tree
 idx = logos.fetch_index(logos.DEFAULT_INDEX, prefer="bulgaria")
 check("the raw address is derived from the listing's",
       logos.raw_base(logos.DEFAULT_INDEX) == "https://raw.githubusercontent.com/tv-logo/tv-logos/main/")
@@ -75,9 +75,9 @@ check("so does a name matched by its beginning",
 check("the README is not offered as a logo", not any("readme" in k for k in idx))
 
 print("\n6. a source that cannot be read leaves everything to monograms")
-logos._get = lambda url, binary=False: None
+logos._get = lambda url, binary=False, mine=False: None
 check("unreachable source", logos.fetch_index("https://nowhere/x") == {})
-logos._get = lambda url, binary=False: "<html>not json</html>"
+logos._get = lambda url, binary=False, mine=False: "<html>not json</html>"
 check("a page that is not a listing", logos.fetch_index("https://e/x") == {})
 
 print("\n7. a source that will not answer says why, not just that it did not")
@@ -92,13 +92,24 @@ def refuse(code, body):
     return opener
 
 
-urllib.request.urlopen = refuse(403, '{"message":"API rate limit exceeded for 1.2.3.4."}')
+def stub(opener):
+    """Stand in for safefetch's own opener — the fetch stopped going through urlopen in 1.19.0.
+
+    The address guard is stubbed out with it, because it resolves the host before opening anything and
+    `https://e/x` does not resolve. What is being checked here is whether logos.py reports a server's
+    complaint in words a person can read; the guard's own refusals are checked in test_security.py.
+    """
+    safefetch._opener = type("O", (), {"open": staticmethod(opener)})()
+    safefetch.check = lambda url, **kw: None
+
+
+stub(refuse(403, '{"message":"API rate limit exceeded for 1.2.3.4."}'))
 check("a refusal is not mistaken for an empty collection", logos.fetch_index("https://e/x") == {})
 check(f"and the reason is kept: {logos.last_error!r}",
       "403" in logos.last_error and "rate limit exceeded" in logos.last_error)
 check("the JSON wrapping is left out of it", "{" not in logos.last_error)
 
-urllib.request.urlopen = refuse(404, "<html><body>Not Found</body></html>")
+stub(refuse(404, "<html><body>Not Found</body></html>"))
 logos.fetch_index("https://e/x")
 check(f"a body that is not JSON still reads: {logos.last_error!r}", "404" in logos.last_error)
 
@@ -107,7 +118,7 @@ def unreachable(req, timeout=0):
     raise urllib.error.URLError("Name or service not known")
 
 
-urllib.request.urlopen = unreachable
+stub(unreachable)
 logos.fetch_index("https://e/x")
 check(f"so does a name that does not resolve: {logos.last_error!r}",
       "not known" in logos.last_error)

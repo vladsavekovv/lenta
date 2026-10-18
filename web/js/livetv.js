@@ -139,8 +139,8 @@ export async function renderLiveTv(body) {
     }
     if (!body.isConnected) { clearInterval(timer); return; }
     let now = { feeds: [] }, failed = { failures: [] };
-    try { now = await api.get('/api/livetv/live'); } catch { /* nothing playing, or the route is older */ }
-    try { failed = await api.get('/api/livetv/live-failures'); } catch { /* an older server */ }
+    try { now = await api.get('/api/admin/livetv/live'); } catch { /* nothing playing, or the route is older */ }
+    try { failed = await api.get('/api/admin/livetv/live-failures'); } catch { /* an older server */ }
     const tuners = o.sources.filter(s => s.kind === 'tuner');
     const lists = o.sources.filter(s => s.kind !== 'tuner');
     const busy = o.sources.some(s => s.scan && s.scan.running);

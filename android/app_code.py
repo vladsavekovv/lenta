@@ -17,7 +17,7 @@ moves to another port or to https on the same machine, the app remembers the new
 """
 from dexwriter import ACC_PUBLIC, ACC_VOLATILE, ClassDef, Field, Method
 
-VERSION = "1.1.5"
+VERSION = "1.1.6"
 PKG = "app.lenta"
 MA, CL, CH, BR, UI = "Lapp/lenta/MainActivity;", "Lapp/lenta/Client;", "Lapp/lenta/Chrome;", "Lapp/lenta/Bridge;", "Lapp/lenta/Ui;"
 ACT = "Landroid/app/Activity;"
@@ -109,6 +109,21 @@ def classes() -> list[ClassDef]:
             ("invoke-virtual", ["v2", "v3"], "Landroid/webkit/WebSettings;->setUseWideViewPort(Z)V"),
             ("invoke-virtual", ["v2", "v4"], "Landroid/webkit/WebSettings;->setLoadWithOverviewMode(Z)V"),
             ("invoke-virtual", ["v2", "v4"], "Landroid/webkit/WebSettings;->setSupportZoom(Z)V"),
+            # Said out loud rather than left to the framework. All five already have the safe value by
+            # default at targetSdk 34 — file access off since API 30, automatic windows off, mixed
+            # content refused since API 21 — so this changes nothing today. It is here because the
+            # defaults depend on TARGET_SDK: lower it below 30 one day and file-system access to the
+            # WebView silently comes back on. `file:///android_asset/setup.html` still loads, because
+            # assets and resources are exempt from setAllowFileAccess.
+            ("invoke-virtual", ["v2", "v4"], "Landroid/webkit/WebSettings;->setAllowFileAccess(Z)V"),
+            ("invoke-virtual", ["v2", "v4"],
+             "Landroid/webkit/WebSettings;->setAllowFileAccessFromFileURLs(Z)V"),
+            ("invoke-virtual", ["v2", "v4"],
+             "Landroid/webkit/WebSettings;->setAllowUniversalAccessFromFileURLs(Z)V"),
+            ("invoke-virtual", ["v2", "v4"],
+             "Landroid/webkit/WebSettings;->setJavaScriptCanOpenWindowsAutomatically(Z)V"),
+            ("const/4", "v5", 1),       # WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            ("invoke-virtual", ["v2", "v5"], "Landroid/webkit/WebSettings;->setMixedContentMode(I)V"),
             ("invoke-virtual", ["v2"], f"Landroid/webkit/WebSettings;->getUserAgentString(){STR}"),
             ("move-result-object", "v4"),
             ("const-string", "v5", f" LENTA-Android/{VERSION}"),
@@ -571,7 +586,11 @@ def classes() -> list[ClassDef]:
             ("move-result-object", "v0"),
             ("if-eqz", "v0", "no"),
             ("const-string", "v2", "LENTA local CA"),
-            ("invoke-virtual", ["v0", "v2"], f"{STR}->startsWith({STR})Z"),
+            # `startsWith` accepted "LENTA local CA" followed by anything at all, which is a wider door
+            # than it looks: the issuer name is chosen by whoever presents the certificate. Exact match.
+            # This is hardening, not the fix — see the certificate-pinning note in CLAUDE.md. Nothing
+            # here checks the key, so a self-signed CA named exactly "LENTA local CA" is still accepted.
+            ("invoke-virtual", ["v0", "v2"], f"{STR}->equals(Ljava/lang/Object;)Z"),
             ("move-result", "v0"),
             ("if-eqz", "v0", "no"),
             ("iget-boolean", "v0", "v1", F_SETUP),
