@@ -398,8 +398,13 @@ for directive in ("CapabilityBoundingSet=", "RestrictAddressFamilies=", "Restric
     check(f"the unit sets {directive.rstrip('=')}", directive in unit)
 check("and says why PrivateDevices and MemoryDenyWriteExecute are deliberately absent",
       "PrivateDevices" in unit and "MemoryDenyWriteExecute" in unit)
-check("the registry token is writable only on the push that publishes",
-      "packages: ${{ github.event_name == 'push' && 'write' || 'none' }}" in src(".github/workflows/docker.yml"))
+# This asserted the opposite until 1.19.2, and the assertion was wrong: narrowing `packages:` with an
+# expression makes the workflow file invalid, because `permissions:` is read before expressions are
+# evaluated. Every container build failed for two releases. Publishing is gated at the steps that
+# publish, which is where a gate belongs. test_docker.py section 9 now guards the shape of the line.
+check("the registry token is a literal permission, not an expression that invalidates the workflow",
+      "packages: write" in src(".github/workflows/docker.yml")
+      and "${{" not in src(".github/workflows/docker.yml").split("permissions:")[1].split("steps:")[0])
 
 print()
 if fails:

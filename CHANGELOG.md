@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.19.2 — The container image builds again
+
+1.19.0 included a one-line change to the build workflow that made the whole file invalid, so **every
+container build since has failed** — 1.19.0 and 1.19.1 both, with no job even starting. The change was
+tightening a permission that was already safe, on a line that did not need touching; it is reverted, and
+a test now refuses to let that shape of line back in.
+
+Nothing in LENTA itself changed. If you install from the tarball or the script this release does nothing
+for you at all; if you pull the container image, this is the one that produces it.
+
 ## 1.19.1 — Theme music plays again
 
 1.19.0 added a browser security policy and did not list the place theme music actually comes from, so

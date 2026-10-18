@@ -27,11 +27,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Writable only on a push, which is the only event that publishes. A pull request builds and
-      # runs the start-up check with a read-only token, so a branch cannot touch the registry even by
-      # accident. (GitHub already downgrades a fork's token, but a branch in this repository is not a
-      # fork, and this is the half that was relying on the `if:` on the login step alone.)
-      packages: ${{ github.event_name == 'push' && 'write' || 'none' }}
+      # Static, and it must stay static. 1.19.0 tried to narrow this to write-on-push-only with an
+      # expression here; `permissions:` is read when the workflow file is parsed, before any expression
+      # is evaluated, so the file became invalid and **every build failed** from 1.19.0 until 1.19.2.
+      # Nothing was lost by reverting it: publishing is already gated on the event, at the two steps
+      # that do it (`if: github.event_name == 'push'` on the sign-in, and `push:` on the build), so a
+      # pull request cannot reach the registry whatever this line says.
+      packages: write
 
     steps:
       - name: Check out

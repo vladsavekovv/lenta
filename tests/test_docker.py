@@ -124,6 +124,21 @@ check("the README's quick start offers the container as well as the script",
       "docker" in readme.lower())
 
 print()
+print("\n9. the workflow file is valid, which is not the same as being sensible")
+# 1.19.0 narrowed `packages:` with an expression — `${{ github.event_name == 'push' && 'write' ... }}`.
+# `permissions:` is read when the file is parsed, before any expression is evaluated, so the whole
+# workflow became invalid and every build failed with no job even starting. It was a hardening nit on
+# a line that was already safe, and it cost three red runs before anyone looked at the Actions tab.
+import yaml                                                                 # noqa: E402
+wf = yaml.safe_load((ROOT / ".github/workflows/docker.yml").read_text())
+perms = wf["jobs"]["build"]["permissions"]
+check("the job's permissions are literal values, never expressions",
+      all("${{" not in str(v) for v in perms.values()))
+check("it can still write packages, which is how the image is published", perms.get("packages") == "write")
+check("and publishing is gated where it actually happens, not by the permission block",
+      "github.event_name == 'push'" in (ROOT / ".github/workflows/docker.yml").read_text())
+
+
 if fails:
     print(f"{len(fails)} failed:")
     for f in fails:
