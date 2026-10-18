@@ -326,6 +326,20 @@ check("and 'unsafe-eval' is present on purpose — the three-client switch probe
 check("and cannot post what it reads to one", "connect-src 'self'" in main)
 check("YouTube is allowed to be framed, because trailers are",
       "frame-src 'self' https://www.youtube-nocookie.com" in main)
+# The policy has to allow exactly what the server is willing to hand over, and no more. Leaving Apple
+# out of media-src is what silently killed theme music in 1.19.0: the audio element was refused and the
+# only symptom was nothing playing. These two lists are derived from `trailer_sources._APPLE_HOST`, the
+# same test the server applies before giving the client a media address.
+import importlib                                                            # noqa: E402
+ts = importlib.import_module("lenta.trailer_sources")
+check("Apple's media hosts are allowed, because that is where theme music and Apple trailers come from",
+      "https://*.apple.com" in main and "https://*.mzstatic.com" in main)
+check("and they are the same hosts the server itself accepts, so the two cannot drift apart",
+      all(ts._APPLE_HOST.match(f"https://x.{h}/y") for h in ("apple.com", "mzstatic.com")))
+check("a theme preview from anywhere else is refused by the server before the browser sees it",
+      "_APPLE_HOST.match" in src("server/lenta/api_extras.py"))
+check("the YouTube thumbnail strip in the trailer picker can load its images",
+      "https://i.ytimg.com" in main and "i.ytimg.com" in src("web/js/editor.js"))
 check("no address LENTA serves travels to another site in a Referer",
       '"Referrer-Policy": "no-referrer"' in main)
 check("the schema and the documentation page are off unless asked for",

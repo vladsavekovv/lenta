@@ -146,13 +146,20 @@ if WEB_DIR.exists():
 # `connect-src 'self'` keeps an injected script from posting what it reads to another host, and
 # `object-src 'none'` and `base-uri 'self'` close two old tricks for nothing.
 #
-# The media sources are LENTA's own; YouTube and Apple are framed for trailers and theme music, and
+# **The media and image hosts are not a guess** — they are the same ones the server already enforces.
+# `trailer_sources.valid_key()` accepts a media address only if it is a local `/api/items/.../trailer-file`
+# or matches `_APPLE_HOST` (`*.apple.com` / `*.mzstatic.com`), so those two plus `'self'` are the complete
+# set the client can ever be handed. Apple serves both the theme-music previews and the Apple TV
+# trailers from there, and leaving them out of `media-src` is what silently killed **theme music** in
+# 1.19.0 — the audio element was blocked and the failure surfaced only as nothing playing.
+# `i.ytimg.com` is the YouTube thumbnail strip in the trailer picker (`editor.js`), the one external
+# image the client loads directly rather than through `/api/img`.
 # `blob:`/`data:` are needed by hls.js and by the artwork the client draws itself.
 CSP = ("default-src 'self'; "
        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
        "style-src 'self' 'unsafe-inline'; "
-       "img-src 'self' data: blob:; "
-       "media-src 'self' data: blob:; "
+       "img-src 'self' data: blob: https://i.ytimg.com; "
+       "media-src 'self' data: blob: https://*.apple.com https://*.mzstatic.com; "
        "font-src 'self' data:; "
        "connect-src 'self'; "
        "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com; "

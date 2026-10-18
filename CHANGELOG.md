@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.19.1 — Theme music plays again
+
+1.19.0 added a browser security policy and did not list the place theme music actually comes from, so
+the browser refused to play it — with no error, no warning, nothing in the log, just silence where a
+theme should have been. The same omission would have stopped an Apple TV trailer playing and left the
+thumbnails blank in the trailer picker.
+
+The policy now names exactly the hosts LENTA is willing to hand over in the first place — it checks
+them before giving a browser an address — so the two can no longer disagree. If theme music was working
+for you on 1.18.0 and stopped, this is why, and it is the whole of it.
+
 ## 1.19.0 — Security release
 
 A security review of LENTA, and the fixes that came out of it. **Everyone should update**, and the

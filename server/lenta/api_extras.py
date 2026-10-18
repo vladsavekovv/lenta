@@ -225,6 +225,7 @@ def _search_terms(item: dict) -> list[str]:
 
 def apple_theme(item: dict) -> dict | None:
     """Best soundtrack album on iTunes for this title, and its main-theme preview."""
+    from . import trailer_sources          # lazily, as everywhere else in this file
     client = httpx.Client(timeout=15, follow_redirects=True)
     year = item.get("year")
     for title in _search_terms(item):
@@ -261,6 +262,12 @@ def apple_theme(item: dict) -> dict | None:
             n = _norm(t.get("trackName"))
             return ("main title" in n or "main theme" in n or n.startswith("theme") or want in n,)
         main = max(tracks, key=pick) if any(pick(t)[0] for t in tracks) else tracks[0]
+        # The address comes out of Apple's answer, so check it is actually Apple's before handing it to a
+        # browser — the same test `trailer_sources.valid_key()` applies to an Apple trailer. It also keeps
+        # the server and the Content-Security-Policy in step: the policy allows exactly these hosts for
+        # media, so anything else would be handed over and then silently refused by the browser.
+        if not trailer_sources._APPLE_HOST.match(main["previewUrl"] or ""):
+            continue
         return {"url": main["previewUrl"], "title": main.get("trackName"), "artist": main.get("artistName"),
                 "album": best.get("collectionName"), "link": main.get("trackViewUrl") or best.get("collectionViewUrl"),
                 "source": "apple"}
