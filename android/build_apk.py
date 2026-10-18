@@ -24,7 +24,13 @@ sys.path.insert(0, HERE)
 from dexwriter import Dex                       # noqa: E402
 from app_code import PKG, VERSION, classes      # noqa: E402
 
-VERSION_CODE = 7
+# Android offers an update only when this number goes up, and it never shows it to anybody: bump
+# VERSION in app_code.py, forget this second constant, and the new APK installs over nothing and
+# reports itself as the old one. So it is worked out from VERSION instead — 1.1.5 is 10105 — which
+# only ever goes up as long as a part stays below 100.
+_parts = [int(p) for p in VERSION.split(".")]
+assert len(_parts) == 3 and all(0 <= p < 100 for p in _parts), f"VERSION {VERSION!r} must be x.y.z, each under 100"
+VERSION_CODE = _parts[0] * 10000 + _parts[1] * 100 + _parts[2]
 MIN_SDK, TARGET_SDK = 26, 34
 ANDROID_NS = "http://schemas.android.com/apk/res/android"
 
@@ -131,7 +137,12 @@ class Axml:
 
 
 def manifest() -> bytes:
-    config_changes = 0x0010 | 0x0020 | 0x0040 | 0x0080 | 0x0100 | 0x0200 | 0x0400 | 0x0800 | 0x2000
+    # Everything the activity would rather handle itself than be destroyed and rebuilt for. density
+    # (0x1000) is in the list because changing Display size in Android's settings counts as a
+    # configuration change: without it the activity is thrown away and the page reloads from the top,
+    # which on a film means losing your place to a setting that has nothing to do with LENTA.
+    config_changes = (0x0010 | 0x0020 | 0x0040 | 0x0080 | 0x0100 | 0x0200 | 0x0400 | 0x0800 | 0x1000
+                      | 0x2000)
     root = ("manifest", [("android:versionCode", (T_INT_DEC, VERSION_CODE)), ("android:versionName", VERSION),
                          ("package", PKG)], [
         ("uses-sdk", [("android:minSdkVersion", (T_INT_DEC, MIN_SDK)), ("android:targetSdkVersion", (T_INT_DEC, TARGET_SDK))], []),

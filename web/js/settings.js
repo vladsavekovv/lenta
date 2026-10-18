@@ -34,6 +34,9 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
   const body = view;
   const videoLibs = (state.libraries || []).filter(l => l.kind === 'movies' || l.kind === 'shows');
   const bannerLibs = (draft.home_banner_libraries || '').split(',').filter(Boolean);
+  // Home's shape is the server's, not each person's: only an administrator is offered the sections, the
+  // banner's libraries, how often it changes and the 30 seconds limit. Everyone gets the sound switch.
+  const owns = !!state.user.is_admin;
   mount(view, html`<div class="lay-head">${layoutButtons()}</div>
     ${layoutBar()}
     <div class="settings"><div class="settings-cols">
@@ -97,6 +100,7 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
           <select class="input" id="p-home-trailer">${[['off', 'Off — show the picture only'], ['muted', 'Play in the background, muted'], ['sound', 'Play in the background, with sound']].map(([v, l]) =>
             html`<option value="${v}" ${v === draft.home_trailer ? raw('selected') : ''}>${l}</option>`)}</select></div>
         ${draft.home_trailer === 'off' ? html`<p style="color:var(--red);font-size:14px;margin:-6px 0 12px">While this is Off, no trailer plays in the banner, not even for titles ticked in Edit.</p>` : ''}
+        ${owns ? html`
         <label class="check" style="margin:-4px 0 16px"><input type="checkbox" id="p-home-30" ${draft.home_trailer_30 === '1' ? raw('checked') : ''}>30 seconds limit</label>
         <p style="color:var(--muted);font-size:14px;margin:-8px 0 16px">The banner only plays trailers of titles marked <i>Show the trailer in the Home banner</i> (Edit › General); the others show their picture.</p>
         <div class="row-field"><label for="p-rotate">Change to another title every</label>
@@ -116,7 +120,10 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
         <ol class="sec-order" id="p-sections"><li class="sec-empty">Loading…</li></ol>
         <div class="sec-actions"><button type="button" class="btn" id="p-sections-new">${icon('plus')}New section</button>
           <button type="button" class="btn ghost" id="p-sections-reset">Default order</button></div>
-        <div id="p-sections-hidden"></div>
+        <div id="p-sections-hidden"></div>`
+        : html`<p style="color:var(--muted);font-size:14px;margin:0">The rows on Home, their order and which titles the big banner
+          draws from are the ones set for this server. The sound of the banner's trailer is yours: turn it off above if you'd rather
+          it played quietly.</p>`}
       </section>
 
       <section class="panel" data-panel="media"><h3>Media pages</h3>
@@ -218,7 +225,9 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
     });
   };
   showDefaultTheme();
-  const bind = (id, key, get) => $(id).addEventListener(id === '#p-vol' ? 'input' : 'change', (e) => { draft[key] = get(e.target); dirty(); });
+  // Some of these are only on an administrator's page (the Home screen's shape is the server's): a control
+  // that is not there is not an error.
+  const bind = (id, key, get) => $(id)?.addEventListener(id === '#p-vol' ? 'input' : 'change', (e) => { draft[key] = get(e.target); dirty(); });
   bind('#p-auto', 'auto_tracks', el => (el.checked ? '1' : '0'));
   bind('#p-audio', 'audio_lang', el => el.value);
   bind('#p-mode', 'subtitle_mode', el => el.value);

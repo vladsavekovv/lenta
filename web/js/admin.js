@@ -335,7 +335,9 @@ async function metadata(body, q = new URLSearchParams()) {
   const [items, settings] = await Promise.all([api.get(`/api/admin/unmatched${lib ? `?library_id=${lib.id}` : ''}`), api.get('/api/admin/settings')]);
   mount(body, html`
     ${settings.tmdb_api_key_set ? '' : html`<div class="panel" style="margin-bottom:22px;border-color:var(--accent)"><h3>Online metadata is off</h3>
-      <p style="margin:0 0 14px;color:var(--muted)">Posters, descriptions and cast come from The Movie Database. Add a free TMDB API key in Settings to turn it on.</p>
+      <p style="margin:0 0 14px;color:var(--muted)">Posters, descriptions and cast come from The Movie Database. It needs a free key of
+        your own — <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener" style="color:var(--accent)">make one here</a>,
+        it takes about a minute — then paste it in Settings. Everything else works without it: your files scan, play and keep their place.</p>
       <a class="btn small primary" href="#/settings/metadata-sources">Open settings</a></div>`}
     <h2 class="section-title" style="margin:0 0 6px">Titles without metadata${lib ? ` in ${lib.name}` : ''}</h2>
     ${lib ? html`<p style="margin:0 0 10px"><a href="#/settings/fix-matches" style="color:var(--accent)">Show every library</a></p>` : ''}
@@ -601,10 +603,15 @@ function netMoved(n, w) {
 
 // ---------------------------------------------------------------- settings
 async function settings(body, page = 'general') {
-  const s = await api.get('/api/admin/settings');
-  const o = await api.get('/api/admin/overview');
-  const art = await api.get('/api/admin/artwork-sources');
-  const net = await api.get('/api/admin/network').catch(() => null);
+  // All four at once, not one after another: none of them needs an answer from the one before, and in
+  // series the page could not appear until the slowest of four round trips had finished after the other
+  // three. (Settings › General and Network both wait for this.)
+  const [s, o, art, net] = await Promise.all([
+    api.get('/api/admin/settings'),
+    api.get('/api/admin/overview?light=1'),     // only the encoder and IMDb are read below
+    api.get('/api/admin/artwork-sources'),
+    api.get('/api/admin/network').catch(() => null),
+  ]);
   const artOrder = { movie: art.movie, show: art.show };
   const hw = o.hardware;
   mount(body, html`<div class="lay-head">${layoutButtons()}</div>${layoutBar()}<form id="sform"><div class="panels" id="aset-panels">
@@ -653,7 +660,9 @@ async function settings(body, page = 'general') {
     <div data-panel="metadata" class="panel"><h3>Metadata</h3>
       <div class="field"><label for="s-tmdb">TMDB API key or read access token</label>
         <input class="input mono" id="s-tmdb" placeholder="${s.tmdb_api_key_set ? `Saved (${s.tmdb_api_key_hint}) — paste a new one to replace it` : 'Paste your key'}" autocomplete="off">
-        <span class="hint">Free at themoviedb.org → Settings → API. Used for posters, descriptions, cast and episode titles.</span></div>
+        <span class="hint">Free: <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">make one here</a> —
+          takes a minute. Used for posters, descriptions, cast and episode titles. A key belongs to the person who made it,
+          so LENTA cannot ship one. In a container you can set it as <span class="mono">LENTA_TMDB_KEY</span> instead.</span></div>
       <div style="display:flex;gap:12px">
         <div class="field" style="flex:1"><label for="s-lang">Language</label><input class="input" id="s-lang" value="${s.metadata_language}" placeholder="en-US">
           <span class="hint">For example en-US or bg-BG</span></div>

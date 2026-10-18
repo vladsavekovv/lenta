@@ -1495,6 +1495,11 @@ html.tv ::-webkit-scrollbar { display: none; }                   /* TVs: no scro
 .about-ua { margin: 12px 0 0; color: var(--faint); font-size: 11.5px; line-height: 1.5; word-break: break-all; }
 .about-lenta .facts dd { color: var(--text); }
 .about-lenta .btn { display: inline-flex; align-items: center; gap: 8px; }
+/* TMDB ask for their logo beside the notice, and ask that it be less prominent than ours (API Terms of
+   Use, paragraph 3). Theirs is 24px tall — 56px wide at its 2.33:1 — against LENTA's own 64–96px logo
+   at the top of the same page. Small enough to be subordinate, big enough that the lettering reads;
+   no opacity, because a mark that must be legible should not be faded. */
+.about-tmdb { display: block; height: 24px; width: auto; margin: 0 0 16px; }
 
 /* ---------- audiobooks ---------- */
 .card.landscape.book-wide .frame { position: relative; overflow: hidden; background: var(--bg-3); }

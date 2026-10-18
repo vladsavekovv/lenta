@@ -1,5 +1,222 @@
 # Changelog
 
+## 1.16.0 — One Home screen, and a banner that stops when you scroll past it
+
+Five things reported from using it, four of them faults and one of them a decision about who owns the
+Home screen.
+
+- **The banner's trailer came back after an edit.** Scrolled down Home, the trailer had gone quiet, as
+  it should. Opening a tile's editor and pressing Save or Cancel brought the sound back — quieter than
+  before, but there. The editor was not the cause: closing it redraws Home, a redraw builds a new
+  trailer, and a trailer starts playing the instant it is made. What then decided whether it should be
+  playing was only ever able to pause a trailer it had started itself — and this one it had not
+  started. So it played on, off screen, for as long as you stayed there. On a trailer that is a video
+  file that is silent; on a YouTube trailer it is audible, because the instructions that mute it and
+  set its volume are messages into a frame that is not listening yet, and one sent too early is thrown
+  away with no error of any kind. YouTube's own volume is what you hear. Both halves are fixed: the
+  banner now drives the trailer to silence whether or not it thinks it started it, and the
+  instructions to a YouTube trailer wait until it has answered, which is the only proof it is
+  listening.
+- **And the sound no longer follows the scroll.** It used to fade in proportion to how much of the
+  banner was still on screen, which is why "stopped" and "very quiet" were hard to tell apart. It is
+  full volume while the banner is in view and nothing when it is not: it fades out, stops, and goes on
+  from the same moment when you scroll back up.
+- **One Home screen, the owner's.** Every setting in LENTA was the signed-in person's own, the rows on
+  Home included — their order, their names, the libraries the big banner draws from, how often it
+  changes. So anyone could rearrange a Home screen of their own, which nobody wanted, and a viewer's
+  Home bore no relation to the one the house had been shown. Those now come from whoever set the
+  server up, and a viewer's Settings › Home screen offers the one thing that is really theirs: whether
+  the banner's trailer has sound. (Which is also why **a viewer's trailer was always silent** — never
+  having opened Settings, they had no settings at all, and fell through to "muted". They now hear what
+  the administrator chose, and can still mute it.) Permission is unaffected: a row pointing at a
+  library you cannot see comes up empty, and a row of live TV channels is not shown to someone without
+  live TV.
+- **Settings opens at the top.** Leaving Settings for Home and coming back opened whichever page you
+  had been on last. That is a sensible thing to do with a long form and the wrong thing for a menu:
+  the gear is one button, and pressing it should put you at the top of its own menu. It opens on
+  Appearance now, for everybody, with no sub-menu left hanging open.
+- **Settings › Dashboard, General and Network sometimes took seconds.** Four things, and only one of
+  them is really a slow network. (a) The page asked for four things one after another although none of
+  them needs the answer before it, so it could not appear until four round trips had finished in
+  series; they go out together now. (b) It asked for the whole Dashboard and read two fields out of
+  it — the rest counts every item and measures every library folder, and a folder on another machine
+  makes that wait for the mount rather than the disk. (c) Describing the HTTPS certificate loaded and
+  checked the certificate authority's private key off the disk on **every** request: 86 ms of the
+  90 ms that page took, now kept and re-read only when the files change. (d) And the one that explains
+  "above five seconds": the page asks the system for this machine's names, which does a reverse DNS
+  lookup, and a network whose DNS server is slow or away makes that wait for the resolver's own
+  timeout — five seconds is the usual one. That answer is now worked out once at start-up and kept, and
+  no request ever waits for a new one.
+
+**Three new tests** — `test_home_sound.py`, `test_viewer_home.py` and `test_admin_pages.py` — all three
+checked against 1.15.1's code, where all three go red. **29 test files, all pass.**
+
+One existing test was wrong and has been corrected rather than quietly adjusted. `test_tv_remote.py`
+checks that holding an arrow down costs about what one press costs, and it was comparing a burst of
+eight presses started from a card in a row against a single press measured from the hero's button,
+where there are a dozen things to consider rather than a hundred. Measured properly, both from the same
+card: one press asks the engine 102 questions, eight in one frame ask 104, and eight in frames of their
+own ask 824 — one scroll against eight. The batching was never broken; the comparison was.
+
+## 1.15.1 — The Android app, gone over properly
+
+**Android app 1.1.5.** The app worked, and nothing was checking it. It is a WebView onto the server
+built without the Android SDK — the Dalvik instructions are written out by hand — and the trouble with
+that is not that it is badly made but that a mistake in it cannot be seen from a desk: there is no
+console on a phone, and almost every fault looks the same from the sofa, which is a screen that does
+nothing. So the whole thing was taken apart against a real `android.jar`.
+
+The good news first: all **144 Android methods and fields the app names really exist**, every one of
+its **22 overrides really overrides** something, the **APK rebuilds to the byte**, and all eight methods
+of the JavaScript bridge carry a runtime-visible `@JavascriptInterface` — read back out of the dex. The
+build is sound. What was wrong was round the edges:
+
+- **The status and navigation bars were the wrong colour on a phone, in the Netflix theme.** The app
+  paints those two bars to match the page, and it was being told `#141414` while the page went pure
+  black — a grey band above the picture and below it. The theme has one background on a tablet and
+  another on a phone, and the colour was being read before the app had decided which of the two it was
+  showing. Rotating the phone did not repaint them at all. (This also fixes the browser's own
+  theme colour, which had the same mistake.)
+- **A crash in the WebView took the whole app with it.** If the part of Android that draws the page
+  runs out of memory — not unusual part-way through a film on a phone — it dies, and an app that does
+  not answer for that is killed outright: "LENTA keeps stopping", with nothing to read. The app now
+  answers, and builds itself a fresh window. You lose your place in the film; you do not lose the app.
+- **The setup page accepted addresses that were not addresses.** Typing `ftp://192.168.1.50` saved
+  `http://ftp:8484` — the scheme mistaken for a machine name — and a bare `http://` saved
+  `http://http:8484`. The app then said it could not reach the server, which is true and no help at
+  all. It now says the address is wrong, which is the thing you need to know.
+- **The download message was wrong on Android 8 and 9.** It said the file would be in Downloads. On
+  those two versions the app deliberately puts it in its own folder instead, because the shared one
+  needs a permission LENTA does not ask for. It now says where the file actually went.
+- **Every cold start flashed grey.** The window is painted before the page has anything to show, in
+  whatever colour the Android theme uses, and that is a mid grey. It is LENTA's near-black now, so
+  opening the app is black all the way through.
+- **Smaller things.** Changing Display size in Android's settings no longer throws the page away and
+  reloads it. A page that goes full screen on top of LENTA's own full-screen player now gives the
+  player its sideways lock back instead of leaving it stuck. A link written `HTTPS://` in capitals
+  opens in the browser instead of being silently dropped. And the version number Android compares when
+  deciding whether something is an update is now worked out from the app's own version rather than
+  kept as a second number somebody has to remember to change.
+
+**`tests/test_android.py` is new**, and it is the first test the app has ever had: it type-checks the
+instructions, resolves every Android name and override against `tests/android-api.json` (generated from
+a real android.jar by `android/api_facts.py`), rebuilds the APK and compares it byte for byte with the
+one being served, reads the manifest and the signature back, confirms the bridge is really exposed and
+that everything the web client calls on it exists, and drives the setup page and the bar colours in a
+browser. Five of its checks were tried against the old code first and each went red. 26 test files.
+
+## 1.15.0 — A build for the televisions in the middle
+
+1.14.0 established that a Samsung set is not one browser. This acts on it. There are now three builds
+of the same client instead of two, and the sets from 2019 to 2022 — four of the six model years that
+cannot run the normal one, and most of the Samsungs still in living rooms — get one made for them
+rather than one made for a 2017 set and handed down.
+
+- **2019–2022 sets get `web/legacy/mid.js` and `mid.css`.** Those engines are Chromium 63 to 85. They
+  have had CSS grid, custom properties, sticky positioning, async functions, classes, destructuring
+  and spread since before 2018, and they were being sent a file with every one of those rewritten away
+  for the benefit of a 2017 set that cannot read them. The new build keeps the stylesheet's variables
+  and its real grids — 800 duplicated declarations and 100 stand-in rules gone — and skips Babel
+  altogether. **785 KB down to 665 KB**, and about 130 ms sooner to a usable page on a slowed
+  processor. 2017 and 2018 sets keep what they had: `app.js` and `app.css` come out of the build
+  byte-for-byte identical to 1.14.0's.
+- **The page now chooses between three, and still never looks at the user agent.** The middle test is
+  CSS grid, which arrived in Chromium 57, and object spread, which arrived in 60 — so a 2018 set (56)
+  fails both halves and falls through to the oldest build, which is the one thing here that had to be
+  right. `?legacy=1` forces the oldest on a normal browser and `?legacy=2` the middle one.
+- **Settings › About names which of the three this device was given**, which is the first thing worth
+  knowing about a television fault and the one thing a photograph of the screen could not otherwise say.
+- **The tests follow the split.** Every model year from 2017 to 2026 is now run through the client it
+  would really be given; each stylesheet is checked only against the engines that receive it; both
+  built clients are run with their own engine's JavaScript deleted; and the three-way switch is tested
+  by pretending to be each engine in turn and seeing where the page sends it. 25 test files, all passing.
+
+## 1.14.0 — The televisions in between
+
+LENTA has always had two clients: the normal one, and a second built for older TV engines. The second
+was built for a 2017 Samsung set and tested on a 2017 Samsung set, and every television from 2018 to
+2022 was handed the same thing and hoped for. They are not the same browser. Samsung's own table:
+2017 is Chromium 47, 2018 is 56, 2019 is 63, 2020 is 69, 2021 is 76, 2022 is 85.
+
+- **The Top 10 row was invisible on 2018 sets.** CSS grid arrived in Chromium 57, so a 2018 television
+  is one version short of it — but it does have custom properties, which came in 49. That combination
+  had never been tried. The stand-in LENTA uses for a grid gives every tile the width of its contents,
+  and every part of a Top 10 tile is positioned on top of the picture rather than beside it, so there
+  were no contents to measure: ten tiles, 199 pixels tall and none of them a single pixel wide. Where
+  the highest-rated films should have been there was a blank stripe. A 2017 set escaped it by pure
+  luck — the fallbacks it gets for having no custom properties happen to put the poster back in the
+  ordinary flow. Those sets keep their plain posters; a 2018 set now gets the counting numbers and the
+  widening tiles, the same as every set since.
+- **A third off the startup on every set from 2017 to 2022.** The built client carried core-js whole —
+  every polyfill it has, 433 of them, a quarter of a megabyte — when this client uses 54. A television
+  had to read and compile all of it before the first picture could be drawn. It now ships the ones it
+  actually uses. The file went from 682 KB to 555 KB, and on a processor slowed to something like a
+  2017 set's the page became usable 1.8 seconds sooner.
+- **Every model year is now tested, not just the one in the house.** Two new test files take the
+  browser they are run in, delete from it everything a given television did not have — generated from
+  MDN's compatibility data rather than from anyone's recollection — and run LENTA in the hole that
+  leaves: every page a remote can reach, the player included. Ten model years, 2017 to 2026. The
+  second takes the language away instead of the DOM, which is what makes the smaller core-js safe to
+  ship: on an ordinary browser a missing polyfill is invisible, because the browser already has it.
+  It caught one immediately that no amount of reading the source would have found.
+- **The library grid is not slow after all.** It had been written down as the next thing to fix, on
+  the grounds that one press of the remote measures every card on it where Home can rule out whole
+  rows at a time. That is true, and it does not matter: timed on a slowed processor the grid answers a
+  press in 61 ms and Home, measuring forty times less, takes 89 ms. Both are below the tenth of a
+  second at which a remote stops feeling immediate. Nothing was changed, and the note saying it should
+  be has been corrected.
+
+## 1.13.2 — An idle server stops pretending to be busy
+
+- **The hourly scan now stops when nothing has changed.** It always walked the libraries and always
+  found the same files — that part was fine, and cost almost nothing. What was wrong is what it did
+  afterwards, whether or not anything had changed: matched titles that have never matched, asked again
+  for trailers, and ran FFmpeg over every film with no picture. Three libraries, every hour, on a
+  server nobody had touched. Now a scan that finds nothing new, nothing altered and nothing missing
+  ends there and says "no changes".
+- **A film that will not give up a frame is no longer asked every hour.** Some never will: a codec
+  this FFmpeg cannot open, a file that is really a stub, a rip that opens on black. There was no
+  record of having tried, so the same ones came round again on every scan for ever — which is what
+  the progress bar reading "artwork, 13 of 22" was, hour after hour, the same 22 films. A failure is
+  now written against the title and left for a fortnight.
+- **None of this touches a scan you asked for.** Scan, or Scan with refresh, still does everything,
+  and refresh tries the stubborn films again from scratch.
+- New media never depended on the hourly scan anyway. The watcher sees a folder change within a
+  minute, waits for the copy to finish, and scans that one folder. The hourly pass is the safety net
+  for what a folder's modification time cannot show — and now it behaves like one. If you want it
+  rarer still, Settings › Libraries › Scanning.
+
+## 1.13.1 — The TMDB logo, which 1.13.0 asked for and could not draw
+
+- **Their mark is on the About page now**, above the notice, at 24px against LENTA's own 64 — which
+  is what their terms ask for: present, and less prominent than ours. 1.13.0 corrected the wording and
+  left a space for the logo, because it is their trademark and not something to approximate.
+- It lives in the source tree, where it survives. The installer and the publish script both copy
+  `web/` with `rsync --delete`, so a file placed on the server or in a clone by hand is removed by the
+  next install — quietly. A test now fails if it goes missing, or if something that is not an SVG
+  turns up in its place.
+
+## 1.13.0 — Keeping to TMDB's terms, and making their key a one-minute job
+
+- **The attribution now says what TMDB require it to say.** Their terms give the sentence word for
+  word; LENTA was using the shorter version everybody uses, which reads perfectly well and is wrong.
+  It is corrected on the About page, in the README and in the third-party notices, and their logo now
+  sits beside it — smaller than LENTA's own, as they ask.
+- **Nothing of theirs is kept for more than five months.** Their terms allow their content to be
+  cached for six. A poster downloaded into the cache and a title's details in the database are both
+  their content, and both used to sit there for ever. Both are now re-fetched at five months, whether
+  or not anything about them changed. Titles matched by an older LENTA have no record of when they
+  were fetched, so they are all refreshed once, quietly, in the background.
+- **A TMDB key can be set before the first start.** `LENTA_TMDB_KEY` in a compose file, on the line
+  under the media folders you are already editing, and the server comes up with metadata working. It
+  only ever fills an empty setting: a key entered in Settings is yours and is never overwritten.
+- **And when there is no key, the page that says so is useful.** A link straight to the page that
+  makes one, how long it takes, and the plain fact that everything else works without it — your
+  files scan, play and remember where you got to.
+- **LENTA will not ship a key of its own, and now says why where somebody would be tempted to add
+  one.** A TMDB key is licensed to the person who made it and may not be passed on. Other media
+  servers do ship one. A test looks for an embedded key so that a future good intention cannot.
+
 ## 1.12.0 — LENTA in a container, so it can be installed by people who are not me
 
 - **`docker compose up -d` and it runs.** Until now the only way in was a clone and a sudo script on

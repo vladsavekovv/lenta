@@ -23,12 +23,32 @@
   <link rel="dns-prefetch" href="https://googlevideo.com">
   <link rel="stylesheet" href="css/fonts.css">
   <script>
-    // Older TV web engines (e.g. Samsung TVs before 2023) get the same app rewritten for them (web/legacy/).
-    window.LENTA_LEGACY = !(window.CSS && CSS.supports && CSS.supports('aspect-ratio', '1'));
-    try { new Function('var a = {}; return a?.b ?? 1'); } catch (e) { window.LENTA_LEGACY = true; }
-    if (/[?&]legacy=1/.test(location.search)) window.LENTA_LEGACY = true;          // to try it on a normal browser
-    document.write(window.LENTA_LEGACY ? '<link rel="stylesheet" href="legacy/app.css">'
-      : '<link rel="stylesheet" href="css/app.css"><link rel="stylesheet" href="css/mobile.css"><link rel="stylesheet" href="css/theme-netflix.css"><link rel="stylesheet" href="css/theme-hbo.css"><link rel="stylesheet" href="css/tv.css">');
+    // Three builds of the same app, because a television is not one browser. A Samsung set runs
+    // Chromium 47 in 2017, 56 in 2018, then 63, 69, 76 and 85 up to 2022, and 94 from 2023.
+    //
+    //   new   2023 and later   web/js + web/css, as written
+    //   mid   2019 to 2022     web/legacy/mid.*   grid, variables and modern JavaScript all work;
+    //                          only aspect-ratio, flex gap and clamp() came later
+    //   old   2017 and 2018    web/legacy/app.*   no grid, no custom properties, no modern syntax
+    //
+    // Always by asking the engine what it can do, never by its user agent — a test enforces that. Each
+    // test names the oldest engine that passes it: CSS grid is Chromium 57 and object spread is 60, so
+    // a 2018 set (56) fails both and correctly falls through to the oldest build.
+    (function () {
+      var q = location.search;
+      var can = function (p, v) { return !!(window.CSS && CSS.supports && CSS.supports(p, v)); };
+      var parses = function (src) { try { new Function(src); return true; } catch (e) { return false; } };
+      var tier = can('aspect-ratio', '1') && parses('var a = {}; return a?.b ?? 1') ? 'new'
+        : can('display', 'grid') && parses('return (async function () { return { ...{} }; })') ? 'mid'
+        : 'old';
+      if (/[?&]legacy=1/.test(q)) tier = 'old';                   // to try either on a normal browser
+      if (/[?&]legacy=2/.test(q)) tier = 'mid';
+      window.LENTA_TIER = tier;
+      window.LENTA_LEGACY = tier !== 'new';              // true for either of the built clients
+      document.write(tier === 'old' ? '<link rel="stylesheet" href="legacy/app.css">'
+        : tier === 'mid' ? '<link rel="stylesheet" href="legacy/mid.css">'
+        : '<link rel="stylesheet" href="css/app.css"><link rel="stylesheet" href="css/mobile.css"><link rel="stylesheet" href="css/theme-netflix.css"><link rel="stylesheet" href="css/theme-hbo.css"><link rel="stylesheet" href="css/tv.css">');
+    })();
   </script>
 </head>
 <body>
@@ -54,6 +74,8 @@
       if (!tv) document.write('<script src="vendor/hls.min.js"><\/script>');
     })();
   </script>
-  <script>document.write(window.LENTA_LEGACY ? '<script src="legacy/app.js"><\/script>' : '<script type="module" src="js/app.js"><\/script>');</script>
+  <script>document.write(window.LENTA_TIER === 'old' ? '<script src="legacy/app.js"><\/script>'
+    : window.LENTA_TIER === 'mid' ? '<script src="legacy/mid.js"><\/script>'
+    : '<script type="module" src="js/app.js"><\/script>');</script>
 </body>
 </html>

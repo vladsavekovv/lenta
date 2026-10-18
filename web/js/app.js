@@ -30,13 +30,31 @@ export function applyTheme(id) {
   document.documentElement.dataset.theme = theme;
   // themes whose menu is a bar along the top rather than a column on the left
   document.documentElement.classList.toggle('topnav', theme === 'netflix' || theme === 'hbo');
-  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', bg || '#17121F');
+  // The phone look has to be decided before anything reads --bg. html.nfx gives the Netflix theme a
+  // different background from its own — #141414 on a tablet, pure black on a phone — and the Android
+  // app paints its status and navigation bars from whatever --bg says. Read it first and the app was
+  // told #141414 while the page went black: a grey band above and below the picture, on the one
+  // theme and the one screen size where most of the app is used.
+  const nfxChanged = syncNfx();
+  paintChrome();
   setTimeout(fitNav, 50);
-  appBarColors(bg || '#17121F');
-  if (syncNfx() && state.user && lastViewKey) { renderRail(); refreshView(); }      // the phone look came or went: draw the page again
+  if (nfxChanged && state.user && lastViewKey) { renderRail(); refreshView(); }      // the phone look came or went: draw the page again
 }
-window.addEventListener('resize', () => { if (syncNfx() && state.user && lastViewKey) { renderRail(); refreshView(); } });
+
+/** The page's background, told to everything outside the page that has to match it. */
+function paintChrome() {
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#17121F';
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', bg);
+  appBarColors(bg);
+}
+
+window.addEventListener('resize', () => {
+  // Crossing the phone/tablet line turns html.nfx on or off, and with it the background. The bars
+  // have to be repainted or they keep the colour from before the rotation.
+  if (!syncNfx()) return;
+  paintChrome();
+  if (state.user && lastViewKey) { renderRail(); refreshView(); }
+});
 
 // The phone header (Netflix): see-through at the top of the page, black once you scroll; the library chips slide
 // away while you scroll down and come back when you scroll up, like the app's.

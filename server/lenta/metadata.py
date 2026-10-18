@@ -209,7 +209,8 @@ def _ref(path: str | None) -> str | None:
 DETAILS_VERSION = 3      # bump when _movie_details/_show_details learn new fields: titles are refreshed in the background
 DETAIL_KEYS = ("composer", "cinematography", "editors", "producers", "countries", "original_language", "languages",
                "budget", "revenue", "collection", "keywords", "imdb_id", "wikidata_id", "homepage", "companies",
-               "seasons_count", "episodes_count", "last_air", "next_air", "show_type", "details_v", "tvdb_id")
+               "seasons_count", "episodes_count", "last_air", "next_air", "show_type", "details_v", "tvdb_id",
+               "details_at")
 
 
 def _crew(crew: list, *jobs: str, limit: int = 4) -> list[str]:
@@ -242,6 +243,7 @@ def _common_details(d: dict) -> dict:
         "tvdb_id": ext.get("tvdb_id") or None,
         "homepage": d.get("homepage") or None,
         "details_v": DETAILS_VERSION,
+        "details_at": time.time(),
     }
 
 

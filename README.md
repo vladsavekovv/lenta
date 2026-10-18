@@ -11,7 +11,7 @@
 https://github.com/user-attachments/assets/ecd20a9b-4fea-4781-9b54-c5688e15229c
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.12.0-8a5cf6">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.16.0-8a5cf6">
   <img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-24.04%20%7C%2026.04-E95420?logo=ubuntu&logoColor=white">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="Android" src="https://img.shields.io/badge/Android-8%2B-3DDC84?logo=android&logoColor=white">
@@ -269,7 +269,7 @@ No copyright is claimed on LENTA's own code, artwork or documentation.
 Bundled and downloaded third-party components keep their own licenses, listed in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-This product uses the TMDB API but is not endorsed or certified by TMDB. IMDb ratings come from the
+This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. IMDb ratings come from the
 [IMDb Non-Commercial Datasets](https://developer.imdb.com/non-commercial-datasets/), which IMDb allows for
 personal, non-commercial use only: anyone using LENTA otherwise should switch IMDb ratings off (Settings ›
 Metadata › About panel extras). The same goes for each online service: its data stays under its own terms. LENTA is not affiliated with Netflix, Plex, Jellyfin, IMDb, TMDB, Apple or any of

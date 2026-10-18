@@ -11,6 +11,7 @@ import io
 import os
 import shutil
 import threading
+import time
 from pathlib import Path
 
 import httpx
@@ -22,6 +23,7 @@ from . import logs
 log = logs.get("images")
 WIDTHS = [92, 185, 342, 500, 780, 1280, 1920]
 TMDB_IMG = "https://image.tmdb.org/t/p/"
+TMDB_CACHE_MAX = 150 * 86400      # five months — TMDB allows their content to be cached for six
 _locks: dict[str, threading.Lock] = {}
 _locks_guard = threading.Lock()
 
@@ -71,12 +73,25 @@ def save_local_file(path: str | Path) -> str | None:
 
 
 def _download_tmdb(name: str) -> Path | None:
-    """Fetch a TMDB image once (w1280 if available, else original) into the cache."""
+    """Fetch a TMDB image (w1280 if available, else original) into the cache.
+
+    Kept for five months and then fetched again. TMDB's API terms allow their content to be cached
+    for no longer than six months (API Terms of Use, paragraph 1.C), and a poster sitting in this
+    folder is as much their content as the title it belongs to. Re-downloading a picture that has
+    not changed costs one request every five months per image; failing to is a breach.
+    """
     target = CACHE_DIR / "tmdb" / name
-    if target.exists():
+
+    def fresh() -> bool:
+        try:
+            return time.time() - target.stat().st_mtime < TMDB_CACHE_MAX
+        except OSError:
+            return False
+
+    if target.exists() and fresh():
         return target
     with _lock_for(name):
-        if target.exists():
+        if target.exists() and fresh():
             return target
         target.parent.mkdir(parents=True, exist_ok=True)
         for bucket in ("w1280", "original"):

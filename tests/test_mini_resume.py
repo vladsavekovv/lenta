@@ -24,7 +24,12 @@ from pathlib import Path
 os.environ.setdefault("LENTA_DATA_DIR", tempfile.mkdtemp())
 ROOT = Path("/home/claude/lenta")
 BASE = "http://127.0.0.1:8597"
-MOVIE = 43                      # Gladiator, in the seeded test library
+# A film to play, found rather than written down. This used to be the number 43, and the number was
+# right until the test server was restarted: three of the fixture's libraries point at the same
+# folder, so a rescan re-homes the same films under fresh ids and 43 stopped existing. The test then
+# failed for forty seconds on a timeout that said nothing about the mini player. Ask the server for a
+# film that actually has a file instead.
+MOVIE = None
 
 fails = []
 
@@ -88,9 +93,23 @@ def sign_in(page):
         page.fill("#lp", "secret123")
         page.click("#login button.primary")
     page.wait_for_selector(".card", timeout=30000)
+    global MOVIE
+    if MOVIE is None:
+        MOVIE = page.evaluate("""async () => {
+          const ids = [...document.querySelectorAll('.card[data-kind="movie"] a[href*="#/item/"]')]
+            .map(a => a.getAttribute('href').split('/').pop());
+          for (const id of ids) {
+            const d = await (await fetch('/api/items/' + id, { credentials: 'same-origin' })).json();
+            if ((d.files || []).length) return Number(id);   // one with something to play
+          }
+          return null;
+        }""")
+    if not MOVIE:
+        raise SystemExit("no film with a file on the test server — nothing to play")
 
 
-def minimised(page, item=MOVIE):
+def minimised(page, item=None):
+    item = item or MOVIE
     """Play something from the beginning, let it get going, then minimise it to the bar.
 
     From the beginning deliberately: earlier runs of this test leave a watch position behind, and a

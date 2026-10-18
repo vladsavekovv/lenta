@@ -37,14 +37,21 @@ export function libraryLine(counts = {}) {
 
 const HW = { nvenc: 'NVIDIA NVENC', qsv: 'Intel Quick Sync', vaapi: 'VA-API', none: 'Off — software (CPU)' };
 
-/** This device rather than the server: which of the two clients it was given, and the engine behind it. */
+// Which of the three builds this device was handed. Worth naming precisely: it is the first thing to
+// know about a television fault, and the one thing nobody can work out from a photograph of the screen.
+const BUILDS = {
+  new: 'Standard build',
+  mid: 'Compatibility build — for televisions from 2019 to 2022',
+  old: 'Compatibility build — for televisions from 2017 to 2018',
+};
+
+/** This device rather than the server: which of the three clients it was given, and the engine behind it. */
 function deviceFacts() {
-  const legacy = !!window.LENTA_LEGACY;
   const root = document.documentElement;
   const missing = ['no-vars', 'no-grid', 'no-sticky', 'no-flexgap'].filter(c => root.classList.contains(c));
   const where = inAndroidApp() ? 'Android app' : isStandalone() ? 'installed app window' : 'browser';
   return [
-    ['Client', legacy ? 'Compatibility build — for televisions from 2017 to 2022' : 'Standard build'],
+    ['Client', BUILDS[window.LENTA_TIER] || (window.LENTA_LEGACY ? BUILDS.old : BUILDS.new)],
     ['Running in', `${where}${tvMode() ? ' · television mode' : ''}`],
     ['Screen', `${window.screen?.width || 0} × ${window.screen?.height || 0}`],
     missing.length ? ['Engine lacks', missing.map(c => ({ 'no-vars': 'CSS variables', 'no-grid': 'CSS grid', 'no-sticky': 'sticky position', 'no-flexgap': 'flex gap' })[c]).join(', ')] : null,
@@ -107,6 +114,13 @@ export async function renderAbout(target = $('#view')) {
       ${a ? html`<section class="panel"><h3>This installation</h3>${facts(admin)}</section>` : ''}
 
       <section class="panel"><h3>Where the information comes from</h3>
+        <!-- TMDB require their logo alongside the notice below, and require it to be less prominent
+             than LENTA's own (API Terms of Use, paragraph 3). The file is their official one, dropped
+             in by hand from themoviedb.org/about/logos-attribution — it is their trademark, not ours
+             to draw. If it is not there, the image takes itself off the page rather than showing a
+             broken picture, and tests/test_tmdb_terms.py says so. -->
+        <img class="about-tmdb" src="img/tmdb.svg" alt="The Movie Database"
+             onerror="this.style.display='none'">
         ${facts([
           ['Films and shows', 'The Movie Database (TMDB)'],
           ['Streaming availability', 'JustWatch, through TMDB'],
@@ -115,7 +129,7 @@ export async function renderAbout(target = $('#view')) {
           ['Background and ratings', 'Wikipedia, IMDb and OMDb'],
           ['Live TV guide', 'The broadcast itself (DVB event tables)'],
         ])}
-        <p class="about-note">This product uses the TMDB API but is not endorsed or certified by TMDB.
+        <p class="about-note">This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.
           Streaming availability data is provided by JustWatch. Nothing from a streaming service plays
           inside LENTA — a title opens on the service itself.</p></section>
 

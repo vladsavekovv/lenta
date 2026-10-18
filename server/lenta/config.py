@@ -6,7 +6,7 @@ database and are edited from the admin dashboard; see db.SETTING_DEFAULTS.
 import os
 from pathlib import Path
 
-VERSION = "1.12.0"
+VERSION = "1.16.0"
 APP_NAME = "LENTA Media Server"
 
 _ROOT = Path(__file__).resolve().parents[2]  # .../lenta
@@ -17,6 +17,13 @@ TRANSCODE_DIR = Path(os.environ.get("LENTA_TRANSCODE_DIR", DATA_DIR / "transcode
 
 HOST = os.environ.get("LENTA_HOST", "0.0.0.0")
 PORT = int(os.environ.get("LENTA_PORT", "8484"))
+
+# A TMDB key given to the server when it starts, for people who would rather not click through a
+# settings page on first run — a line in a compose file, next to the media folders they are editing
+# anyway. It is applied only when no key has been saved yet; anything entered in Settings wins and is
+# never overwritten. LENTA ships no key of its own: a TMDB key is licensed to the person who created
+# it and may not be passed on (TMDB API Terms of Use, paragraphs 1.A and 1.C).
+TMDB_KEY_ENV = os.environ.get("LENTA_TMDB_KEY", "").strip()
 
 FFMPEG = os.environ.get("LENTA_FFMPEG", "ffmpeg")
 FFPROBE = os.environ.get("LENTA_FFPROBE", "ffprobe")

@@ -23,6 +23,8 @@ import socket
 import ssl
 import subprocess
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 from cryptography import x509
@@ -49,8 +51,43 @@ class CertError(ValueError):
 
 # ---- names and addresses of this machine -------------------------------------------------------
 
+_names_cache: tuple[list[str], list[str]] | None = None
+_names_at = 0.0
+_names_lock = threading.Lock()
+NAMES_TTL = 300          # seconds; a machine's own name and addresses do not change between page loads
+
+
 def local_names() -> tuple[list[str], list[str]]:
-    """(DNS names, IP addresses) this server is likely reached by on the home network."""
+    """(DNS names, IP addresses) this server is likely reached by on the home network — from a cache.
+
+    _local_names() asks the resolver and runs a program, and on a network whose DNS server is slow or
+    away (a domain controller that is off, a VPN that is up) the reverse lookup inside it waits for the
+    resolver's own timeout — five seconds, typically, per nameserver. That used to happen on every
+    request for the Network page, and the Settings pages ask for it too, which is why they sometimes
+    took longer to appear than anything else in LENTA. So: answer from the cache, and work out the new
+    answer in a thread of its own, where nobody is waiting for it.
+    """
+    global _names_cache, _names_at
+    fresh = _names_cache is not None and (time.monotonic() - _names_at) < NAMES_TTL
+    if _names_cache is not None and not fresh and _names_lock.acquire(blocking=False):
+        def refresh() -> None:
+            global _names_cache, _names_at
+            try:
+                got = _local_names()
+                _names_cache, _names_at = got, time.monotonic()
+            finally:
+                _names_lock.release()
+        threading.Thread(target=refresh, name="lenta-names", daemon=True).start()
+    if _names_cache is None:                      # the very first call: warmed at start-up, see main.py
+        with _names_lock:
+            if _names_cache is None:
+                _names_cache, _names_at = _local_names(), time.monotonic()
+    dns, ips = _names_cache
+    return list(dns), list(ips)                   # callers append to these (_wanted)
+
+
+def _local_names() -> tuple[list[str], list[str]]:
+    """(DNS names, IP addresses) this server is likely reached by — asked of the system. Can be slow."""
     host = socket.gethostname().split(".")[0] or "lenta"
     dns = [host, f"{host}.local", "localhost"]
     try:
@@ -142,11 +179,22 @@ def _now() -> dt.datetime:
 
 # ---- LENTA's own certificates --------------------------------------------------------------------
 
+_ca_cache: tuple[str, object, object] | None = None       # (stamp, certificate, key)
+
+
 def _ensure_ca():
+    global _ca_cache
     if CA_CRT.exists() and CA_KEY.exists():
+        # Loading the authority's own key parses an RSA key and checks it over, which takes about as long
+        # as everything else on the Network page put together. It is the same two files every time, so
+        # keep it, and notice by their mtime and size if they are ever replaced.
+        mark = stamp((CA_CRT, CA_KEY))
+        if _ca_cache and _ca_cache[0] == mark:
+            return _ca_cache[1], _ca_cache[2]
         ca = x509.load_pem_x509_certificate(CA_CRT.read_bytes())
         key = serialization.load_pem_private_key(CA_KEY.read_bytes(), None)
         if ca.not_valid_after_utc > _now() + dt.timedelta(days=LEAF_DAYS):
+            _ca_cache = (mark, ca, key)
             return ca, key
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     host = socket.gethostname().split(".")[0] or "server"
@@ -165,6 +213,7 @@ def _ensure_ca():
     _write(CA_KEY, _pem_key(key), secret=True)
     _write(CA_CRT, ca.public_bytes(serialization.Encoding.PEM))
     AUTO_CRT.unlink(missing_ok=True)            # a new CA means new server certificates
+    _ca_cache = (stamp((CA_CRT, CA_KEY)), ca, key)
     return ca, key
 
 

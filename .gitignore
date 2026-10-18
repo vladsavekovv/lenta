@@ -43,3 +43,9 @@ tools/.fills.js
 
 # which GitHub version a package was built on (read by tools/github-update.sh)
 .github-base
+
+# The handoff Claude reads at the start of a session. Local only: it is written about Vlad and his
+# network — his employer, his vault path, the VM and addresses LENTA runs on — none of which belongs
+# in a public repository. The same material, kept for him rather than for a stranger, is in the vault
+# as Homelab/LENTA working rules. Contributors are served by CONTRIBUTING.md.
+CLAUDE.md

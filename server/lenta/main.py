@@ -9,10 +9,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import (about, api_admin, api_auth, api_editor, api_extras, api_library, api_livetv, api_network, api_playback,
-               api_prefs, api_streaming, api_subtitles, api_system, epg, intros, livestream, livetv, logs, scanner,
-               streaming, trailers, transcode, trickplay, watcher)
-from .config import APP_NAME, VERSION, WEB_DIR, ensure_dirs
-from .db import get_setting, init_db
+               api_prefs, api_streaming, api_subtitles, api_system, certs, epg, intros, livestream, livetv, logs,
+               scanner, streaming, trailers, transcode, trickplay, watcher)
+from .config import APP_NAME, TMDB_KEY_ENV, VERSION, WEB_DIR, ensure_dirs
+from .db import get_setting, init_db, set_setting
 
 log = logs.get("server")
 mimetypes.add_type("application/manifest+json", ".webmanifest")
@@ -46,8 +46,11 @@ async def _scheduled_scans() -> None:
         if interval > 0 and elapsed >= interval:
             elapsed = 0
             if not scanner.state["running"]:
-                log.info("Scheduled library scan")
-                scanner.request_scan(None)
+                # The safety net, not the way new media arrives: the watcher sees a new film within a
+                # minute and scans only its folder. This walks the libraries to catch what a folder's
+                # modification time cannot show, and stops the moment it finds nothing changed.
+                log.debug("Checking the libraries for changes")
+                scanner.request_scan(None, periodic=True)
 
 
 @asynccontextmanager
@@ -55,9 +58,17 @@ async def lifespan(app: FastAPI):
     logs.setup_logging()
     ensure_dirs()
     init_db()
+    # LENTA_TMDB_KEY: for the person who would rather put their key in a compose file than click
+    # through a settings page. Only ever fills an empty setting — a key entered in Settings is theirs
+    # and is never overwritten by the environment.
+    if TMDB_KEY_ENV and not get_setting("tmdb_api_key"):
+        set_setting("tmdb_api_key", TMDB_KEY_ENV)
+        log.info("TMDB key taken from LENTA_TMDB_KEY")
     log.info("%s %s starting", APP_NAME, VERSION)
     transcode.start_housekeeping()
     threading.Thread(target=transcode.detect_hardware, daemon=True).start()
+    # this machine's names and addresses, asked for once here rather than while someone waits for a page
+    threading.Thread(target=certs.local_names, name="lenta-names-warm", daemon=True).start()
     livetv.start_background()           # finds USB tuners and scans a new one, quietly
     epg.start_sweeping()                # fills in the guide for multiplexes nobody is watching
     task = asyncio.create_task(_scheduled_scans())

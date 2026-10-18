@@ -411,8 +411,12 @@ def _home_rows(user: dict, sections: bool = False):
     cw = mylist = None
     with db() as con:
         specs = _section_specs(user, libs, con)
+        # A channels section names channels, not libraries, so the filter below cannot see into it: a
+        # viewer with no live TV of his own would be shown the owner's channels row. Drop it for him.
+        live_ok = any(l["kind"] == "livetv" for l in libs)
         specs += [{"id": c["id"], "type": "custom", "rule": c["rule"], "genre": c["genre"], "title": c["title"],
-                   "libs": c["libs"], "channels": c["channels"], "custom": True} for c in cfg["custom"]]
+                   "libs": c["libs"], "channels": c["channels"], "custom": True}
+                  for c in cfg["custom"] if c["rule"] != "channels" or live_ok]
         for sp in specs:
             sp["default_title"], sp["default_libs"] = sp["title"], [i for i in sp["libs"] if i in allowed]
             if not sp.get("custom") and sp["id"] in cfg["titles"]:

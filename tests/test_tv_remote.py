@@ -119,6 +119,13 @@ if sync_playwright:
     # crosses it, so a burst can be answered from one set of measurements and scrolled once at the end
     # — otherwise the presses queue up behind frames that have not been drawn, and the ring arrives
     # somewhere unexpected a second after the thumb stopped.
+    #
+    # Everything below starts from the same card and measures a single press there as its own baseline.
+    # It used to compare the burst against the single press measured above, from wherever tv.js had
+    # settled the focus — the hero's button, with a dozen candidates round it, against a card in a row
+    # with a hundred. Measured on 18 Oct 2026 with both starting from the same card: one press 102
+    # position questions, eight in one frame 104, eight in frames of their own 824. The batching works;
+    # the comparison did not.
     with sync_playwright() as pw2:
         bb = pw2.chromium.launch()
         pg = bb.new_page(viewport={"width": 1920, "height": 1080})
@@ -138,29 +145,53 @@ if sync_playwright:
           const siv = Element.prototype.scrollIntoView;
           Element.prototype.scrollIntoView = function () { window.__siv++; return siv.apply(this, arguments); };
         }""")
-        pg.evaluate("document.querySelector('.card .frame-link')?.focus()")
-        pg.wait_for_timeout(300)
-        pg.evaluate("window.__n = 0; window.__siv = 0;")
-        # Eight presses inside one frame, which is what a slow set sees when the key is held down.
         # Sending them through the keyboard instead would measure how fast this machine draws frames
         # rather than whether the presses are batched at all.
-        pg.evaluate("""() => {
-          for (let i = 0; i < 8; i++) {
+        PRESSES = """(n) => {
+          for (let i = 0; i < n; i++) {
             const e = new KeyboardEvent('keydown', { bubbles: true, cancelable: true });
             Object.defineProperty(e, 'key', { value: 'ArrowRight' });
             Object.defineProperty(e, 'keyCode', { value: 39 });
             window.dispatchEvent(e);
           }
-        }""")
-        pg.wait_for_timeout(1500)
-        burst = pg.evaluate("({rects: window.__n, scrolls: window.__siv})")
+        }"""
+
+        def from_a_card(presses, apart=False):
+            """Cost of `presses` ArrowRights, always starting from the same card.
+
+            Always from the same card, because what one press costs depends entirely on where the ring
+            is standing: from the hero's button, which is where tv.js settles the focus and where the
+            single press above was measured, there are a dozen candidates; from a card in a row there
+            are a hundred. Comparing the burst against that single press was comparing two different
+            neighbourhoods, and the number it produced meant nothing.
+            """
+            pg.evaluate("document.querySelector('.card .frame-link')?.focus()")
+            pg.wait_for_timeout(400)
+            pg.evaluate("window.__n = 0; window.__siv = 0;")
+            if apart:
+                for _ in range(presses):          # each in a frame of its own: no sharing at all
+                    pg.evaluate(PRESSES, 1)
+                    pg.wait_for_timeout(120)
+            else:
+                pg.evaluate(PRESSES, presses)     # all eight inside one frame, as a held-down key is
+            pg.wait_for_timeout(1500)
+            return pg.evaluate("({rects: window.__n, scrolls: window.__siv})")
+
+        one = from_a_card(1)
+        burst = from_a_card(8)
+        apart = from_a_card(8, apart=True)
         bb.close()
-    print(f"       eight presses in one frame: {burst['rects']} position questions,"
-          f" {burst['scrolls']} scrolls")
-    check(f"eight presses in one frame cost about what one does ({burst['rects']} for eight,"
-          f" against {counts['rects'] * 8} if each were answered on its own)",
-          burst["rects"] <= counts["rects"] * 2)
+    print(f"       from a card: one press {one['rects']} position questions; "
+          f"eight in one frame {burst['rects']}, {burst['scrolls']} scrolls; "
+          f"eight frames apart {apart['rects']}, {apart['scrolls']} scrolls")
+    check(f"eight presses in one frame cost about what one does ({burst['rects']} against "
+          f"{one['rects']} for a single press from the same card)",
+          burst["rects"] <= one["rects"] * 1.5 + 10)
+    check(f"and far less than answering each on its own ({burst['rects']} against {apart['rects']})",
+          burst["rects"] * 3 <= apart["rects"])
     check(f"and the page is scrolled a few times, not eight ({burst['scrolls']})", burst["scrolls"] <= 4)
+    check(f"while eight separate presses really do scroll eight times ({apart['scrolls']})",
+          apart["scrolls"] >= 5)
 
 print("\n4. a television starts a film and a channel without hls.js having been loaded first")
 # The page leaves the library out on a TV because the set can normally play HLS itself. This browser

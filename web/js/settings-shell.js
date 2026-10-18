@@ -89,17 +89,27 @@ function foldMainMenu() {
   window.addEventListener('hashchange', back);
 }               // sub-menus opened by hand during this visit
 
-function remember(page) { try { localStorage.setItem('lenta.settingsPage', page); } catch { /* private mode */ } }
-function last() { try { return localStorage.getItem('lenta.settingsPage'); } catch { return null; } }
+/** The page Settings opens on: the first one in the sidebar this user can see (Appearance). */
+function firstPage() {
+  for (const g of NAV) {
+    if (g.admin && !state.user?.is_admin) continue;
+    for (const it of g.items) {
+      if (it.children) { if (it.children[0]) return it.children[0].id; }
+      else if (it.id) return it.id;
+    }
+  }
+  return 'appearance';
+}
 
 export async function renderSettingsPage(page, q = new URLSearchParams()) {
   const all = pages();
   if (!page || !all[page]) {
-    const p = last();
-    location.replace(`#/settings/${p && all[p] ? p : 'appearance'}`);
+    // Settings always opens at the top of its own menu — it does not remember the page you were last on.
+    // Coming back to Settings after going to Home should look the same as opening it for the first time.
+    opened.clear();
+    location.replace(`#/settings/${firstPage()}`);
     return;
   }
-  remember(page);
   foldMainMenu();
   const info = all[page];
   if (info.parent) opened.add(info.parent.key);

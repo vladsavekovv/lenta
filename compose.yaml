@@ -24,6 +24,11 @@ services:
       PUID: 1000
       PGID: 1000
       TZ: Europe/Sofia
+      # Posters, descriptions, cast and episode titles come from The Movie Database, which needs a
+      # free key of your own: https://www.themoviedb.org/settings/api — about a minute to make.
+      # Put it here and LENTA starts with it already set; or leave it out and paste it in Settings
+      # later. LENTA ships no key, because a TMDB key is licensed to the person who made it.
+      # LENTA_TMDB_KEY: ""
 
     # Rather not have root in the picture at all? Start as the account instead, and make sure ./data
     # already belongs to it. PUID/PGID above are then ignored — this line has already done their job.

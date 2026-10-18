@@ -48,7 +48,9 @@ def text(path):
 
 src = text(ROOT / "web" / "js" / "sysinfo.js")
 check("the page reads the server's own account of itself", "'/api/system'" in src)
-check("TMDB's attribution sentence is on the page", "not endorsed or certified by TMDB" in src)
+# The sentence itself is TMDB's and is checked word for word in tests/test_tmdb_terms.py, which owns
+# it. Here we only care that the About page is where it ended up, because that is where TMDB ask for it.
+check("TMDB's attribution sentence is on the page", "or otherwise approved by TMDB" in src)
 check("JustWatch is credited for streaming availability", "provided by JustWatch" in src)
 check("the licence is stated as public domain", "public domain" in src and "Unlicense" in src)
 check("no draft, no save: the page never writes anything",

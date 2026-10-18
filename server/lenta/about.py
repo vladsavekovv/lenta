@@ -29,6 +29,11 @@ router = APIRouter(prefix="/api", tags=["about"])
 
 WIKI_REFRESH = 60 * 86400          # articles change slowly
 OMDB_REFRESH = 14 * 86400          # ratings and votes move
+# TMDB's API terms allow their content to be cached for no longer than 6 months (API Terms of Use,
+# paragraph 1.C). So a title's TMDB details are re-fetched well inside that, whether or not anything
+# about them has changed. Titles matched by a version of LENTA that did not record when their details
+# were fetched count as due: there is no way to tell how old they are, so they are refreshed once.
+TMDB_REFRESH = 150 * 86400         # five months — inside the six TMDB allows
 RETRY_AFTER_ERROR = 86400          # a failed lookup (network, limit) is tried again the next day
 OMDB_DAILY = 1000                  # OMDb's free plan
 OMDB_BACKGROUND_SHARE = 800        # the background job leaves the rest for pages you open
@@ -306,8 +311,11 @@ def _rows(where: str, *args) -> list[dict]:
 
 
 def _refresh_details(tmdb: metadata.TMDB) -> None:
-    """Older titles were matched before the extended fields existed: fetch just those fields."""
-    rows = _rows("COALESCE(json_extract(extra, '$.details_v'), 0) < ?", metadata.DETAILS_VERSION)
+    """Fetch TMDB details again: for titles matched before the extended fields existed, and for any
+    whose copy is approaching the six months TMDB allows it to be kept for."""
+    rows = _rows("(COALESCE(json_extract(extra, '$.details_v'), 0) < ? "
+                 " OR COALESCE(json_extract(extra, '$.details_at'), 0) < ?)",
+                 metadata.DETAILS_VERSION, time.time() - TMDB_REFRESH)
     state.update(phase="details", done=0, total=len(rows))
     for n, item in enumerate(rows, 1):
         try:

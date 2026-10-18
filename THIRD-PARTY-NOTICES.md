@@ -12,7 +12,7 @@ license and terms, and every license file they require is included next to them.
 | [Golos Text](https://github.com/googlefonts/golos-text) font | `web/fonts/golos-text-*.woff2` | SIL Open Font License 1.1 (`web/fonts/OFL.txt`) |
 | [Oswald](https://github.com/googlefonts/OswaldFont) font | `web/fonts/oswald-*.woff2` | SIL Open Font License 1.1 (`web/fonts/OFL.txt`) |
 | Outlines of the digits 0–9 from Golos Text | the large *Top 10* numbers in `web/js/ui.js` | SIL Open Font License 1.1 (`web/fonts/OFL.txt`) |
-| [core-js](https://github.com/zloirock/core-js) | bundled into `web/legacy/app.js` (the version for older TVs) | MIT (`web/legacy/core-js.LICENSE`) |
+| [core-js](https://github.com/zloirock/core-js) | bundled into `web/legacy/app.js` and `web/legacy/mid.js` (the versions for older TVs) | MIT (`web/legacy/core-js.LICENSE`) |
 
 ## Downloaded during installation
 
@@ -40,6 +40,8 @@ These packages are installed from PyPI on your machine; they are not copied into
 [esbuild](https://esbuild.github.io) (MIT), [Babel](https://babeljs.io) (MIT; its small helper functions end up in
 `web/legacy/app.js`) and [Lightning CSS](https://lightningcss.dev) (MPL-2.0) build `web/legacy/`
 from `tools/`; they are installed only when you rebuild it.
+[MDN browser-compat-data](https://github.com/mdn/browser-compat-data) (CC0) generates
+`tests/tv-engines.json`, and is installed only when that file is refreshed.
 
 ## Used only when you install the Samsung TV app
 
@@ -58,7 +60,7 @@ off or get a license from the service.
 
 | Service | Used for | Terms |
 |---|---|---|
-| [TMDB](https://www.themoviedb.org) | Titles, descriptions, artwork, cast, trailers list | [API terms](https://www.themoviedb.org/api-terms-of-use). *This product uses the TMDB API but is not endorsed or certified by TMDB.* |
+| [TMDB](https://www.themoviedb.org) | Titles, descriptions, artwork, cast, trailers list | [API terms](https://www.themoviedb.org/api-terms-of-use). *This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.* |
 | [JustWatch](https://www.justwatch.com) | Which streaming services carry a title, per country (reached through TMDB's watch-provider endpoints, and shown in Settings › Streaming services and the Home rows) | TMDB supplies this on one condition: **"In order to use this data you must attribute the source of the data as JustWatch"**, and says access is revoked where it is not. LENTA shows that credit on the settings page and on every row built from it. If you change how those rows look, keep it. |
 | [IMDb Non-Commercial Datasets](https://developer.imdb.com/non-commercial-datasets/) | IMDb ratings and votes | Personal and non-commercial use only. Information courtesy of IMDb (https://www.imdb.com). Used with permission. |
 | [Wikipedia](https://www.wikipedia.org) / [Wikidata](https://www.wikidata.org) | Summaries in the About panel | Text under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), shown with a link to the article |

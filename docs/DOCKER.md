@@ -35,6 +35,25 @@ business changing what it was asked to play.
 The path you type when you add a library in LENTA is the path **inside** the container — `/media/films`,
 not `/srv/media/films`. This catches everybody once.
 
+## The one key you need
+
+Posters, descriptions, cast and episode titles come from The Movie Database, and TMDB give keys to
+people rather than to programs — a key is licensed to whoever made it and cannot be passed on, so
+LENTA cannot ship one and neither can anybody else honestly. Making your own is free and takes about
+a minute at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api).
+
+Set it in `compose.yaml` before the first start and there is nothing to click afterwards:
+
+```yaml
+environment:
+  LENTA_TMDB_KEY: "your-key-here"
+```
+
+It only ever fills an empty setting — once you have entered a key in Settings, that one is yours and
+the environment never overwrites it. Leave it out entirely if you would rather paste the key in
+Settings › Metadata later; everything except online metadata works without it, so your files still
+scan, play and remember where you got to.
+
 ## Who it runs as
 
 The server refuses to run as root, in a container exactly as on a host. Set `PUID` and `PGID` to the

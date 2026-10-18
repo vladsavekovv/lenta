@@ -17,7 +17,7 @@ moves to another port or to https on the same machine, the app remembers the new
 """
 from dexwriter import ACC_PUBLIC, ACC_VOLATILE, ClassDef, Field, Method
 
-VERSION = "1.1.4"
+VERSION = "1.1.5"
 PKG = "app.lenta"
 MA, CL, CH, BR, UI = "Lapp/lenta/MainActivity;", "Lapp/lenta/Client;", "Lapp/lenta/Chrome;", "Lapp/lenta/Bridge;", "Lapp/lenta/Ui;"
 ACT = "Landroid/app/Activity;"
@@ -85,6 +85,14 @@ def classes() -> list[ClassDef]:
             ("const", "v1", BG),
             ("invoke-virtual", ["v0", "v1"], "Landroid/view/Window;->setStatusBarColor(I)V"),
             ("invoke-virtual", ["v0", "v1"], "Landroid/view/Window;->setNavigationBarColor(I)V"),
+            # The window is painted before the WebView has anything to show, and the theme LENTA uses
+            # (Theme.Material.NoActionBar) paints it the Material grey. So every cold start flashed a
+            # grey screen for as long as the page took to draw — on a phone, long enough to see every
+            # time. Give the window LENTA's own near-black and the start is black all the way through.
+            ("new-instance", "v2", "Landroid/graphics/drawable/ColorDrawable;"),
+            ("invoke-direct", ["v2", "v1"], "Landroid/graphics/drawable/ColorDrawable;-><init>(I)V"),
+            ("invoke-virtual", ["v0", "v2"],
+             "Landroid/view/Window;->setBackgroundDrawable(Landroid/graphics/drawable/Drawable;)V"),
             ("new-instance", "v0", WV),
             ("invoke-direct", ["v0", "v6"], f"{WV}-><init>(Landroid/content/Context;)V"),
             ("iput-object", "v0", "v6", F_WEB),
@@ -403,8 +411,12 @@ def classes() -> list[ClassDef]:
             ("invoke-virtual", ["v1", "v0"], "Landroid/view/ViewGroup;->removeView(Landroid/view/View;)V"),
             ("const/4", "v0", 0),
             ("iput-object", "v0", "v3", F_CUSTOM),
-            ("const/4", "v1", -1),                    # SCREEN_ORIENTATION_UNSPECIFIED
-            ("invoke-virtual", ["v3", "v1"], f"{ACT}->setRequestedOrientation(I)V"),
+            # Put back whatever the app itself was doing, rather than assuming it was doing nothing.
+            # This used to set the orientation straight to UNSPECIFIED, which is wrong whenever a page
+            # went full screen on top of LENTA's own full-screen player: the sideways lock and the
+            # hidden bars went with it, and setFull could not bring them back because as far as it was
+            # concerned nothing had changed. applyFull asks the flag what the state should be.
+            ("invoke-virtual", ["v3"], f"{MA}->applyFull()V"),
             ("iget-object", "v1", "v3", F_CB),
             ("iput-object", "v0", "v3", F_CB),
             ("if-eqz", "v1", "end"),
@@ -459,19 +471,22 @@ def classes() -> list[ClassDef]:
             ("if-lt", "v3", "v4", "old"),
             # Android 10+: the shared Downloads folder, no permission needed
             ("invoke-virtual", ["v0", "v2", "v1"], f"{DMR}->setDestinationInExternalPublicDir({STR}{STR}){DMR}"),
+            ("const-string", "v4", "Downloading — you'll find it in Downloads"),
             ("goto", "queue"),
             L("old"),
             # Android 8-9 would need storage permission for it: the app's own Download folder instead
             ("invoke-virtual", ["v0", "v5", "v2", "v1"], f"{DMR}->setDestinationInExternalFilesDir(Landroid/content/Context;{STR}{STR}){DMR}"),
+            # and it is not in Downloads, so it must not say it is: on these two versions the file
+            # lands in the app's own folder, which is where Files shows it under Android/data.
+            ("const-string", "v4", "Downloading — it will be in LENTA's own folder"),
             L("queue"),
             ("const-string", "v2", "download"),       # Context.DOWNLOAD_SERVICE
             ("invoke-virtual", ["v5", "v2"], f"{ACT}->getSystemService({STR}){OBJ}"),
             ("move-result-object", "v2"),
             ("check-cast", "v2", "Landroid/app/DownloadManager;"),
             ("invoke-virtual", ["v2", "v0"], f"Landroid/app/DownloadManager;->enqueue({DMR})J"),
-            ("const-string", "v2", "Downloading - you'll find it in Downloads"),
             ("const/4", "v3", 0),
-            ("invoke-static", ["v5", "v2", "v3"], "Landroid/widget/Toast;->makeText(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;"),
+            ("invoke-static", ["v5", "v4", "v3"], "Landroid/widget/Toast;->makeText(Landroid/content/Context;Ljava/lang/CharSequence;I)Landroid/widget/Toast;"),
             ("move-result-object", "v2"),
             ("invoke-virtual", ["v2"], "Landroid/widget/Toast;->show()V"),
             ("return-void",)]),
@@ -497,16 +512,19 @@ def classes() -> list[ClassDef]:
             ("move-result-object", "v0"),
             ("invoke-virtual", ["v0"], f"Landroid/net/Uri;->getScheme(){STR}"),
             ("move-result-object", "v1"),
+            # A scheme is case-insensitive by the standard and Uri.getScheme returns it as written,
+            # so these are compared that way: "HTTPS://..." used to match none of them and the link
+            # was dropped without a word.
             ("const-string", "v2", "file"),
-            ("invoke-virtual", ["v2", "v1"], f"{STR}->equals({OBJ})Z"),
+            ("invoke-virtual", ["v2", "v1"], f"{STR}->equalsIgnoreCase({STR})Z"),
             ("move-result", "v2"),
             ("if-nez", "v2", "inapp"),
             ("const-string", "v2", "http"),           # only web links leave the app; others are ignored
-            ("invoke-virtual", ["v2", "v1"], f"{STR}->equals({OBJ})Z"),
+            ("invoke-virtual", ["v2", "v1"], f"{STR}->equalsIgnoreCase({STR})Z"),
             ("move-result", "v2"),
             ("if-nez", "v2", "web"),
             ("const-string", "v2", "https"),
-            ("invoke-virtual", ["v2", "v1"], f"{STR}->equals({OBJ})Z"),
+            ("invoke-virtual", ["v2", "v1"], f"{STR}->equalsIgnoreCase({STR})Z"),
             ("move-result", "v2"),
             ("if-nez", "v2", "web"),
             ("const/4", "v0", 1),
@@ -627,6 +645,19 @@ def classes() -> list[ClassDef]:
             ("invoke-interface", ["v2"], f"{SPE}->apply()V"),
             L("end"),
             ("return-void",)]),
+        # The WebView's own process died — out of memory on a long film, usually. Android's rule is
+        # that if nobody answers this, it kills the whole app: "LENTA keeps stopping", no explanation,
+        # nothing in the app able to say what happened. Answering it means the app lives, and since
+        # the dead WebView can never be used again the activity is built afresh, which makes a new one
+        # and reopens the server. The film's place is lost; the app is not.
+        #
+        # No guard against doing this repeatedly, deliberately: a renderer that dies every time is a
+        # crash loop either way, and today that loop is the app disappearing instead of reappearing.
+        Method("onRenderProcessGone", f"({WV}Landroid/webkit/RenderProcessGoneDetail;)Z", regs=4, code=[
+            ("iget-object", "v0", "v1", f"{CL}->a:{MA}"),
+            ("invoke-virtual", ["v0"], f"{ACT}->recreate()V"),
+            ("const/4", "v0", 1),                     # handled: do not take the app down with it
+            ("return", "v0")]),
         Method("onReceivedError", f"({WV}{REQ}Landroid/webkit/WebResourceError;)V", regs=6, code=[
             ("invoke-interface", ["v4"], f"{REQ}->isForMainFrame()Z"),
             ("move-result", "v0"),

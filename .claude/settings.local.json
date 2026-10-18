@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp \"/root/.claude/uploads/1a1811fd-45fa-52eb-9201-d80f12d29999/3e5f5907-tmdb.svg\" web/img/tmdb.svg)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}

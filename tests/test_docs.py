@@ -104,6 +104,23 @@ check(f"the user guide says {said and said.group(1)} themes, there are {len(THEM
 rm = re.search(r"(\w+) dark themes", readme)
 check(f"the README says {rm and rm.group(1)}", bool(rm) and rm.group(1).lower() == words.get(len(THEMES)))
 
+print("\n6. the handoff stays at home")
+# CLAUDE.md is written about Vlad and his network — employer, vault path, the VM and addresses LENTA
+# runs on. It went to GitHub once, in 1.12.0, and should not go again. Two gates, because one of them
+# will eventually be edited by somebody who does not know why it is there.
+gitignore = (ROOT / ".gitignore").read_text()
+check("CLAUDE.md is in .gitignore",
+      any(ln.strip() == "CLAUDE.md" for ln in gitignore.splitlines()))
+handoff = (ROOT / "CLAUDE.md")
+if handoff.exists():
+    rules = handoff.read_text()
+    check("and the packaging command in it excludes the file itself",
+          "--exclude='CLAUDE.md'" in rules)
+    check("and says plainly that it is never published",
+          "never packaged and never published" in rules)
+else:
+    print("  ok    CLAUDE.md is not in this copy of the tree (a package, or a clone) — nothing to check")
+
 print()
 if fails:
     print(f"{len(fails)} failed: {', '.join(fails)}")

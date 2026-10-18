@@ -202,7 +202,13 @@ export function oldEngines(css) {
       const sizeKids = (kidsFn, colsV, autoColV) => {
         const cl = colsV ? tracks(colsV) : [];
         const au = cl.length === 1 && /^repeat\(auto-(fill|fit),minmax\((.+?),[^,]*\)\)$/.exec(cl[0]);
-        if (autoColV) kidsFn('*', `flex:0 0 ${autoColV};width:${autoColV}`);
+        // flexFor knows that a track sized by its content ("max-content", "auto") must leave the
+        // child's own width alone. Writing width:max-content instead takes the width away from a
+        // child that sets one, and a child whose every part is positioned absolutely then measures
+        // nothing at all: that is the Top 10 row on a 2018 set — ten tiles 199px tall and 0 wide,
+        // so the whole row is a blank stripe. A 2017 set escaped it only by accident, because the
+        // no-vars rules make that poster static and so give max-content something to measure.
+        if (autoColV) kidsFn('*', flexFor(autoColV));
         else if (au) kidsFn('*', `flex:1 0 ${au[2]};max-width:calc(${au[2]} * 1.6)`);
         else if (cl.length > 1 || (cl.length === 1 && !/^minmax\(0,1fr\)$|^1fr$/.test(cl[0])))
           cl.forEach((t, k) => kidsFn(`:nth-child(${cl.length}n+${k + 1})`, flexFor(t)));

@@ -1,24 +1,41 @@
-// Builds web/legacy/: LENTA's web client for older TV web engines (Samsung TVs from 2017 to 2022, Chromium 47-87).
+// Builds web/legacy/: LENTA's web client for older TV web engines, in two builds rather than one.
 //
 //   cd tools && npm install && npm run legacy
 //
-// The normal client (web/js, web/css) uses current JavaScript and CSS. This turns it into one script and one
-// stylesheet those engines understand: newer syntax is rewritten (esbuild), missing functions are added (core-js
-// and a few small fill-ins), and CSS the old engines drop is given fallbacks (Lightning CSS plus the rules below).
-// index.html picks the legacy files by itself when the browser can't run the normal ones.
-// Run it again after changing anything in web/js or web/css.
+// A Samsung television is not one browser. 2017 runs Chromium 47 and 2018 runs 56; 2019 to 2022 run 63,
+// 69, 76 and 85. Those two halves want completely different things, and sending the older one's build to
+// both is what made a 2022 set read half a megabyte of ES5 and polyfills it has had for years.
+//
+//   web/legacy/app.js + app.css   2017-2018  (Chromium 47-56)  everything rewritten to ES5 by Babel,
+//                                 core-js for the language, plain copies of every var() and a flex
+//                                 stand-in for every grid (tools/css-old.mjs), because these engines
+//                                 have neither custom properties nor grid.
+//   web/legacy/mid.js + mid.css   2019-2022  (Chromium 63-85)  grid, custom properties, sticky and
+//                                 modern JavaScript all work. No Babel, almost no polyfills, and the
+//                                 stylesheet keeps its variables and its real grids. It needs only
+//                                 what came later: aspect-ratio (88), flex gap (84), clamp() (79),
+//                                 :focus-visible (86), and a handful of DOM methods.
+//
+// The normal client (web/js, web/css) is what 2023 and newer get, untouched. index.html picks between
+// the three by asking the engine what it can do — never by its user agent.
+// Run this again after changing anything in web/js or web/css.
 import { build } from 'esbuild';
 import { transformSync as babel } from '@babel/core';
 import { transform, browserslistToTargets } from 'lightningcss';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import corejsCompat from 'core-js-compat';
 import { oldEngines } from './css-old.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WEB = join(HERE, '..', 'web');
 const OUT = join(WEB, 'legacy');
-const CHROME = 47;
+const CHROME = 47;          // the oldest set LENTA supports: 2017, Tizen 3.0
+// The second build's floor. 2019 is Chromium 63, so 60 is a little below the oldest set that will ever
+// be given it — deliberately, so that the feature test in index.html can be a plain one (object spread
+// arrived in 60) and still be certain nothing in the file is newer than the engine reading it.
+const MID = 60;
 mkdirSync(OUT, { recursive: true });
 
 // ---- CSS ----------------------------------------------------------------------------------------------
@@ -92,6 +109,11 @@ css = css.replace(/(--[a-z0-9-]*rgb\s*:\s*)(\d+)\s+(\d+)\s+(\d+)/g, '$1$2, $3, $
 css = css.replace(/:focus-visible/g, ':focus');
 // media queries with not (…) are newer than these engines, which could drop the whole rule: TVs have no touch screen
 css = css.replace(/ and \(not \(any-pointer: coarse\)\)/g, '');
+// Everything above is common to both builds. What follows differs: the stand-ins below are for engines
+// without sticky positioning (Chromium 56) or custom properties (49), and every set given the second
+// build has both. They are switched on by a class the fill-ins only add when the engine fails the test,
+// so carrying them there would be dead weight and nothing more.
+const sharedCss = css;
 css += `
 /* engines without position:sticky (html.no-sticky): the menu on the left stays put */
 @media (min-width: 900px) {
@@ -114,18 +136,33 @@ html.no-vars .card.rank .frame-link { position: relative; display: block; height
 html.no-vars .card.rank .frame { position: static; width: 132px; height: 198px; box-shadow: none; }
 html.no-vars .track.top10 { gap: 16px; }
 `;
-css += '\n/* flex gap for older engines (LENTA adds html.no-flexgap when needed) */\n' + gaps.join('\n') + '\n';
+// Flex gap arrived in Chromium 84, so both builds need this: 2022 (85) is the only set in either that
+// has it, and the rules are behind html.no-flexgap, which that set never gets given.
+const gapRules = '\n/* flex gap for older engines (LENTA adds html.no-flexgap when needed) */\n'
+  + gaps.join('\n') + '\n';
+css += gapRules;
 
 const targets = { chrome: CHROME << 16 };
 const res = transform({ filename: 'legacy.css', code: Buffer.from(css), targets, minify: true, errorRecovery: true });
 for (const w of res.warnings.slice(0, 5)) console.warn('css:', w.message);
 const old = oldEngines(res.code.toString());
 writeFileSync(join(OUT, 'app.css'), old.css);
-console.log('css: plain copies of', old.nVar, 'var() values,', old.nGrid, 'grids given a flex fallback');
+console.log('css 2017-2018: plain copies of', old.nVar, 'var() values,', old.nGrid, 'grids given a flex fallback');
+
+// The same stylesheet for 2019-2022, and the difference is what is *not* done to it: no plain copy in
+// front of every var(), no flex stand-in for every grid. That is 800 duplicated declarations and 100
+// extra rules these engines have no use for.
+const midRes = transform({ filename: 'mid.css', code: Buffer.from(sharedCss + gapRules),
+  targets: { chrome: MID << 16 }, minify: true, errorRecovery: true });
+for (const w of midRes.warnings.slice(0, 5)) console.warn('css (mid):', w.message);
+const midCss = midRes.code.toString();
+writeFileSync(join(OUT, 'mid.css'), midCss);
+console.log('css 2019-2022: variables and grids kept as written —',
+  ((old.css.length - midCss.length) / 1024).toFixed(0), 'KB smaller');
 
 // ---- JavaScript ---------------------------------------------------------------------------------------
 const fills = `
-import 'core-js/stable';
+__POLYFILLS__
 (function () {
   var E = Element.prototype;
   // append/prepend/before/after/replaceWith arrived in Chromium 54 — a 2017 Samsung set runs 47 and has
@@ -260,14 +297,39 @@ import 'core-js/stable';
   }
 })();
 `;
-writeFileSync(join(HERE, '.fills.js'), fills);
-
 const bundled = await build({
   stdin: { contents: `import '../web/js/app.js';\n`, resolveDir: HERE, sourcefile: 'legacy-entry.js' },
   bundle: true, format: 'iife', target: ['chrome56'], minify: false, write: false, outfile: join(OUT, 'app.js'),
   nodePaths: [join(HERE, 'node_modules')], legalComments: 'none', logLevel: 'warning',
   supported: { 'dynamic-import': false },
 });
+
+// core-js/stable is every polyfill core-js has: 433 of them, a quarter of a megabyte once built, and
+// a 2017 television must read and compile all of it before the first picture can be drawn. Most of it
+// is for language this client never writes. Babel can see which ones it does reach for — reading the
+// finished bundle, so nothing is missed by looking at the files one at a time — and only those are
+// shipped. tests/test_legacy_builtins.py is what makes that safe: it deletes from a browser every
+// built-in a Chromium 47 engine lacks and runs the client in the hole that leaves, so a polyfill left
+// out by mistake fails there instead of in somebody's living room.
+const seen = babel(bundled.outputFiles[0].text + '\n' + fills.replace('__POLYFILLS__', ''), {
+  babelrc: false, configFile: false, filename: 'legacy.js', sourceType: 'script', compact: true,
+  plugins: [['polyfill-corejs3', { method: 'usage-global', targets: { chrome: String(CHROME) }, version: '3' }]],
+}).code;
+// Reading the source cannot see everything. core-js's own string polyfills call the engine's native
+// String.split and String.replace while they work out whether they are needed, and those algorithms
+// read RegExp.prototype.flags — which a 2017 engine does not have and which nothing in this client
+// mentions by name. Left out, the bundle died on its first line with "Invalid flags supplied to
+// RegExp constructor 'undefinedy'". The whole regexp family is a few kilobytes and is what the rest
+// of core-js stands on, so it goes in whether or not it was spotted being used.
+const FOUNDATION = /^es\.regexp\./;
+const compat = typeof corejsCompat === 'function' ? corejsCompat : (corejsCompat.compat ?? corejsCompat.default);
+const foundation = compat({ targets: { chrome: String(CHROME) } }).list.filter(m => FOUNDATION.test(m));
+const polyfills = [...new Set([
+  ...[...seen.matchAll(/require\(["']core-js\/modules\/([^"']+?)(?:\.js)?["']\)/g)].map(m => m[1]),
+  ...foundation,
+])].sort();
+writeFileSync(join(HERE, '.fills.js'),
+  fills.replace('__POLYFILLS__', polyfills.map(m => `import 'core-js/modules/${m}.js';`).join('\n')));
 // the fill-ins go first, on their own: the app's helpers (Object.getOwnPropertyDescriptors...) need them at once
 const fillsBuilt = await build({
   stdin: { contents: `import './.fills.js';\n`, resolveDir: HERE, sourcefile: 'fills-entry.js' },
@@ -279,6 +341,50 @@ const js = babel(fillsBuilt.outputFiles[0].text + '\n' + bundled.outputFiles[0].
   babelrc: false, configFile: false, compact: true, comments: false, sourceType: 'script',
   presets: [['@babel/preset-env', { targets: { chrome: String(CHROME) }, modules: false, exclude: ['transform-regenerator'] }]],
 }).code;
-const min = await (await import('esbuild')).transform(js, { minify: !process.env.DEBUG, target: 'es2015', legalComments: 'none' });
+const { transform: esTransform } = await import('esbuild');
+const min = await esTransform(js, { minify: !process.env.DEBUG, target: 'es2015', legalComments: 'none' });
 writeFileSync(join(OUT, 'app.js'), '"use strict";' + min.code);
-console.log('web/legacy/app.js and app.css built for Chrome', CHROME, '| aspect-ratio rules:', aspect.length, '| flex-gap rules:', gaps.length);
+console.log('web/legacy/app.js  2017-2018, Chrome', CHROME, '| aspect-ratio rules:', aspect.length,
+  '| flex-gap rules:', gaps.length, '| core-js polyfills:', polyfills.length, 'of 433',
+  '|', (min.code.length / 1024).toFixed(0), 'KB');
+
+// ---- the same client for 2019-2022 --------------------------------------------------------------------
+// Everything above exists because Chromium 47 cannot read modern JavaScript. Chromium 63 can: async
+// functions, classes, arrow functions, destructuring, spread, template literals, for-of — all of it
+// native since before 2018. So this build skips Babel entirely and esbuild emits the code very nearly
+// as it was written. That is where the saving is; the polyfills were never the biggest part of it.
+//
+// What these engines still want is small: a few DOM methods that came later (replaceChildren is
+// Chromium 86, toggleAttribute 69, ResizeObserver 64), the aspect-ratio stand-in, and whatever core-js
+// modules the client is seen to use. The fill-ins are the same block of code — every one of them is
+// written as "if the engine hasn't got it", so on an engine that has it nothing happens at all.
+const midBundled = await build({
+  stdin: { contents: `import '../web/js/app.js';\n`, resolveDir: HERE, sourcefile: 'mid-entry.js' },
+  bundle: true, format: 'iife', target: [`chrome${MID}`], minify: false, write: false,
+  nodePaths: [join(HERE, 'node_modules')], legalComments: 'none', logLevel: 'warning',
+  supported: { 'dynamic-import': false },
+});
+const midSeen = babel(midBundled.outputFiles[0].text + '\n' + fills.replace('__POLYFILLS__', ''), {
+  babelrc: false, configFile: false, filename: 'mid.js', sourceType: 'script', compact: true,
+  plugins: [['polyfill-corejs3', { method: 'usage-global', targets: { chrome: String(MID) }, version: '3' }]],
+}).code;
+// No regexp foundation here. It is in the older build because Chromium 47 has no
+// RegExp.prototype.flags and core-js's string polyfills read it; that property arrived in 49, so every
+// engine given this build already has it. Checked, not assumed: tests/test_legacy_builtins.py runs
+// this bundle with a Chromium 63 engine's built-ins taken away.
+const midPolyfills = [...new Set(
+  [...midSeen.matchAll(/require\(["']core-js\/modules\/([^"']+?)(?:\.js)?["']\)/g)].map(m => m[1]),
+)].sort();
+writeFileSync(join(HERE, '.fills.js'),
+  fills.replace('__POLYFILLS__', midPolyfills.map(m => `import 'core-js/modules/${m}.js';`).join('\n')));
+const midFills = await build({
+  stdin: { contents: `import './.fills.js';\n`, resolveDir: HERE, sourcefile: 'mid-fills.js' },
+  bundle: true, format: 'iife', target: [`chrome${MID}`], write: false,
+  nodePaths: [join(HERE, 'node_modules')], legalComments: 'none', logLevel: 'warning',
+});
+const midMin = await esTransform(midFills.outputFiles[0].text + '\n' + midBundled.outputFiles[0].text,
+  { minify: !process.env.DEBUG, target: [`chrome${MID}`], legalComments: 'none' });
+writeFileSync(join(OUT, 'mid.js'), '"use strict";' + midMin.code);
+console.log('web/legacy/mid.js  2019-2022, Chrome', MID, '| core-js polyfills:', midPolyfills.length,
+  '|', (midMin.code.length / 1024).toFixed(0), 'KB,',
+  (((min.code.length - midMin.code.length) / min.code.length) * 100).toFixed(0) + '% smaller than the 2017 build');

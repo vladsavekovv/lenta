@@ -39,7 +39,16 @@ def ffmpeg_version() -> str:
 
 
 @router.get("/overview")
-def overview():
+def overview(light: bool = False):
+    """The Dashboard's figures. light=1: only what the Settings pages read (the encoder and IMDb), with
+    none of the counting and none of the storage.
+
+    The storage list calls disk_usage() on every library folder, and on a folder that lives on another
+    machine — a NAS over NFS or SMB, a disk that has spun down — that waits for the mount, not for the
+    disk. Settings › General and Settings › Network asked for all of it and used two fields of it."""
+    if light:
+        return {"version": VERSION, "uptime": time.time() - STARTED, "ffmpeg": ffmpeg_version(),
+                "hardware": transcode.hw, "imdb": imdb.status()}
     with db() as con:
         counts = {r["kind"]: r["n"] for r in con.execute("SELECT kind, COUNT(*) AS n FROM items GROUP BY kind")}
         users = con.execute("SELECT COUNT(*) FROM users").fetchone()[0]

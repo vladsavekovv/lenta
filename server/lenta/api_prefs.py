@@ -46,6 +46,26 @@ PREF_DEFAULTS = {
 }
 
 
+# Home's shape belongs to whoever set LENTA up: which sections there are, what they are called, what they
+# draw from, the order they come in, which libraries feed the big banner and how often it changes. Everyone
+# else sees the Home screen he arranged — there is one Home screen in the house, not one per person — so
+# these are read from the owner for a viewer and are not offered on his Settings page at all.
+OWNER_HOME = ("home_sections", "home_row_order", "home_banner_libraries", "home_row_libraries",
+              "home_banner_interval", "home_trailer_30")
+# Inherited as the starting point, but his own once he changes it: whether the banner trailer has sound.
+# A viewer who has never touched it hears what the owner chose, and can still mute it for himself.
+OWNER_SEEDED = ("home_trailer",)
+
+
+def _owner_prefs(con) -> dict:
+    """The first administrator's preferences — the ones a viewer inherits."""
+    row = con.execute("SELECT id FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1").fetchone()
+    if not row:
+        return {}
+    return {r["key"]: r["value"] for r in
+            con.execute("SELECT key, value FROM user_prefs WHERE user_id = ?", (row["id"],))}
+
+
 def _validate(key: str, value) -> str:
     v = "" if value is None else str(value).strip()
     if key == "theme" and v:
@@ -119,10 +139,22 @@ def _validate(key: str, value) -> str:
 
 def get_prefs(user_id: int) -> dict:
     prefs = dict(PREF_DEFAULTS)
+    mine = {}
     with db() as con:
+        row = con.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
         for r in con.execute("SELECT key, value FROM user_prefs WHERE user_id = ?", (user_id,)):
             if r["key"] in prefs:
-                prefs[r["key"]] = r["value"]
+                mine[r["key"]] = r["value"]
+        if row is not None and not row["is_admin"]:
+            owner = _owner_prefs(con)
+            for key in OWNER_HOME:              # the owner's, whatever this user may have saved before
+                if key in owner:
+                    prefs[key] = owner[key]
+                mine.pop(key, None)
+            for key in OWNER_SEEDED:            # the owner's until this user chooses for himself
+                if key in owner and key not in mine:
+                    prefs[key] = owner[key]
+    prefs.update(mine)
     prefs["theme"] = THEME_RENAMED.get(prefs["theme"], prefs["theme"])
     if prefs["theme"] not in THEMES:
         prefs["theme"] = get_setting("default_theme") or "projector"
@@ -145,7 +177,10 @@ def read_prefs(user: dict = Depends(auth.current_user)):
 
 @router.put("/me/prefs")
 def write_prefs(body: dict, user: dict = Depends(auth.current_user)):
-    clean = {k: _validate(k, v) for k, v in body.items() if k in PREF_DEFAULTS}
+    keys = set(PREF_DEFAULTS)
+    if not user["is_admin"]:
+        keys -= set(OWNER_HOME)     # not his to change; an older page may still send them, so ignore quietly
+    clean = {k: _validate(k, v) for k, v in body.items() if k in keys}
     with db() as con:
         for k, v in clean.items():
             con.execute("INSERT INTO user_prefs(user_id, key, value) VALUES(?, ?, ?) "

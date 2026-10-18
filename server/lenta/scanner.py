@@ -31,6 +31,7 @@ LEAF_KINDS = ("movie", "episode", "track", "photo", "book")
 
 # Every library scans on its own: its own queue, worker thread and progress, so new films in one library
 # don't wait for another library's long scan (artwork, metadata). Scans of the same library run one by one.
+FRAME_RECHECK = 14 * 86400        # a film that gave up no usable frame is left alone this long
 _IDLE = {"running": False, "library_id": None, "library": None, "phase": "idle",
          "done": 0, "total": 0, "started": None, "finished": None, "message": ""}
 scans: dict[int, dict] = {}             # library id -> its scan progress (while it runs, then its last result)
@@ -111,17 +112,26 @@ def _start_worker(library_id: int) -> None:
         t.start()
 
 
-def request_scan(library_id: int | None = None, refresh_metadata: bool = False) -> None:
-    """Queue one library (or all of them) for scanning in the background. Each library has its own queue."""
+def request_scan(library_id: int | None = None, refresh_metadata: bool = False,
+                 periodic: bool = False) -> None:
+    """Queue one library (or all of them) for scanning in the background. Each library has its own queue.
+
+    `periodic` marks the hourly safety net rather than something a person asked for. Such a scan looks
+    for changes and, finding none, stops there: no metadata, no trailers, no frame grabbing. Asking for
+    a scan by hand always does the lot, so a queued periodic scan is upgraded by one that is not."""
     with db() as con:
         ids = [r["id"] for r in con.execute("SELECT id FROM libraries WHERE kind NOT IN ('livetv') ORDER BY position, id")] \
             if library_id is None else [library_id]
     with _queue_lock:
         for lid in ids:
             q = _queues.setdefault(lid, [])
-            if [refresh_metadata, None] not in q:
+            waiting = next((e for e in q if e[1] is None), None)
+            if waiting is not None:
+                waiting[0] = waiting[0] or refresh_metadata
+                waiting[2] = waiting[2] and periodic          # one real request makes the queued one real
+            else:
                 q[:] = [e for e in q if e[1] is None]      # a full scan covers the folder scans
-                q.append([refresh_metadata, None])
+                q.append([refresh_metadata, None, periodic])
             _start_worker(lid)
 
 
@@ -137,7 +147,7 @@ def request_scan_folders(library_id: int, folders: list[str]) -> None:
                 e[1] = sorted(set(e[1]) | set(folders))
                 break
         else:
-            q.append([False, sorted(set(folders))])
+            q.append([False, sorted(set(folders)), False])
         _start_worker(library_id)
 
 
@@ -158,9 +168,9 @@ def _run_queue(library_id: int) -> None:
                 if cur:
                     cur.update(running=False, phase="idle", finished=now())
                 return
-            refresh, folders = q.pop(0)
+            refresh, folders, periodic = q.pop(0)
         try:
-            scan_library(library_id, refresh, folders)
+            scan_library(library_id, refresh, folders, periodic)
         except Exception as exc:  # keep the worker alive
             log.exception("Scan of library %s failed: %s", library_id, exc)
 
@@ -644,17 +654,33 @@ def _grab_frame(path: str, at: float, hdr: bool) -> bytes | None:
         return None
 
 
-def _fill_frames(library_id: int) -> None:
+def _fill_frames(library_id: int, force: bool = False) -> None:
+    """A picture for anything that has none, taken from the film itself.
+
+    Some files never give one up — a codec FFmpeg here cannot open, a file that is really a stub, a
+    disc rip whose first minutes are black. Without a record of having tried, every one of those is
+    attempted again on every scan, for ever: FFmpeg started once per title per scan, producing nothing,
+    and a progress bar that makes an idle server look busy. So a failure is written down and left alone
+    for a fortnight, the same way a missing trailer is. Scanning a library by hand with "refresh"
+    ignores that and tries them all again.
+    """
     from . import artwork
     with db() as con:
         kind = con.execute("SELECT kind FROM libraries WHERE id = ?", (library_id,)).fetchone()
     if kind and not artwork.enabled("show" if kind["kind"] == "shows" else "movie", "screen"):
         return                                   # Screen grabber switched off (Artwork sources)
+    # The stamps are past times, so a cutoff in the future lets every one of them through: that is
+    # what "refresh" means. Zero would do the exact opposite and skip them all.
+    cutoff = time.time() + 1 if force else time.time() - FRAME_RECHECK
     with db() as con:
         rows = con.execute(
             "SELECT i.id, f.path, f.duration, f.hdr, i.kind FROM items i JOIN files f ON f.item_id = i.id "
             "WHERE i.library_id = ? AND i.kind IN ('movie','episode') AND i.thumb IS NULL "
-            "AND f.video_codec IS NOT NULL GROUP BY i.id", (library_id,)).fetchall()
+            "AND f.video_codec IS NOT NULL "
+            "AND COALESCE(json_extract(i.extra, '$.thumb_tried'), 0) < ? GROUP BY i.id",
+            (library_id, cutoff)).fetchall()
+    if not rows:
+        return
     state.update(phase="artwork", done=0, total=len(rows))
     for n, row in enumerate(rows, 1):
         duration = row["duration"] or 0
@@ -666,6 +692,11 @@ def _fill_frames(library_id: int) -> None:
                     con.execute("UPDATE items SET thumb = ? WHERE id = ?", (images.save_local(data, ".jpg"), row["id"]))
             except OSError as exc:
                 log.warning("Could not save a frame for item %s: %s", row["id"], exc)
+                data = None
+        if not data:                     # remember the attempt, so it is not repeated every scan
+            with db() as con:
+                con.execute("UPDATE items SET extra = json_set(COALESCE(extra, '{}'), '$.thumb_tried', ?) "
+                            "WHERE id = ?", (time.time(), row["id"]))
         state["done"] = n
     with db() as con:  # shows without art borrow a frame from their first episode
         con.execute("UPDATE items SET thumb = (SELECT e.thumb FROM items se JOIN items e ON e.parent_id = se.id "
@@ -688,7 +719,8 @@ def _cleanup(con, library_id: int) -> int:
     return removed
 
 
-def scan_library(library_id: int, refresh_metadata: bool = False, folders: list[str] | None = None) -> None:
+def scan_library(library_id: int, refresh_metadata: bool = False, folders: list[str] | None = None,
+                 periodic: bool = False) -> None:
     with db() as con:
         row = con.execute("SELECT * FROM libraries WHERE id = ?", (library_id,)).fetchone()
     if not row:
@@ -699,16 +731,19 @@ def scan_library(library_id: int, refresh_metadata: bool = False, folders: list[
     started = time.time()
     with _queue_lock:
         _tls.state = scans.setdefault(library_id, dict(_IDLE))     # this thread's progress (see _State)
-    state.update(running=True, library_id=library_id, library=lib["name"], phase="discovering",
+    state.update(running=True, library_id=library_id, library=lib["name"],
+                 phase="looking for changes" if periodic else "discovering",
                  done=0, total=0, started=started, message="")
     if folders:
         log.info("Scanning new or changed folders in '%s': %s", lib["name"], ", ".join(folders))
+    elif periodic:
+        log.debug("Looking for changes in '%s'", lib["name"])
     else:
         log.info("Scanning library '%s' (%s)", lib["name"], ", ".join(roots))
 
     report: dict = {"started": started}
     try:
-        _scan(lib, roots, extensions, handler, refresh_metadata, report, folders)
+        _scan(lib, roots, extensions, handler, refresh_metadata, report, folders, periodic)
         report["ok"] = True
     except Exception as exc:
         log.exception("Scan of library '%s' failed", lib["name"])
@@ -780,7 +815,7 @@ def _under(path: str, folders: list[str]) -> bool:
 
 
 def _scan(lib: dict, roots: list, extensions: set, handler, refresh_metadata: bool, report: dict,
-          folders: list[str] | None = None) -> None:
+          folders: list[str] | None = None, periodic: bool = False) -> None:
     library_id = lib["id"]
     started = report["started"]
     version_key = f"parser_version_{library_id}"
@@ -841,6 +876,18 @@ def _scan(lib: dict, roots: list, extensions: set, handler, refresh_metadata: bo
                     pass
         todo.sort(key=lambda t: t[1])
 
+    # The hourly scan is a safety net, not the way new media arrives — the watcher sees that within a
+    # minute and scans only the folder it changed. So when the walk finds nothing new, nothing altered
+    # and nothing missing, this stops here. Everything below costs real work for no reason on an
+    # unchanged library: matching titles that never match, asking for trailers that are not there, and
+    # running FFmpeg over every film that has never given up a usable frame. Asking for a scan by hand
+    # is a different thing and always does the lot.
+    if periodic and not todo and not gone and not report.get("renamed"):
+        report.update(added=0, failed=0, removed=0, unchanged=True)
+        state["message"] = f"{lib['name']}: no changes"
+        log.debug("No changes in '%s' (%d files seen)", lib["name"], len(found))
+        return
+
     state.update(phase="reading files", total=len(todo), done=0)
     added = failed = 0
     for n, (root, path, st) in enumerate(todo, 1):
@@ -897,7 +944,7 @@ def _scan(lib: dict, roots: list, extensions: set, handler, refresh_metadata: bo
         from . import intros
         intros.request()                  # intros of new episodes
         try:
-            _fill_frames(library_id)
+            _fill_frames(library_id, force=refresh_metadata)
         except Exception as exc:
             log.warning("Artwork from video frames failed: %s", exc)
 

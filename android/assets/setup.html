@@ -62,13 +62,20 @@
   const q = new URLSearchParams(location.search);
 
   function normalise(text) {
-    let s = text.trim().replace(/\/+$/, '');
-    if (!s) return '';
-    if (!/^https?:\/\//i.test(s)) s = 'http://' + s;
+    let s = text.trim();
+    if (!s || /\s/.test(s)) return '';
+    // An address that names a scheme must name http or https. Anything else is not a LENTA server,
+    // and guessing at it produced something worse than a refusal: "ftp://192.168.1.50" used to come
+    // out as http://ftp:8484 — the scheme taken for a host name — and a bare "http://" as
+    // http://http:8484, because the trailing slashes were stripped before the scheme was looked at.
+    // The app then saved that and said it could not reach the server, which tells you nothing.
+    const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(s);
+    if (scheme && !/^https?$/i.test(scheme[1])) return '';
+    if (!scheme) s = 'http://' + s;
     let u;
-    if (/\s/.test(s)) return '';
+    // No trailing-slash strip: the path is dropped below anyway, by returning only scheme and host.
     try { u = new URL(s); } catch { return ''; }
-    if (!/^[a-z0-9.-]+$|^\[[0-9a-f:.]+\]$/i.test(u.hostname)) return '';
+    if (!u.hostname || !/^[a-z0-9.-]+$|^\[[0-9a-f:.]+\]$/i.test(u.hostname)) return '';
     if (!u.port && u.protocol === 'http:') u.port = '8484';
     if (!u.port && u.protocol === 'https:' && !/^https:\/\/[^/]*:443\b/i.test(s)) u.port = '8443';   // LENTA's HTTPS port
     return `${u.protocol}//${u.host}`;

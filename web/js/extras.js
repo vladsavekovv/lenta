@@ -57,11 +57,12 @@ export function ytSrc(key, { muted, controls, start = 0 }) {
 export function ytCommand(frame, func, args = []) {
   frame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
 }
-export function ytListen(frame, onState, onInfo, onError) {
+export function ytListen(frame, onState, onInfo, onError, onAny) {
   const onMsg = (e) => {
     if (e.source !== frame.contentWindow) return;
     let d;
     try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
+    onAny?.();            // anything at all from the embed proves it is listening to us as well
     if (d?.event === 'onError') { onError?.(Number(d.info)); return; }
     const s = d?.event === 'onStateChange' ? d.info : d?.info?.playerState;
     if (typeof s === 'number') onState(s);
@@ -179,10 +180,26 @@ export function trailerPlayer(key, { muted = true, controls = false, start = 0, 
   else f.tabIndex = -1;
   f.title = 'Trailer';
   let t = start, at = 0, vol = 80, sent = -1;
+  // A command to a YouTube embed is a postMessage into an iframe that may not be listening yet, and one
+  // sent too early is dropped with no error at all. That is how a trailer ends up playing at YouTube's own
+  // volume instead of ours — we said setVolume(0), nothing heard it, and the cache below then recorded it
+  // as said. So commands wait here until the embed has spoken to us, which is the only proof it is
+  // listening; and the mute and the volume are said again at that moment.
+  let ready = false;
+  const queued = [];
+  const cmd = (func, args = []) => { if (ready) ytCommand(f, func, args); else queued.push([func, args]); };
+  const flush = () => {
+    if (ready) return;
+    ready = true;
+    for (const [func, args] of queued.splice(0)) ytCommand(f, func, args);
+    ytCommand(f, isMuted ? 'mute' : 'unMute');
+    sent = -1;
+    setVol(vol);
+  };
   const setVol = (x) => {
     vol = Math.max(0, Math.min(100, x));
     const r = Math.round(vol);
-    if (r !== sent) { sent = r; ytCommand(f, 'setVolume', [r]); }
+    if (r !== sent) { sent = r; cmd('setVolume', [r]); }
   };
   // YouTube shows captions when the viewer's YouTube settings or the uploader ask for them: switch them off
   // as the trailer starts (a few times, the captions module loads a moment after playback begins).
@@ -190,15 +207,17 @@ export function trailerPlayer(key, { muted = true, controls = false, start = 0, 
   const noCaptions = () => {
     for (const ms of [0, 600, 2000]) setTimeout(() => {
       if (!f.isConnected) return;
-      ytCommand(f, 'unloadModule', ['captions']);
-      ytCommand(f, 'unloadModule', ['cc']);
+      cmd('unloadModule', ['captions']);
+      cmd('unloadModule', ['cc']);
     }, ms);
   };
   let capsOff = '';
   const stop = ytListen(f, (s) => {
+    flush();                                            // it answered: whatever we said too early, say again
     if (s === 1 && capsOff !== current) { capsOff = current; noCaptions(); }
     onState?.(s);
   }, (info) => {
+    flush();
     if (typeof info.currentTime === 'number') { t = info.currentTime; at = performance.now(); onTime?.(t); }
   }, async (code) => {
     // 100 removed/private, 101/150 the uploader blocks embedding or this country, 153 embedding refused
@@ -209,15 +228,16 @@ export function trailerPlayer(key, { muted = true, controls = false, start = 0, 
     if (!replace) return;
     if (next && !isFileTrailer(next) && f.isConnected) {
       current = next; t = 0; at = 0;
+      ready = false; queued.length = 0; sent = -1;      // a new load: nothing is listening again until it says so
       f.src = ytSrc(next, { muted: isMuted, controls, start: 0 });      // same element: callers don't notice
     } else {
       onState?.(0);                                                     // nothing else to play: as if it ended
     }
-  });
+  }, flush);
   return {
     el: f, file: false, key: () => current,
-    play: () => ytCommand(f, 'playVideo'), pause: () => ytCommand(f, 'pauseVideo'),
-    setMuted: (m) => { isMuted = m; ytCommand(f, m ? 'mute' : 'unMute'); if (!m) setVol(vol); },
+    play: () => cmd('playVideo'), pause: () => cmd('pauseVideo'),
+    setMuted: (m) => { isMuted = m; cmd(m ? 'mute' : 'unMute'); if (!m) setVol(vol); },
     fadeTo: fader(() => vol, setVol),
     time: () => (at ? t + (performance.now() - at) / 1000 : t),
     destroy: () => { stop(); f.remove(); },
@@ -394,7 +414,9 @@ let homeTrailer = null;
 class HomeTrailer {
   constructor(hero, key, label, { sound, limit = 0, itemId }) {
     this.hero = hero; this.key = key; this.label = label; this.wantSound = sound; this.limit = limit;
-    this.muted = true; this.shown = false; this.inView = true; this.stopped = false;
+    // Not "in view until told otherwise": the banner may be drawn while you are scrolled half way down
+    // the page, and sync() works out for itself where it is.
+    this.muted = true; this.shown = false; this.inView = false; this.stopped = false;
     // More info (or the title) while the trailer plays: it carries on in the title's page from the same moment
     this.onOpen = (e) => {
       const a = e.target.closest('a[href^="#/item/"]');
@@ -421,30 +443,35 @@ class HomeTrailer {
       this.frame = this.player.el;
       this.fallback = setTimeout(() => this.reveal(), 5000);
     }, delay);
-    // The sound follows how much of the banner is on screen: it fades as you scroll away, and the trailer
-    // pauses once the banner is mostly gone (or another tab is in front).
-    this.seen = 1;
-    this.io = new IntersectionObserver(([e]) => {
-      const full = Math.min(e.boundingClientRect.height, window.innerHeight) || 1;
-      this.seen = Math.min(1, e.intersectionRect.height / full);
-      const was = this.inView;
-      this.inView = this.seen > 0.35;
-      if (was !== this.inView) this.sync(); else this.loudness(250);
-    }, { threshold: Array.from({ length: 21 }, (_, i) => i / 20) });
+    // The trailer plays while the banner is on screen and stops once it is mostly gone (or another tab is
+    // in front). sync() measures the banner itself; the observer is only what tells it to look again.
+    this.io = new IntersectionObserver(() => this.sync(),
+      { threshold: Array.from({ length: 21 }, (_, i) => i / 20) });
     this.io.observe(this.hero);
     this.onVis = () => this.sync();
     document.addEventListener('visibilitychange', this.onVis);
   }
-  /** Full volume with the whole banner in view, silent when only a third is left; and silent for the
-   *  last seconds before the 30 seconds limit. */
+  /** How much of the banner is on screen, 0 to 1 — asked of the page, not remembered from the last
+   *  observation, because the banner can be redrawn in a place nothing has observed yet. */
+  onScreen() {
+    const h = this.hero;
+    if (!h.isConnected || !h.offsetParent) return 0;
+    const r = h.getBoundingClientRect();
+    const full = Math.min(r.height, window.innerHeight);
+    if (full <= 0) return 0;
+    return Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0)) / full;
+  }
+  /** Full volume while the banner is in view — it fades in and out, it does not follow the scroll
+   *  half way. Silent for the last seconds before the 30 seconds limit. */
   level() {
     if (this.limit && (this.played || 0) >= this.limit - FADE_END_S) return 0;
-    const k = Math.max(0, Math.min(1, (this.seen - 0.35) / 0.55));
-    return 80 * k;
+    return this.inView ? 80 : 0;
   }
   loudness(ms) { if (this.player && !this.muted && !this.stopped && this.playing) this.player.fadeTo(this.level(), ms); }
   sync() {
     if (!this.frame || !this.shown || this.stopped) return;
+    this.seen = this.onScreen();
+    this.inView = this.seen > 0.35;
     const play = this.inView && !document.hidden && !previewOn && !mediaOn;
     if (play) {
       this.player.setMuted(this.muted || dockPlaying());    // the player bar has the sound: the banner plays muted
@@ -453,11 +480,15 @@ class HomeTrailer {
         this.player.play();                   // the volume is 0 here (faded out, or set to 0 below)
       }
       this.loudness(700);                     // comes back in gently
-    } else if (this.playing) {
+    } else {
+      // Not "else if (this.playing)": a player starts playing the moment it is created, so a banner drawn
+      // while you are scrolled down the page had one running that nothing here had asked for — off screen,
+      // and audible on an engine whose volume had not been set yet. Drive it to silence either way.
+      const was = this.playing;
       this.playing = false;
       const p = this.player;
-      // fade the sound out, then pause (straight away when muted, or when the tab is hidden: nothing to hear)
-      if (this.muted || document.hidden || mediaOn) { p.pause(); p.fadeTo(0, 0); }   // a film starting: at once
+      // fade the sound out, then pause (straight away when muted, hidden, or never ours to fade)
+      if (!was || this.muted || document.hidden || mediaOn) { p.fadeTo(0, 0); p.pause(); }   // a film starting: at once
       else p.fadeTo(0, 700).then((done) => { if (done && !this.playing && this.player === p) p.pause(); });
     }
     // 30 seconds limit (Settings): count only the time it really plays, fade the sound over the last
