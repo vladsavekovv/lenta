@@ -1,11 +1,14 @@
 """SQLite storage: schema, connections and runtime settings."""
 import json
+import logging
 import sqlite3
 import threading
 import time
 from contextlib import contextmanager
 
 from .config import DB_PATH
+
+log = logging.getLogger("lenta.db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS web_images (       -- web: picture references -> where to download them
@@ -371,6 +374,40 @@ def init_db() -> None:
         uc = {r[1] for r in con.execute("PRAGMA table_info(users)")}
         if "token_epoch" not in uc:
             con.execute("ALTER TABLE users ADD COLUMN token_epoch INTEGER NOT NULL DEFAULT 0")
+        # 1.19.3: undo what 1.19.0 and 1.19.1 did to the trailers.
+        #
+        # Those two sent `Referrer-Policy: no-referrer`, and YouTube partly decides whether an embed may
+        # play on the Referer. With none, it refuses with the same error codes a genuinely blocked video
+        # gives (101/150). LENTA believed them: it put each key on the sixty-day "doesn't play here"
+        # list and cleared the title's trailer to look for a replacement — which then also failed, for
+        # the same reason. So a library could lose years' worth of working trailers in an afternoon.
+        #
+        # Both halves are undone here, once. The skip list is emptied, because every entry it holds was
+        # written by a browser that had been told to say nothing about where it came from, and a title
+        # left with no trailer has its "looked recently, found nothing" stamp cleared so that it looks
+        # again. This is safe to run even for someone who never saw the fault: an emptied skip list
+        # simply means those videos are tried once more, and a video that really is blocked goes
+        # straight back on it.
+        if not con.execute("SELECT 1 FROM settings WHERE key = 'trailer_repair_1193'").fetchone():
+            banned = con.execute("SELECT value FROM settings WHERE key = 'yt_unavailable'").fetchone()
+            n = 0
+            if banned and banned[0]:
+                try:
+                    n = len(json.loads(banned[0]))
+                except ValueError:
+                    n = 0
+            con.execute("DELETE FROM settings WHERE key = 'yt_unavailable'")
+            cleared = con.execute(
+                "UPDATE items SET extra = json_set(extra, '$.trailer_checked', 0) "
+                "WHERE extra IS NOT NULL AND json_valid(extra) "
+                "AND json_extract(extra, '$.trailer') IS NULL "
+                "AND COALESCE(json_extract(extra, '$.trailer_checked'), 0) > 0").rowcount
+            con.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('trailer_repair_1193', ?)",
+                        (str(int(time.time())),))
+            if n or cleared:
+                log.info("Trailers: cleared %s skipped YouTube video(s) and asked %s title(s) to look "
+                         "again — see the Referrer-Policy note in main.py", n, cleared)
+
         # Renamed from SAVEK: keep a custom server name, but update the old default.
         con.execute("UPDATE settings SET value = 'LENTA' WHERE key = 'server_name' AND value = 'SAVEK'")
         # The Redline theme is called Netflix from 1.3.1: keep everyone's choice working.

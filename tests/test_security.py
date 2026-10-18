@@ -340,8 +340,10 @@ check("a theme preview from anywhere else is refused by the server before the br
       "_APPLE_HOST.match" in src("server/lenta/api_extras.py"))
 check("the YouTube thumbnail strip in the trailer picker can load its images",
       "https://i.ytimg.com" in main and "i.ytimg.com" in src("web/js/editor.js"))
-check("no address LENTA serves travels to another site in a Referer",
-      '"Referrer-Policy": "no-referrer"' in main)
+check("the path of an address LENTA serves never travels to another site in a Referer",
+      '"Referrer-Policy": "strict-origin-when-cross-origin"' in main)
+check("but the origin does, because YouTube refuses an embed that arrives anonymous — see 1.19.3",
+      '"Referrer-Policy": "no-referrer"' not in main)
 check("the schema and the documentation page are off unless asked for",
       'os.environ.get("LENTA_API_DOCS") == "1"' in main)
 check("forwarded headers are believed only from a proxy on this machine",

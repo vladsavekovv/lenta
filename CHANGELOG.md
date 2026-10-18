@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.19.3 — The trailers come back
+
+1.19.0 told browsers to say nothing about where they had come from. That was meant to keep a stream
+address out of other people's logs, and it did — but **YouTube decides whether an embed may play partly
+on exactly that**, and with nothing to go on it started refusing videos that had played for years.
+
+It refuses them with the same message it uses for a video the uploader really has blocked, so LENTA
+believed it. Each refused video went on the sixty-day "doesn't play here" list, which is shared by every
+title that uses it; the title's trailer was cleared and a replacement looked for; the replacement was
+refused the same way; and the title was then marked as having looked recently and found nothing, which
+stopped it looking again. An afternoon of browsing was enough to strip a library of working trailers.
+
+**This release undoes it.** The skip list is emptied once on upgrade — every entry on it was written by
+a browser that had been told to stay quiet — and every title left without a trailer is asked to look
+again. You do not have to do anything; trailers reappear as you open titles. A video that genuinely is
+blocked will go back on the list the first time it refuses, as it always did, and a trailer you chose by
+hand was never touched by any of this.
+
+The header itself now sends the site's address and nothing more — which is what YouTube wants, and is
+not the part that needed protecting. A stream address with a token in it still never leaves.
+
 ## 1.19.2 — The container image builds again
 
 1.19.0 included a one-line change to the build workflow that made the whole file invalid, so **every

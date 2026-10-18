@@ -172,9 +172,18 @@ SECURITY_HEADERS = {
     "Content-Security-Policy": CSP,
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
-    # A stream URL may legitimately carry ?token= (see auth.QUERY_TOKEN_PATHS), so no address LENTA
-    # serves may travel to another site in a Referer header.
-    "Referrer-Policy": "no-referrer",
+    # A stream URL may legitimately carry ?token= (see auth.QUERY_TOKEN_PATHS), so the **path** must
+    # never travel to another site. `strict-origin-when-cross-origin` sends only the origin
+    # (`https://lenta.example`) to another site and nothing at all on an HTTPS→HTTP downgrade, so the
+    # token is as safe as it was under `no-referrer` — which is what this said in 1.19.0 and 1.19.1.
+    #
+    # Why it changed: **YouTube decides whether an embed may play partly on the Referer**, and with
+    # none at all it refuses with error 101/150 — the same codes a genuinely blocked video returns.
+    # LENTA believes those codes, so it marked working trailers as "doesn't play here", added them to
+    # a sixty-day skip list and went looking for replacements. Trailers that had played for years
+    # stopped, and titles whose replacement search came up empty were left with none at all.
+    # Sending the origin is what YouTube needs and costs nothing we were protecting.
+    "Referrer-Policy": "strict-origin-when-cross-origin",
 }
 
 
