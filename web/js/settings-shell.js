@@ -29,6 +29,7 @@ export const NAV = [
   { title: 'Libraries', admin: true, items: [
     { label: 'Libraries', icon: 'folder', key: 'libs', children: [
       { id: 'libraries', label: 'Manage libraries' },
+      { id: 'library-sections', label: 'Libraries sections' },
       { id: 'scanning', label: 'Scanning' },
     ] },
     { label: 'Metadata', icon: 'info', key: 'meta', children: [

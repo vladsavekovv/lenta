@@ -278,6 +278,11 @@ CREATE TABLE IF NOT EXISTS watchlist (
 
 SETTING_DEFAULTS = {
     "server_name": "LENTA",
+    # Which libraries show a row of genre tiles above their grid, and how many tiles each one shows.
+    # JSON: {"<library id>": <tile count>}. A library not named here has no row. Server-wide and set by
+    # an administrator, for the same reason Home's shape is his: a library is one shelf for the whole
+    # house, not a thing each person arranges differently (see api_prefs.OWNER_HOME).
+    "library_sections": "",
     "tmdb_api_key": "",          # v3 API key or v4 read access token
     "metadata_language": "en-US",
     "metadata_region": "US",

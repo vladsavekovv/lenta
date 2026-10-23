@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from . import auth, images, metadata
-from .db import db, jloads, now
+from .db import db, get_setting, jloads, now
 from .serialize import (CHILD_COUNT, EPISODE_JOIN, PHOTO_COVER, TOP_KIND, UNWATCHED_SHOW, card, cards,
                         file_info, states_for)
 
@@ -112,6 +112,106 @@ def library_genres(library_id: int, user: dict = Depends(auth.current_user)):
                            "WHERE i.library_id = ? AND i.kind = ? GROUP BY g.value ORDER BY n DESC",
                            (library_id, TOP_KIND[lib["kind"]])).fetchall()
     return [{"name": r["genre"], "count": r["n"]} for r in rows]
+
+
+GENRE_TILES_MAX = 24
+MIN_TITLES = 3          # a genre with fewer titles than this is not what a library is made of
+# Kinds whose titles carry genres at all. A photo album has none, and a live TV library has channels
+# rather than titles — neither can be tiled, so neither is offered a row or answered for one.
+GENRE_TILE_KINDS = ("movies", "shows", "music", "audiobooks")
+
+
+def genre_tile_choice(library_id: int) -> tuple[int, list[str]]:
+    """What genre tiles this library shows: how many, and which ones if an administrator named them.
+
+    Two shapes are stored, and both are read here. A plain number is **automatic** — that many of the
+    library's commonest genres, which is what 1.20.0 could do and still the sensible default for a
+    shelf nobody has curated. An object may instead name the genres, in the order they are to appear:
+    `{"count": 12, "genres": ["Action", "Drama"]}`. A named list wins over the count and sets the
+    length itself, because the point of naming them is that the row is exactly what was asked for.
+
+    `(0, [])` means no row at all.
+    """
+    cfg = jloads(get_setting("library_sections"), {}) or {}
+    v = cfg.get(str(library_id))
+    chosen: list[str] = []
+    if isinstance(v, dict):
+        seen = set()
+        for g in (v.get("genres") or [])[:GENRE_TILES_MAX]:
+            name = str(g).strip()
+            if name and name not in seen:
+                seen.add(name)
+                chosen.append(name)
+        if chosen:
+            return len(chosen), chosen
+        v = v.get("count")
+    try:
+        return max(0, min(GENRE_TILES_MAX, int(v or 0))), []
+    except (TypeError, ValueError):
+        return 0, []
+
+
+def genre_tile_count(library_id: int) -> int:
+    """How many genre tiles this library shows, or 0 for none. Set by an administrator."""
+    return genre_tile_choice(library_id)[0]
+
+
+@router.get("/libraries/{library_id}/genre-tiles")
+def library_genre_tiles(library_id: int, user: dict = Depends(auth.current_user)):
+    """The library's commonest genres, each carrying the artwork of its best-rated title.
+
+    A tile needs a picture, and a genre has none of its own — so it borrows one. The title lent to a
+    genre is the **highest-rated one in it**, which is also the first thing you land on when you open
+    the tile, so the picture is a promise the drill-down keeps rather than a random still.
+
+    Ordered by how many titles carry the genre, because the point of the row is *what this library is
+    mostly made of*. A genre carried by one film is noise on a shelf of two thousand, so `MIN_TITLES`
+    keeps it out — with the exception that a small library would otherwise show nothing at all. All of
+    that is the *automatic* row; an administrator who has named the genres gets exactly those, in the
+    order given, with no floor applied, because naming them is the whole point.
+    """
+    lib = _library(library_id, user)
+    limit, chosen = genre_tile_choice(library_id)
+    if not limit or lib["kind"] not in GENRE_TILE_KINDS:
+        # Not switched on for this library, or a kind with no genres to tile. An empty answer rather
+        # than a 404, so the page simply has no row and the client needs to know nothing about the
+        # setting that decides it.
+        return {"library": {"id": lib["id"], "name": lib["name"], "kind": lib["kind"]}, "genres": []}
+    kind = TOP_KIND[lib["kind"]]
+    with db() as con:
+        counts = con.execute(
+            "SELECT g.value AS genre, COUNT(*) AS n FROM items i, json_each(i.genres) g "
+            "WHERE i.library_id = ? AND i.kind = ? GROUP BY g.value ORDER BY n DESC, g.value",
+            (library_id, kind)).fetchall()
+        have = {r["genre"]: r["n"] for r in counts}
+        if chosen:
+            # His list, his order. A genre with nothing behind it is a tile that opens on an empty
+            # grid, so it is left out rather than shown — the library may have been rescanned since
+            # he chose, and the choice is kept either way.
+            wanted = [(name, have[name]) for name in chosen if have.get(name)]
+        else:
+            # A genre needs a few titles behind it to be worth a tile — unless the whole library is
+            # small, in which case anything is better than an empty row.
+            floor = MIN_TITLES if sum(have.values()) >= MIN_TITLES * 10 else 1
+            wanted = [(r["genre"], r["n"]) for r in counts if r["n"] >= floor][:limit]
+        out = []
+        for name, n in wanted:
+            # `uid` is in here because `_top_columns("show")` carries UNWATCHED_SHOW, which binds
+            # `:uid`. Leaving it out raised on every TV library — and the client catches a failed
+            # fetch so the page keeps working, which meant the row was simply absent, with nothing
+            # said anywhere. That is the 1.20.1 fault; do not thin these parameters to what one kind
+            # of library appears to need.
+            best = con.execute(
+                f"SELECT {_top_columns(kind)} FROM items i "
+                f"WHERE i.library_id = :lib AND i.kind = :kind "
+                f"AND EXISTS (SELECT 1 FROM json_each(i.genres) g WHERE g.value = :genre) "
+                f"ORDER BY i.rating DESC NULLS LAST, i.sort_title LIMIT 1",
+                {"lib": library_id, "kind": kind, "genre": name, "uid": user["id"]}).fetchone()
+            art = card(best, None) if best else {}
+            out.append({"name": name, "count": n,
+                        "poster": art.get("poster"), "backdrop": art.get("backdrop"),
+                        "top_title": art.get("title")})
+    return {"library": {"id": lib["id"], "name": lib["name"], "kind": lib["kind"]}, "genres": out}
 
 
 def _library(library_id: int, user: dict) -> dict:

@@ -13,6 +13,7 @@ from . import about, auth, imdb, logs, metadata, scanner, trailers, transcode, t
 from .api_auth import validate_new_user
 from .api_playback import current_now_playing
 from .config import DATA_DIR, FFMPEG, FOLDERLESS_KINDS, LIBRARY_KINDS, TRANSCODE_DIR, VERSION
+from .api_library import GENRE_TILES_MAX
 from .db import SETTING_DEFAULTS, all_settings, db, get_setting, jloads, now, set_setting
 from .serialize import TOP_KIND, card
 
@@ -357,6 +358,42 @@ def put_settings(body: dict):
             raise HTTPException(400, "Unknown theme")
         if k == "hw_accel" and v not in ("auto", "nvenc", "qsv", "vaapi", "none"):
             raise HTTPException(400, "Unknown hardware acceleration option")
+        if k == "library_sections":
+            # {"<library id>": {"count": n, "genres": [...]}}, or a bare number for the automatic row,
+            # which is what 1.20.0 wrote and is still accepted. Validated here rather than trusted,
+            # because it is read straight back out and turned into a query limit and a list of names.
+            try:
+                cfg = jloads(v, {}) if isinstance(v, str) else (v or {})
+            except ValueError:
+                raise HTTPException(400, "Unknown library sections")
+            if not isinstance(cfg, dict) or len(cfg) > 200:
+                raise HTTPException(400, "Unknown library sections")
+            clean = {}
+            for lib_id, want in cfg.items():
+                if not str(lib_id).isdigit():
+                    raise HTTPException(400, "Unknown library")
+                names, count = [], want
+                if isinstance(want, dict):
+                    raw_names = want.get("genres") or []
+                    if not isinstance(raw_names, list):
+                        raise HTTPException(400, "The chosen genres must be a list")
+                    for g in raw_names[:GENRE_TILES_MAX]:
+                        if not isinstance(g, str):
+                            raise HTTPException(400, "A genre must be a name")
+                        g = g.strip()[:120]
+                        if g and g not in names:
+                            names.append(g)
+                    count = want.get("count")
+                try:
+                    n = int(count or 0)
+                except (TypeError, ValueError):
+                    raise HTTPException(400, "The number of tiles must be a number")
+                n = max(0, min(GENRE_TILES_MAX, n))
+                if names:
+                    clean[str(int(lib_id))] = {"count": len(names), "genres": names}
+                elif n > 0:                     # 0 or less simply means "no row", so it is not stored
+                    clean[str(int(lib_id))] = {"count": max(1, n)}
+            v = json.dumps(clean)
         if k == "scan_interval_minutes":
             try:
                 v = max(0, int(v))

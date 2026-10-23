@@ -1,5 +1,144 @@
 # Changelog
 
+## 1.21.3 — The same film, properly this time
+
+1.21.2 worked out that this graphics card cannot decode AV1 and stopped asking it to. It then handed
+the job to a second command that asked the card to decode it anyway — so the film still did not play.
+FFmpeg does not fall back to the processor on its own when that happens; it fails on every frame and
+says so only in its own log.
+
+A file the card has refused is now decoded on the processor, with the card still doing the encoding.
+The playback panel says **CPU decode → CPU filters → NVENC** when that happens, so a film that makes
+the processor work is no longer a mystery.
+
+## 1.21.2 — Films that would not play
+
+**The graphics card was being asked to do something it cannot.** An AV1 film sat on a black screen
+and never started. LENTA decides whether the card can decode a file from a list of what this family
+of cards supports in general — and AV1 decoding arrived in a later generation than the card fitted
+here, so the list said yes and the card said nothing. It now asks once, remembers what it could not
+do, and stops asking. **Settings › Dashboard › Detect hardware forgets it**, which is what to press
+after changing the card.
+
+**And the safety net was never reaching the ground.** There has always been a slower, surer way to
+play a file when the fast way fails, but it only took over once FFmpeg had *given up* — and on a file
+the card cannot decode FFmpeg keeps retrying for fifteen seconds or more. The player had stopped
+waiting long before that, so the slower way never ran once. Anything that has produced no picture
+after twelve seconds is now switched over regardless of what the player does, which also covers a
+stall whose cause nobody has found yet.
+
+**The quality menu no longer offers choices that change nothing.** Choosing 1080p for a film smaller
+than 1080p did nothing — rightly, because there was nothing to re-encode — but the menu offered it
+and the panel then reported "1080p" over a much smaller picture, which read as a broken encoder. The
+menu now lists only the qualities that would really change the picture.
+
+## 1.21.1 — Three things 1.21.0 got wrong on the phone
+
+**"Recently added" is the badge you already know again.** 1.21.0 gave it the coloured tab along the
+bottom edge that the Netflix tiles use. It is back to this theme's own dark pill in the top-left
+corner, exactly as the web interface draws it — only smaller, because at its full size the words do
+not fit across a phone-sized poster.
+
+**The rows are no longer spaced far apart.** The gap between rows was set by the window's height in
+one theme and its width in another, so the same phone layout came out airy in the HBO theme and tight
+in the Netflix one. The phone layout now says it once, and both are tight.
+
+**A streaming row showed giant service logos instead of posters.** On a phone, "Popular on Netflix"
+and the rows like it painted the service's mark across the whole tile and hid the picture behind it.
+This one was not new — it has been wrong in the Netflix theme since the phone layout was written, and
+only came to light now that a second theme uses the same tiles.
+
+## 1.21.0 — The HBO Max theme gets the phone layout
+
+On a phone held upright, LENTA has a layout of its own: posters with no title repeated underneath, a
+header carrying the page name and your libraries as chips, and a floating tab bar of four. It was
+written for the Netflix theme and only that theme ever got it. **The HBO Max theme has it now too.**
+
+Same tiles, same header, same tab bar — in HBO's own colours and its own light lettering, so it still
+reads as the theme you chose rather than as Netflix in blue. **The Home banner is untouched**: HBO
+keeps its own, with the trailer that plays on it, instead of the framed poster card the Netflix theme
+shows on a phone.
+
+Nothing changes on a tablet, on a desktop or on a television, and the other themes are as they were.
+
+Also fixed: **the genre tile row was a few pixels out of line in the Netflix theme**, on every screen.
+1.20.2 lined the row up by subtracting the page's own margin from it, which is exact when that margin
+is a fixed width and is not when it is a percentage of the window — which is what the Netflix theme
+uses and no other theme does. The row no longer subtracts anything; it just doesn't indent itself
+twice. The heading above it was out by the same amount and is fixed with it.
+
+## 1.20.3 — The genre tiles read better
+
+Two things about how the row looks, both asked for after living with 1.20.2.
+
+**The name on each tile is now a label in the middle of it**, in the same style as the "Recently
+added" badge on a poster: a small rounded panel, uppercase, centred. It used to be large text along
+the bottom-left edge. The picture behind it is dimmed evenly now rather than shaded towards the
+bottom, which is where the old name needed something to sit on. On a television the label is set
+larger, so it still reads from the sofa.
+
+**And there is twice as much space between the row and the grid underneath it**, which was still
+tighter than it should have been.
+
+## 1.20.2 — Genre tiles: pick your own, and they line up now
+
+Four things about the row of genre tiles 1.20.0 added, three of them wrong and one of them missing.
+
+**It never appeared on a TV library.** The row simply was not there, with no error anywhere — the
+lookup that fetches each tile's artwork needed a piece of information only a TV library asks for, and
+without it the request failed. The page is built to carry on when the tiles cannot be fetched, which
+is right, but it meant the failure was invisible. Films were unaffected.
+
+**The tiles started a gutter in from everything else.** The row sits inside the page, which has
+already indented its contents, and the row indented itself again — so the first tile and the heading
+sat about fifty pixels to the right of the grid below them. They line up now, and there is proper
+space between the tiles and the grid instead of the two touching.
+
+**You can now choose the genres yourself, and put them in whatever order you like.** Settings ›
+Libraries › Libraries sections has a **Choose** button per library: leave it on the most common
+genres, as before, or name exactly the ones you want and arrange them with the arrows. A genre the
+library has since lost is left out of the row rather than opening on nothing, and your choice is kept.
+
+Also: a live TV library is no longer offered a row it could never have shown — it has channels rather
+than titles. And **Save on that page stayed greyed after one press** until you left and came back; the
+save itself had gone through, which is why it said nothing.
+
+## 1.20.1 — The scrollbar stays put after you save an edit
+
+Scroll a long way down a library, edit a title, press Save, and the page would wander about for
+several seconds before settling — usually nowhere near where you had been. It has done that since the
+beginning.
+
+Saving redraws the page, because that is how the change shows. The redraw started the grid again from
+the first sixty titles, so your position was suddenly past the end of a much shorter page; LENTA then
+tried to put you back by scrolling down and waiting for the next sixty to load, and again, and again,
+up to forty times. Scrolling is what makes the next titles load, so the hunt could not help being
+visible — and the further down you were, the longer it went on.
+
+It no longer throws away what was already there: a redraw asks for as many titles as were on screen,
+in one go, so the page comes back the same height and your place is simply still there. Measured on a
+library of 150 titles: the page used to end up nearly 2,000 pixels from where it started, and now does
+not move at all.
+
+## 1.20.0 — Browse a library by genre
+
+A library grid is two thousand films in the order they arrived. Finding something **in a mood** means
+knowing what you want before you start, and the genre dropdown in the toolbar asks you to.
+
+A library can now show a row of **genre tiles** above its grid instead. The genres are the ones that
+library has most of, so the row describes the shelf rather than listing every label TMDB has ever
+attached to anything, and each tile wears the artwork of the best-rated title in it. Open one and you
+get that genre with the **best rated first** — so the picture on the tile is the first thing behind it,
+not a random still.
+
+Switch it on per library in **Settings › Libraries › Libraries sections**, where you also choose how
+many tiles each one shows. It is off until you do. Like the Home screen's shape, it belongs to whoever
+set LENTA up: a library is one shelf for the whole house, so everyone who can see it sees the same row.
+
+Small things that follow from it: the row is hidden once you are inside a genre, because there it would
+be a way back out rather than a way in, and a genre carried by only a handful of titles does not get a
+tile unless the library is small enough that it would otherwise show nothing.
+
 ## 1.19.3 — The trailers come back
 
 1.19.0 told browsers to say nothing about where they had come from. That was meant to keep a stream

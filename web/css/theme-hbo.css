@@ -218,3 +218,48 @@
 html.tv[data-theme="hbo"] .card .frame-link:focus .frame::after { border-color: #fff; border-radius: 8px; }
 html.tv[data-theme="hbo"] .card .frame-link:focus .frame { transform: scale(1.06); transition: transform .2s; }
 html.tv[data-theme="hbo"] .rail a:focus { color: #fff; background: rgb(255 255 255 / .14); }
+
+/* =====================================================================================================
+   Phones held upright: the shared phone look (html.nfx, set by ui.js syncNfx)
+
+   Since 1.21.0 this theme gets the same phone layout the Netflix theme has — poster tiles with no
+   title repeated underneath, the chips header, the floating tab bar — because that is what was asked
+   for. The class is still called `nfx`; every rule lives in theme-netflix.css and is written against
+   it, and this file loads afterwards, so what follows is the short list of places where that layout
+   speaks with the wrong voice: **its colours and its lettering**. The structure is left exactly as it
+   is, deliberately — that is the whole point of sharing it.
+
+   What is NOT shared is the billboard. `nfxBillboard()` in ui.js stays Netflix-only, so Home here
+   keeps this theme's own banner and the trailer that plays on it.
+   ===================================================================================================== */
+/* the brand's dark indigo glow, which html.nfx would otherwise flatten to plain black — on Home too,
+   where Netflix tints the page with the billboard's colour and this theme has no billboard to tint from */
+html.nfx[data-theme="hbo"] body,
+html.nfx[data-theme="hbo"] body.home-page {
+  background: radial-gradient(130% 85% at 50% -12%, #19122C 0%, #0A0812 42%, #000 78%) fixed, #000;
+}
+/* Max Blue, not Netflix red: the line under a Continue Watching poster is the one coloured thing on a tile */
+html.nfx[data-theme="hbo"] .nfx-prog i { background: linear-gradient(90deg, #002BE7, #71B8F2); }
+/* a tile with no artwork yet, and the strip under a Continue Watching poster: this theme's own panel */
+html.nfx[data-theme="hbo"] .nfx-card .frame,
+html.nfx[data-theme="hbo"] .nfx-cw { background: var(--bg-3); }
+/* light lettering is what this theme is: headings stay weight 400 at the phone layout's size rather
+   than the 700 the Netflix rules set (see the note at the top of this file) */
+html.nfx[data-theme="hbo"] .row h2 { font: 400 20px/1.2 var(--display); letter-spacing: -.01em; }
+html.nfx[data-theme="hbo"] .mh-title { font-weight: 400; letter-spacing: -.025em; }
+/* "Recently added" on a phone tile: **this theme's own pill, the one the web interface shows** — the
+   dark panel in the top-left corner with the hairline border and the fully rounded ends. It is
+   inherited whole from the rule at the top of this file; the only thing said again here is the size.
+
+   1.21.0 moved it to the bottom edge in Max Blue, copying how the Netflix tiles carry theirs. That
+   was the wrong instinct: the layout is shared, the badge is the theme's, and he said so. What is
+   true is that the desktop pill does not fit — at 10px with `.1em` tracking "RECENTLY ADDED" is
+   about 126px against a 116px tile, so it wrapped to two lines and took the corner. Hence a smaller
+   pill rather than a different one. Keep it fitting: `test_phone_look.py` measures it against the
+   tile, which is the check that matters if this type is ever changed.
+
+   `border-radius` has to be said again even though this theme already sets it: the shared rule gives
+   the badge the Netflix tab's `3px 3px 0 0`, and it out-specifies `[data-theme="hbo"] .new-badge`. */
+html.nfx[data-theme="hbo"] .nfx-card .new-badge {
+  border-radius: 100px; font-size: 8.5px; letter-spacing: .05em; padding: 4px 8px; white-space: nowrap;
+}

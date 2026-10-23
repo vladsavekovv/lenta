@@ -41,12 +41,230 @@ export async function renderAdminPage(page, body, q = new URLSearchParams()) {
   window.addEventListener('hashchange', stop);
   if (page === 'dashboard') return dashboard(body);
   if (page === 'libraries') return libraries(body);
+  if (page === 'library-sections') return librarySections(body);
   if (page === 'users') return users(body);
   if (page === 'fix-matches') return metadata(body, q);
   if (page === 'logs') return logs(body);
   if (page === 'livetv') return renderLiveTv(body);
   if (page === 'streaming') return renderStreaming(body);
   return settings(body, SETTINGS_PAGES[page] ? page : 'general');
+}
+
+// ---------------------------------------------------------------- library sections
+/** Which libraries carry a row of genre tiles above their grid, and which genres are on it.
+ *
+ * A genre tile is a shortcut into the part of a shelf you are actually in the mood for: open it and
+ * you get that genre with the best-rated titles first.
+ *
+ * Two ways to fill the row, and the second is why this page has a dialog. **The most common** genres
+ * describe the shelf — the row says what the library is mostly made of, and it follows the library as
+ * it grows, which is the right default and all 1.20.0 could do. **The ones he chooses** are something
+ * else: a curated row, in his order, with no floor and no count, because the row is then the list. The
+ * dialog is the only place that distinction is made; everything downstream just reads the result.
+ *
+ * Server-wide and set here, for the same reason the Home screen's shape belongs to whoever set LENTA
+ * up: a library is one shelf for the whole house.
+ */
+// Kinds whose titles carry genres. Matches `api_library.GENRE_TILE_KINDS`, which is the authority —
+// a library of any other kind is answered with no genres whatever is stored for it.
+const GENRE_TILE_KINDS = ['movies', 'shows', 'music', 'audiobooks'];
+const GENRE_TILES_MAX = 24;
+
+async function librarySections(body) {
+  const draw = async () => {
+    const [libs, settings] = await Promise.all([
+      api.get('/api/admin/libraries'),
+      api.get('/api/admin/settings'),
+    ]);
+    let stored = {};
+    try { stored = JSON.parse(settings.library_sections || '{}') || {}; } catch { stored = {}; }
+    // A photo album has no genres and a live TV library has channels rather than titles, so neither is
+    // offered a row. Live TV was offered one until 1.20.2, which it could never have shown.
+    const eligible = libs.filter(l => GENRE_TILE_KINDS.includes(l.kind));
+
+    // One shape in hand for every library, whichever of the two is stored: `{ on, count, genres }`.
+    // A plain number is 1.20.0's automatic row; an object may name the genres in the order he wants
+    // them. Writing always sends the object, so the older shape is read and then left behind.
+    const cfg = {};
+    eligible.forEach((l) => {
+      const v = stored[String(l.id)];
+      const o = v && typeof v === 'object' ? v : {};
+      const names = Array.isArray(o.genres) ? o.genres.filter(g => typeof g === 'string' && g.trim()) : [];
+      const n = Number(typeof v === 'object' ? o.count : v) || 0;
+      cfg[l.id] = { on: !!(names.length || n), count: Math.min(GENRE_TILES_MAX, n || 12), genres: names };
+    });
+    const available = {};                           // library id -> [{ name, count }], filled in below
+
+    const summary = (l) => {
+      const c = cfg[l.id];
+      if (!c.on) return 'No row';
+      if (!c.genres.length) return `The ${c.count} most common`;
+      return `${c.genres.length} chosen: ${c.genres.join(', ')}`;
+    };
+    const redrawRow = (l) => {
+      const cell = body.querySelector(`[data-choice="${l.id}"]`);
+      if (cell) cell.textContent = summary(l);
+      const btn = body.querySelector(`[data-pick="${l.id}"]`);
+      if (btn) btn.disabled = !cfg[l.id].on;
+    };
+
+    mount(body, html`
+      <p class="lead" style="margin-bottom:18px">A library can show a row of <b>genre tiles</b> above its
+        grid, and opening one shows that genre with the <b>best rated first</b>. Leave it on the most
+        common genres, or choose exactly which to show and in what order. Everyone who can see the
+        library sees the same row.</p>
+      ${eligible.length ? html`<div class="table-wrap"><table class="table">
+        <thead><tr><th>Library</th><th>Genres available</th><th>Show the row</th><th>Which genres</th></tr></thead><tbody>
+        ${eligible.map(l => html`<tr>
+          <td><div style="display:flex;gap:10px;align-items:center;font-weight:600"><span style="width:20px;color:var(--accent)">${icon(KIND_ICON[l.kind])}</span>${l.name}</div>
+            <div class="sub">${KIND_NAMES[l.kind]}</div></td>
+          <td class="sub" data-genres="${l.id}">…</td>
+          <td><label class="check"><input type="checkbox" data-on="${l.id}" ${cfg[l.id].on ? raw('checked') : ''}><span>On</span></label></td>
+          <td><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn small" data-pick="${l.id}" ${cfg[l.id].on ? '' : raw('disabled')}>Choose…</button>
+            <span class="sub" data-choice="${l.id}">${summary(l)}</span></div></td></tr>`)}</tbody></table></div>`
+      : html`<div class="empty"><h3>No libraries to show a row in</h3>
+          <p>Make a movie, TV, music or audiobook library first — a photo library has no genres, and a
+            live TV library has channels rather than titles.</p></div>`}
+      <div class="actions" style="margin-top:20px"><button class="btn primary" id="ls-save">Save changes</button>
+        <span class="sub" id="ls-note"></span></div>`);
+
+    // What genres each library actually has, so neither the table nor the dialog is choosing blind.
+    // Fetched after the table is drawn rather than before it: the page should not wait on it, and the
+    // Choose button says so if it is pressed first.
+    eligible.forEach(async (l) => {
+      const cell = body.querySelector(`[data-genres="${l.id}"]`);
+      try {
+        const gs = await api.get(`/api/libraries/${l.id}/genres`);
+        available[l.id] = gs;
+        if (cell?.isConnected) {
+          cell.textContent = gs.length
+            ? `${gs.length} genres · most common: ${gs.slice(0, 3).map(g => g.name).join(', ')}`
+            : 'none yet — scan the library first';
+        }
+      } catch { if (cell?.isConnected) cell.textContent = ''; }
+    });
+
+    body.querySelectorAll('[data-on]').forEach(cb => cb.addEventListener('change', () => {
+      const l = eligible.find(x => String(x.id) === cb.dataset.on);
+      cfg[l.id].on = cb.checked;
+      redrawRow(l);
+    }));
+
+    // ---- choosing and ordering the genres for one library
+    const pick = (l) => {
+      const all = available[l.id];
+      if (!all) return toast('Still reading that library’s genres — try again in a moment');
+      if (!all.length) return toast('That library has no genres yet — scan it first', 'error');
+      const c = cfg[l.id];
+      let mode = c.genres.length ? 'chosen' : 'common';
+      let chosen = c.genres.slice();
+      const countOf = (name) => (all.find(g => g.name === name) || {}).count;
+
+      const m = modal(html`<h2>Genre tiles — ${l.name}</h2>
+        <div class="field"><label class="check"><input type="radio" name="gt-mode" value="common" ${mode === 'common' ? raw('checked') : ''}>
+          <span>The most common genres in this library</span></label>
+          <label class="check"><input type="radio" name="gt-mode" value="chosen" ${mode === 'chosen' ? raw('checked') : ''}>
+            <span>The ones I choose, in my order</span></label></div>
+        <div class="field" id="gt-common-f"><label for="gt-count">How many tiles</label>
+          <select class="input" id="gt-count" style="max-width:120px">
+            ${[6, 8, 10, 12, 16, 20, 24].map(n => html`<option value="${n}" ${n === c.count ? raw('selected') : ''}>${n}</option>`)}</select></div>
+        <div class="field" id="gt-chosen-f">
+          <label>Shown in this order</label>
+          <ol class="sec-order" id="gt-list"></ol>
+          <div class="sec-actions"><select class="input" id="gt-add" style="max-width:260px"></select>
+            <button type="button" class="btn" id="gt-add-btn">${icon('plus')}Add</button></div>
+          <span class="hint">Up to ${GENRE_TILES_MAX}. A genre with nothing in it is left out of the row
+            rather than shown empty.</span>
+        </div>
+        <div class="foot"><button type="button" class="btn" data-close>Cancel</button>
+          <button type="button" class="btn primary" id="gt-done">Done</button></div>`, { wide: true });
+
+      const list = m.box.querySelector('#gt-list');
+      const addSel = m.box.querySelector('#gt-add');
+      const renderList = () => {
+        mount(list, chosen.length ? html`${chosen.map((name, i) => html`<li class="sec-item" data-genre="${name}">
+          <span class="sec-grip" aria-hidden="true">${icon('grip')}</span>
+          <span class="sec-name"><b>${name}</b><small>${countOf(name) === undefined ? 'not in this library any more'
+            : `${countOf(name)} ${countOf(name) === 1 ? 'title' : 'titles'}`}</small></span>
+          <button type="button" class="sec-btn" data-move="-1" ${i === 0 ? raw('disabled') : ''} aria-label="Move ${name} up">${icon('chevron-up')}</button>
+          <button type="button" class="sec-btn" data-move="1" ${i === chosen.length - 1 ? raw('disabled') : ''} aria-label="Move ${name} down">${icon('chevron-down')}</button>
+          <button type="button" class="sec-btn" data-remove aria-label="Remove ${name}">${icon('close')}</button></li>`)}`
+          : html`<li class="sec-empty">Nothing chosen yet — add a genre below.</li>`);
+        const left = all.filter(g => !chosen.includes(g.name));
+        mount(addSel, html`${left.map(g => html`<option value="${g.name}">${g.name} · ${g.count} ${g.count === 1 ? 'title' : 'titles'}</option>`)}`);
+        addSel.disabled = !left.length || chosen.length >= GENRE_TILES_MAX;
+        m.box.querySelector('#gt-add-btn').disabled = addSel.disabled;
+      };
+      const showMode = () => {
+        m.box.querySelector('#gt-common-f').hidden = mode !== 'common';
+        m.box.querySelector('#gt-chosen-f').hidden = mode !== 'chosen';
+      };
+      renderList();
+      showMode();
+
+      m.box.querySelectorAll('[name="gt-mode"]').forEach(r => r.addEventListener('change', () => {
+        mode = r.value;
+        showMode();
+      }));
+      m.box.querySelector('#gt-add-btn').addEventListener('click', () => {
+        const name = addSel.value;
+        if (name && !chosen.includes(name) && chosen.length < GENRE_TILES_MAX) { chosen.push(name); renderList(); }
+      });
+      list.addEventListener('click', (e) => {
+        const li = e.target.closest('li[data-genre]');
+        if (!li) return;
+        const i = chosen.indexOf(li.dataset.genre);
+        if (i < 0) return;
+        if (e.target.closest('[data-remove]')) chosen.splice(i, 1);
+        else {
+          const dir = Number(e.target.closest('[data-move]')?.dataset.move || 0);
+          const j = i + dir;
+          if (!dir || j < 0 || j >= chosen.length) return;
+          chosen.splice(j, 0, chosen.splice(i, 1)[0]);
+        }
+        renderList();
+      });
+      m.box.querySelector('#gt-done').addEventListener('click', () => {
+        // "Most common" is stored as no list at all, so the row keeps following the library as it
+        // grows. An empty chosen list would mean no tiles, which is what the On switch is for — so it
+        // falls back to the automatic row rather than silently showing nothing.
+        c.count = Number(m.box.querySelector('#gt-count').value) || 12;
+        c.genres = mode === 'chosen' ? chosen.slice() : [];
+        if (mode === 'chosen' && !chosen.length) toast('Nothing chosen — showing the most common instead');
+        redrawRow(l);
+        m.close();
+      });
+    };
+    body.querySelectorAll('[data-pick]').forEach(btn => btn.addEventListener('click', () => {
+      pick(eligible.find(x => String(x.id) === btn.dataset.pick));
+    }));
+
+    body.querySelector('#ls-save')?.addEventListener('click', async (e) => {
+      const out = {};
+      eligible.forEach((l) => {
+        const c = cfg[l.id];
+        if (!c.on) return;
+        out[l.id] = c.genres.length ? { count: c.genres.length, genres: c.genres } : { count: c.count };
+      });
+      // The button is taken hold of here, not read back out of the event later: `e.currentTarget` is
+      // only set while the event is being dispatched, and after the first `await` it is null. Written
+      // the other way round in 1.20.0, the `finally` threw — so the save went through, nothing was
+      // said, and **Save stayed greyed until you left the page and came back**. Every other handler in
+      // this file captures the button first; this one now does too.
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        await api.put('/api/admin/settings', { library_sections: JSON.stringify(out) });
+        toast(Object.keys(out).length ? 'Saved — open a library to see the row' : 'Saved — no genre rows');
+      } catch (ex) {
+        toast(ex.message || 'Not saved', 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  };
+  await draw();
 }
 
 // ---------------------------------------------------------------- dashboard

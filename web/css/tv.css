@@ -252,3 +252,11 @@ html.tv.av-on .player { background: transparent !important; }
 html.tv.av-on .player > video { display: none !important; }
 /* the controls still need to be readable against whatever the film is showing */
 html.tv.av-on .player .chrome { background: linear-gradient(transparent 55%, rgba(0, 0, 0, .72)) !important; }
+
+/* ---- 11. Genre tiles across a room -------------------------------------------------
+   The name on a genre tile wears the "Recently added" badge's style, which is a 12px
+   uppercase pill — right at a desk, and too small from a sofa. Same pill, bigger type.
+   Scoped to html.tv like everything else in this file; see the test in test_tv_remote.py
+   that enforces that. */
+html.tv .genre-name { font-size: 20px !important; padding: 10px 20px !important; }
+html.tv .genre-count { font-size: 17px !important; padding: 4px 11px !important; }

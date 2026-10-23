@@ -265,6 +265,35 @@ export function posterCard(item, opts = {}) {
   </div>`;
 }
 
+/** One genre, as a tile: the artwork of its best-rated title with the genre's name over it.
+ *
+ * A genre has no picture of its own, so it borrows the one from the title you will land on first when
+ * you open it — the drill-down is sorted by rating, so the face on the tile is the thing behind it
+ * rather than a random still. `count` is how many titles carry the genre, which is what decides the
+ * order of the row: the point of it is what the library is mostly made of.
+ */
+export function genreTile(g, libraryId) {
+  const src = g.backdrop || g.poster;
+  const href = `#/library/${libraryId}?genre=${encodeURIComponent(g.name)}&sort=rating`;
+  return html`<a class="card genre-tile" href="${href}"
+      aria-label="${g.name} — ${g.count} ${g.count === 1 ? 'title' : 'titles'}, best rated first">
+    <div class="frame">${src ? html`<img loading="lazy" src="${img(src, 500)}" alt="">` : ''}
+      <span class="genre-name">${g.name}</span>
+      <span class="genre-count">${g.count}</span></div></a>`;
+}
+
+/** The row of them, above a library's grid. Nothing at all when the library has no tiles configured. */
+export function genreRow(genres, libraryId) {
+  if (!genres || !genres.length) return '';
+  return html`<section class="row genre-row" aria-label="Genres">
+    <h2>Browse by genre</h2>
+    <div class="scroller">
+      <button class="scroll-btn prev" data-scroll="-1" aria-label="Scroll left">${icon('back')}</button>
+      <div class="track landscape">${genres.map(g => genreTile(g, libraryId))}</div>
+      <button class="scroll-btn next" data-scroll="1" aria-label="Scroll right">${icon('next')}</button>
+    </div></section>`;
+}
+
 export function landscapeCard(item, opts = {}) {
   let art = item.thumb || item.backdrop || item.show_backdrop;
   if (item.kind === 'movie' || item.kind === 'show') art = item.backdrop || item.thumb;
@@ -426,13 +455,24 @@ export function rankCard(item, n) {
 // Posters in every row, "Continue Watching for <name>" with a play circle, the progress line and ⓘ / ⋮ under each
 // picture, a billboard card with Play and My List, a header with the page name and library chips, a floating tab bar.
 export const nfx = () => document.documentElement.classList.contains('nfx');
+// Two themes get it, not one (1.21.0). It began as the Netflix app's look and the class is still
+// called `nfx` because every rule in theme-netflix.css is written against that name; **HBO Max asked
+// for the same thing** — the same poster tiles with no title under them, the same chips header, the
+// same floating tab bar. What it does NOT get is the billboard: `nfxBillboard()` below stays
+// Netflix's alone, because he wants HBO's own banner and the trailer that plays on it.
+// A theme added here inherits the whole phone layout, so add one only on purpose.
+const PHONE_LOOK = ['netflix', 'hbo'];
 /** Turns the look on or off for the current theme and screen; true when it changed. */
 export function syncNfx() {
-  const on = document.documentElement.dataset.theme === 'netflix' && window.matchMedia('(max-width: 720px)').matches;
+  const on = PHONE_LOOK.indexOf(document.documentElement.dataset.theme) >= 0
+    && window.matchMedia('(max-width: 720px)').matches;
   const was = nfx();
   document.documentElement.classList.toggle('nfx', on);
   return on !== was;
 }
+/** The framed poster billboard on Home, and the still picture instead of a trailer that goes with it.
+ *  Netflix's alone: HBO keeps its own hero and its trailer, which is what he asked for by name. */
+export const nfxBillboard = () => nfx() && document.documentElement.dataset.theme === 'netflix';
 let viewer = '';
 export function setViewer(name) { viewer = name || ''; }
 

@@ -182,6 +182,13 @@ let fitTimer = 0;
 window.addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = setTimeout(fitNav, 120); });
 
 let keepScroll = false;
+/** True while refreshView() is redrawing and means to land back where you were.
+ *
+ * A view that pages its content (the library grid) can ask for as much as it had showing, instead of
+ * its usual first page — otherwise the redraw leaves a short page under a deep scroll position, and
+ * the restore below has to walk back down a page at a time, which is what made saving an edit send
+ * the scrollbar wandering for several seconds. */
+export const restoringScroll = () => keepScroll;
 
 // Draw the page again (after editing details, refreshing metadata...) without losing your place: the page keeps
 // its scroll position, rows keep theirs, and a library loads as many pages as it had shown.

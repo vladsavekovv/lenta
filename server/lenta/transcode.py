@@ -10,6 +10,7 @@ folder. Sessions start at an offset; seeking outside what has been produced
 starts a new session at the new position. FFmpeg is paused when it gets far
 ahead of the viewer and killed when the viewer goes away.
 """
+import json
 import os
 import re
 import secrets
@@ -23,7 +24,7 @@ from pathlib import Path
 
 from . import logs
 from .config import DEV_VP9, FFMPEG, TRANSCODE_DIR
-from .db import get_setting
+from .db import get_setting, jloads, set_setting
 
 log = logs.get("transcode")
 
@@ -75,14 +76,94 @@ NVDEC_FORMATS = {
 }
 
 
+def _nvdec_key(codec: str | None, pix_fmt: str | None) -> str:
+    return f"{codec or '?'}/{pix_fmt or '?'}"
+
+
+def nvdec_refused() -> set:
+    """What this machine's card has actually failed to decode, learned the hard way.
+
+    `NVDEC_FORMATS` above is what NVDEC supports **in general** — it is a reading of NVIDIA's own
+    table, and it says nothing about the card in this machine. A GTX 1070 is listed there as able to
+    decode AV1 and cannot: AV1 decoding arrived with the RTX 30 series, and FFmpeg says so plainly
+    ("Your platform doesn't support hardware accelerated AV1 decoding"). Rather than keep a second
+    table of which chip generation gained which codec — another list of assumptions, which is what
+    caused this — the first failure is remembered and never repeated.
+
+    Cleared by Settings › Dashboard › Detect hardware, which is what you press after changing the card.
+    """
+    try:
+        return set(jloads(get_setting("nvdec_refused"), []) or [])
+    except (TypeError, ValueError):
+        return set()
+
+
+def remember_nvdec_failure(codec: str | None, pix_fmt: str | None) -> None:
+    key = _nvdec_key(codec, pix_fmt)
+    known = nvdec_refused()
+    if key in known:
+        return
+    known.add(key)
+    set_setting("nvdec_refused", json.dumps(sorted(known)))
+    log.warning("This card cannot decode %s on the GPU; it will not be asked to again", key)
+
+
+def nvdec_can_decode(f: dict) -> tuple[bool, str]:
+    """Can the card decode this file at all — never mind where the filters run?
+
+    **This is asked in two places and both matter.** `gpu_pipeline_possible()` uses it to choose the
+    pipeline, and `build_command()` uses it to decide whether to pass `-hwaccel cuda` at all. 1.21.2
+    asked it in the first place only, which left the *fallback* command still saying `-hwaccel cuda` —
+    and FFmpeg does not quietly decode in software when that fails. Measured on his server, 23 Oct
+    2026, on the fallback LENTA had just switched to:
+
+        [av1] Failed setup for format cuda: hwaccel initialisation returned error.
+        [dec:av1] Error submitting packet to decoder: Function not implemented
+
+    repeated for every frame, forever. So **the safe path has to be safe about the decoder too**, not
+    only about the filters: without `-hwaccel`, FFmpeg decodes AV1 with libdav1d on the processor and
+    the picture arrives.
+    """
+    codec, pix = f.get("video_codec"), f.get("pix_fmt")
+    if pix not in NVDEC_FORMATS.get(codec or "", set()):
+        return False, f"NVDEC can't decode {codec} {pix}"
+    key = _nvdec_key(codec, pix)
+    if key in nvdec_refused():
+        return False, f"this card has already failed to decode {key}"
+    return True, ""
+
+
+def without_hwaccel(cmd: list) -> list:
+    """The same command with the hardware decoder taken off it.
+
+    The fallback command is built in `start_session`, **before** the failure that makes it necessary
+    has happened, so it cannot have consulted `nvdec_refused()` — on the very first film of a codec
+    the card turns out not to decode, the learned answer arrives one moment too late. Rather than
+    carry the build arguments around to rebuild it, the flags are taken off the command that exists.
+    `-hwaccel_output_format` and `-extra_hw_frames` are removed too, for a caller that passes a full
+    GPU command; the fallback itself only ever carries `-hwaccel`.
+    """
+    out, skip = [], 0
+    for i, a in enumerate(cmd):
+        if skip:
+            skip -= 1
+            continue
+        if a in ("-hwaccel", "-hwaccel_output_format", "-extra_hw_frames"):
+            skip = 1                               # drop the flag and its value
+            continue
+        out.append(a)
+    return out
+
+
 def gpu_pipeline_possible(f: dict, burn_sub_index: int | None) -> tuple[bool, str]:
     """Can this file be decoded, scaled and encoded without frames leaving the GPU?"""
     if hw["accel"] != "nvenc" or not hw["scale_cuda"]:
         return False, "no CUDA scaler"
     if burn_sub_index is not None:
         return False, "picture subtitles are drawn on the CPU"
-    if f.get("pix_fmt") not in NVDEC_FORMATS.get(f.get("video_codec") or "", set()):
-        return False, f"NVDEC can't decode {f.get('video_codec')} {f.get('pix_fmt')}"
+    can, why = nvdec_can_decode(f)
+    if not can:
+        return False, why
     if f.get("hdr") and not hw["tonemap_cuda"]:
         return False, "HDR tone mapping runs on the CPU with this FFmpeg build"
     return True, ""
@@ -91,6 +172,10 @@ def gpu_pipeline_possible(f: dict, burn_sub_index: int | None) -> tuple[bool, st
 PIPELINE_LABELS = {
     "gpu": "GPU decode → GPU scale → NVENC",
     "hybrid-nvenc": "GPU/CPU decode → CPU filters → NVENC",
+    # The card encodes but cannot decode this file, so the processor does the decoding. Named
+    # separately because "GPU/CPU decode" above reads as if the card might be helping, and when a
+    # film is heavy on the processor he should be able to see from the panel why.
+    "swdec-nvenc": "CPU decode → CPU filters → NVENC",
     "qsv": "Quick Sync",
     "vaapi": "VA-API",
     "cpu": "CPU (x264)",
@@ -101,6 +186,9 @@ PIPELINE_LABELS = {
 def detect_hardware() -> dict:
     """Probe which H.264 encoders really work on this machine (driver present, device reachable)."""
     with _hw_lock:
+        # Whatever this card could not decode is forgotten here, because this is the button you press
+        # after changing the card — and the old card's failures say nothing about the new one.
+        set_setting("nvdec_refused", "")
         src = ["-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25:duration=0.4"]
         device = get_setting("vaapi_device") or "/dev/dri/renderD128"
         tests = {
@@ -169,6 +257,9 @@ class Session:
     pipeline: str = "cpu"
     fallback_cmd: list | None = None
     stopped: bool = False
+    force_fallback: bool = False    # the watchdog saw nothing come out; take the safe command
+    codec: str = ""                 # what the source is, so a failed GPU attempt can be remembered
+    pix_fmt: str = ""
     done: threading.Event = field(default_factory=threading.Event)
 
     def produced_segments(self) -> int:
@@ -240,8 +331,10 @@ def build_command(f: dict, out: Path, start: float, mode: str, quality: str,
     if mode == "transcode":
         if accel == "nvenc" and gpu:
             cmd += ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda", "-extra_hw_frames", "4"]
-        elif accel == "nvenc":
+        elif accel == "nvenc" and nvdec_can_decode(f)[0]:
             cmd += ["-hwaccel", "cuda"]            # GPU decode when possible, frames come back for CPU filters
+        # and when the card cannot decode this file, no `-hwaccel` at all: it does not degrade to
+        # software on its own, it fails on every frame. See `nvdec_can_decode`.
         elif accel == "vaapi":
             cmd += ["-vaapi_device", get_setting("vaapi_device") or "/dev/dri/renderD128"]
     # -copyts keeps the film's own timestamps in the stream (and mpegts_copyts=1 below stops the TS
@@ -346,6 +439,44 @@ def _launch(session: Session, cmd: list) -> None:
     errlog.close()
 
 
+# How long a session may produce nothing before the watchdog takes the safer command. Comfortably
+# under the 40 s the client waits in `wait_for`, so the fallback still has time to make a segment.
+STARTUP_GRACE = 12
+
+
+def _watch_start(session: Session) -> None:
+    """Take the safe command if the full GPU pipeline produces nothing at all.
+
+    **The fallback in `_read_progress` only runs when FFmpeg exits**, and on a file the card cannot
+    decode FFmpeg does not exit quickly: it retries the decode, throttled by `-readrate`, for fifteen
+    seconds or more before giving up. The player stops the session long before that, and
+    `stop_session` sets `stopped`, which makes `_read_progress` return without ever reaching the
+    retry. So the recovery existed and could not be reached — every AV1 film failed with the safe
+    path sitting right there unused.
+
+    This is the half that does not depend on the client outlasting a slow failure, and it catches a
+    hung encoder as well as a failing one, for the same reason the player's own watchdog exists (see
+    the decode ceiling in CLAUDE.md): a stall reports nothing, so something has to go and look.
+    """
+    end = time.time() + STARTUP_GRACE
+    while time.time() < end:
+        if session.stopped or session.produced_segments() or not session.fallback_cmd:
+            return
+        time.sleep(0.5)
+    if session.stopped or session.produced_segments() or not session.fallback_cmd:
+        return
+    log.warning("Nothing came out of the full GPU pipeline for '%s' in %ds; taking the CPU-filter path",
+                session.title, STARTUP_GRACE)
+    session.force_fallback = True
+    try:
+        if session.proc:
+            if session.paused:
+                session.proc.send_signal(signal.SIGCONT)
+            session.proc.kill()                 # `_read_progress` wakes and does the relaunch
+    except OSError:
+        pass
+
+
 def _read_progress(session: Session) -> None:
     try:
         while True:
@@ -362,8 +493,13 @@ def _read_progress(session: Session) -> None:
                     except ValueError:
                         pass
             code = proc.wait()
-            if code in (0, -signal.SIGKILL, -signal.SIGTERM) or session.stopped:
+            if session.stopped:
                 return
+            # A kill is normally us, so it means "leave it alone" — unless the watchdog below did the
+            # killing, in which case the whole point was to come here and take the safer command.
+            if code in (0, -signal.SIGKILL, -signal.SIGTERM) and not session.force_fallback:
+                return
+            session.force_fallback = False
             try:
                 detail = (session.directory / "ffmpeg.log").read_text(errors="ignore")[-1500:]
             except OSError:
@@ -372,8 +508,14 @@ def _read_progress(session: Session) -> None:
                 # The all-GPU chain failed on this file (driver, codec profile...): redo it the safe way.
                 log.warning("Full GPU pipeline failed for '%s', retrying with CPU filters: %s",
                             session.title, detail.strip().splitlines()[-1:] or detail)
+                # And remember it, so the next film in this codec goes straight down the safe path
+                # instead of spending fifteen seconds discovering the same thing again.
+                remember_nvdec_failure(session.codec, session.pix_fmt)
                 cmd, session.fallback_cmd = session.fallback_cmd, None
-                session.pipeline = "hybrid-nvenc"
+                # The fallback was built before the failure was known, so it is still carrying
+                # `-hwaccel cuda` — which is the thing that just failed. Take it off.
+                cmd = without_hwaccel(cmd)
+                session.pipeline = "swdec-nvenc"
                 _launch(session, cmd)
                 continue
             session.error = detail
@@ -399,18 +541,24 @@ def start_session(*, user: dict, item: dict, f: dict, mode: str, quality: str, s
         pipeline = "copy"
     elif gpu:
         pipeline = "gpu"
+    elif hw["accel"] == "nvenc" and mode == "transcode" and not nvdec_can_decode(f)[0]:
+        pipeline = "swdec-nvenc"               # the card encodes but cannot decode this one
     else:
         pipeline = {"nvenc": "hybrid-nvenc", "qsv": "qsv", "vaapi": "vaapi"}.get(hw["accel"], "cpu")
     session = Session(id=sid, user_id=user["id"], username=user["username"], item_id=item["id"], file_id=f["id"],
                       title=item.get("display_title") or item["title"], mode=mode, quality=quality, start=start,
                       duration=f.get("duration") or 0, directory=out, cmd=cmd, pipeline=pipeline,
                       origin=origin)
+    session.codec = f.get("video_codec") or ""
+    session.pix_fmt = f.get("pix_fmt") or ""
     if gpu:
         session.fallback_cmd = build_command(f, out, start, mode, quality, audio_index, burn_sub_index, gpu=False)
     log.info("Starting %s session %s for '%s' at %.0fs (%s%s)", mode, sid, session.title, start,
              PIPELINE_LABELS[pipeline], f"; {why_not}" if why_not and hw["accel"] == "nvenc" else "")
     _launch(session, cmd)
     threading.Thread(target=_read_progress, args=(session,), daemon=True).start()
+    if session.fallback_cmd:
+        threading.Thread(target=_watch_start, args=(session,), daemon=True).start()
     with _sessions_lock:
         sessions[sid] = session
     return session

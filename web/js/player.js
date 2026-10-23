@@ -12,6 +12,17 @@ const sameLang = (a, b) => !!a && !!b && (a === b || a.split('-')[0] === b.split
 
 let P = null;
 const QUALITIES = [['original', 'Original'], ['1080p', '1080p · 10 Mbps'], ['720p', '720p · 4 Mbps'], ['480p', '480p · 1.5 Mbps']];
+// The same ceilings the server keeps in `transcode.QUALITIES`, and the same 1.3x allowance
+// `api_playback.decide()` gives a bitrate. They have to agree: this decides what the menu offers,
+// that decides what the server does with it, and when they disagree the menu promises a conversion
+// the server then declines to make. `tests/test_quality_menu.py` compares the two files.
+const QUALITY_LIMITS = { '1080p': [1080, 10_000_000], '720p': [720, 4_000_000], '480p': [480, 1_500_000] };
+/** True when the file already sits inside this quality, so choosing it would re-encode nothing. */
+function fitsQuality(v, f) {
+  const t = QUALITY_LIMITS[v];
+  if (!t || !f) return false;
+  return (f.height || 0) <= t[0] && (f.bitrate || 0) <= t[1] * 1.3;
+}
 const store = {
   get: (k, d) => { try { return localStorage.getItem(`lenta.${k}`) ?? d; } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem(`lenta.${k}`, v); } catch { /* private mode */ } },
@@ -1067,9 +1078,15 @@ function settingsMenu(kind, anchor) {
   const tick = (on, label) => `${label}${on ? '  ✓' : ''}`;
   let items = [];
   if (kind === 'quality') {
-    items = QUALITIES.map(([v]) => ({ label: tick(v === P.quality, qualityLabel(v)), action: () => {
-      P.quality = v; store.set('quality', v); load(position(), { keepPaused: P.video.paused }).then(redraw);
-    } }));
+    // Only the ones that would actually do something. A 720x544 film offered "1080p · 10 Mbps" does
+    // not become 1080p by being asked: the server sees that the file already fits inside that budget
+    // and repackages it untouched, correctly — but the menu had already promised otherwise, and then
+    // the panel reported "quality 1080p" over a 544-line picture. Picking it looked like a broken
+    // encoder, which is how it was reported. See `fitsQuality`.
+    items = QUALITIES.filter(([v]) => v === P.quality || !fitsQuality(v, currentFile()))
+      .map(([v]) => ({ label: tick(v === P.quality, qualityLabel(v)), action: () => {
+        P.quality = v; store.set('quality', v); load(position(), { keepPaused: P.video.paused }).then(redraw);
+      } }));
   } else if (kind === 'speed') {
     items = SPEEDS.map(([v, l]) => ({ label: tick(v === (P.video.playbackRate || 1), l), action: () => {
       P.speed = v; P.video.playbackRate = v; P.video.defaultPlaybackRate = v; redraw();

@@ -1,6 +1,6 @@
 // Browsing views: home, library, details, search, people, my list.
 import { api } from './api.js';
-import { state, refreshView, moveLibrary } from './app.js';
+import { state, refreshView, moveLibrary, restoringScroll } from './app.js';
 import { playTracks, currentTrackId, playBook, currentBookId, bookPosition, jumpToChapter, musicPaused, toggleMusic } from './music.js';
 import { adminItemMenu, libraryMenu } from './admin.js';
 import { onCleanup, openTrailer, stageHtml, startExtras, startHomeTrailer, stopHomeTrailer, wireStage } from './extras.js';
@@ -8,7 +8,8 @@ import { openSubtitleDialog } from './subtitles.js';
 import { tvMode } from './tv.js';
 import {
   $, $$, cardFor, channels, esc, fmtBytes, fmtRuntime, fmtTime, genPoster, html, icon, img, itemHref, lang, mount,
-  popMenu, posterCard, raw, row, safeUrl, squareCard, landscapeCard, toast, modal, wideArt, nfx,
+  genreRow, popMenu, posterCard, raw, row, safeUrl, squareCard, landscapeCard, toast, modal, wideArt, nfx,
+  nfxBillboard,
 } from './ui.js';
 
 const view = () => $('#view');
@@ -102,7 +103,7 @@ function nfxHero(h) {
 
 function hero(h) {
   if (!h) return '';
-  if (nfx()) return nfxHero(h);
+  if (nfxBillboard()) return nfxHero(h);
   const art = h.backdrop || h.thumb;
   return html`<section class="hero" data-art="${img(art, 1920)}">
     <div class="art" style="background-image:url('${img(art, 1920)}')"></div>
@@ -148,7 +149,10 @@ async function home() {
   // which on a TV is a visible stutter and throws away wherever the remote had got to. Neither is
   // worth what it costs there, and the trailer behind it cost more than both (see extras.js).
   if (data.hero && !tvMode()) tintFromPicture(document.querySelector('.hero')?.dataset.art);
-  if (!nfx() && !tvMode()) startHomeTrailer(data.hero);   // the phone billboard is a still card, like the app's
+  // Netflix's phone billboard is a still card, like the app's, so no trailer runs behind it.
+  // HBO's phone keeps its own banner and its trailer — that is why this asks for the billboard
+  // rather than for the phone look.
+  if (!nfxBillboard() && !tvMode()) startHomeTrailer(data.hero);
   if (data.hero && !tvMode()) rotateBanner(data.hero);
 }
 
@@ -187,7 +191,7 @@ function rotateBanner(first) {
       cur.classList.remove('trailer-on');
       tintFromPicture(cur.dataset.art);
       requestAnimationFrame(() => cur.classList.remove('swapping'));
-      if (!nfx()) startHomeTrailer(next);
+      if (!nfxBillboard()) startHomeTrailer(next);
     } catch { /* try again next time */ } finally { busy = false; }
   }, 1000);
   onCleanup(() => { clearInterval(tick); io.disconnect(); });
@@ -388,6 +392,14 @@ function tableRow(i, group) {
     <td>${i.rating ? i.rating.toFixed(1) : ''}</td><td class="tg">${(i.genres || []).slice(0, 3).join(', ')}</td><td>${added}</td></tr>`;
 }
 
+// How many titles each library view had on screen, so a redraw can come back the same height rather
+// than starting again from the first page. Keyed by the library and its filters, because changing a
+// filter is a different list and must start at the top. SHOWN_MAX is the server's own ceiling on one
+// request (`limit=Query(60, le=500)`): past that the redraw asks for 500 and `refreshView` walks the
+// rest, which is the old behaviour and only for someone scrolled past five hundred titles.
+const shown = new Map();
+const SHOWN_MAX = 500;
+
 async function library(id, q) {
   const lib = state.libraries.find(l => l.id === id);
   if (!lib) throw new Error('That library does not exist or is not shared with you.');
@@ -401,12 +413,27 @@ async function library(id, q) {
   const zoom = Math.min(7, Math.max(1, Number(state.prefs?.library_zoom || 4)));
   const render = (items) => items.map(i => mode === 'detail' ? detailRow(i, group) : mode === 'table' ? tableRow(i, group)
     : style === 'poster' ? posterCard(i, { captioned: true }) : cardFor(i, style));
-  const params = new URLSearchParams({ sort, limit: 60 });
-  if (filter) params.set('filter', filter);
-  if (genre) params.set('genre', genre);
-  const [first, genres] = await Promise.all([
+  // How much of this library was on screen last time it was drawn. Saving an edit redraws the page
+  // (that is how the change shows), and a redraw used to start again from the first 60 titles — so a
+  // deep scroll position landed on a page that was no longer tall enough to hold it, and `refreshView`
+  // had to walk back down sixty at a time, scrolling to drive each load. That is the scrollbar
+  // wandering about for seconds after Save. Asking for what was showing makes the page come back the
+  // same height, and the restore is then a single jump.
+  const viewKey = `${id}|${sort}|${filter}|${genre}|${q.get('q') || ''}`;
+  const PAGE = 60;
+  const want = restoringScroll() ? Math.min(SHOWN_MAX, Math.max(PAGE, shown.get(viewKey) || PAGE)) : PAGE;
+  const params = new URLSearchParams({ sort, limit: want });
+  const pageParams = new URLSearchParams({ sort, limit: PAGE });
+  if (filter) { params.set('filter', filter); pageParams.set('filter', filter); }
+  if (genre) { params.set('genre', genre); pageParams.set('genre', genre); }
+  // Three at once, not one after another — the tiles must not make the grid wait (see the Speed note
+  // in CLAUDE.md). The tile row answers with nothing at all unless an administrator has switched it on
+  // for this library, so this costs an empty round trip and no decision on the client's part.
+  const [first, genres, tiles] = await Promise.all([
     api.get(`/api/libraries/${id}/items?${params}&offset=0`),
     group === 'photos' ? Promise.resolve([]) : api.get(`/api/libraries/${id}/genres`),
+    group === 'photos' ? Promise.resolve({ genres: [] })
+      : api.get(`/api/libraries/${id}/genre-tiles`).catch(() => ({ genres: [] })),
   ]);
   const noun = { movies: 'movie', shows: 'show', music: 'album', audiobooks: 'book', photos: 'album' }[lib.kind];
   mount(view(), html`<div class="page">
@@ -431,6 +458,7 @@ async function library(id, q) {
         </div>
       </div>
     </div>
+    ${genre || filter || q.get('q') ? '' : genreRow(tiles.genres, id)}
     ${first.total ? '' : html`<div class="empty"><h3>Nothing here${filter || genre ? ' with these filters' : ' yet'}</h3>
       <p>${filter || genre ? 'Try a different filter.' : 'Files appear as soon as the library scan reads them.'}</p></div>`}
     ${mode === 'table' ? html`<div class="table-wrap"><table class="table ltable"><thead><tr>${tableHead(group, sort)}</tr></thead>
@@ -461,12 +489,14 @@ async function library(id, q) {
   $('#lib-menu-btn')?.addEventListener('click', (e) => libraryMenu(e.currentTarget, lib, { move: (dir) => moveLibrary(lib.id, dir) }));
 
   let offset = first.items.length, loading = false;
+  shown.set(viewKey, offset);
   const grid = $('#grid');
   const io = new IntersectionObserver(async (entries) => {
     if (!entries[0].isIntersecting || loading || offset >= first.total) return;
     loading = true;
-    const more = await api.get(`/api/libraries/${id}/items?${params}&offset=${offset}`);
+    const more = await api.get(`/api/libraries/${id}/items?${pageParams}&offset=${offset}`);
     offset += more.items.length;
+    shown.set(viewKey, offset);
     grid.insertAdjacentHTML('beforeend', render(more.items).map(x => x.s).join(''));
     loading = false;
     if (!more.items.length) io.disconnect();

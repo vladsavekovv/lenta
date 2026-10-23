@@ -240,6 +240,71 @@ select.input { appearance: none; padding-right: 36px;
   overflow: hidden; }
 .card.channel .frame img { width: auto; height: auto; max-width: 84%; max-height: 64%;
   min-width: 0; min-height: 0; object-fit: contain; }
+/* A genre tile: the artwork of the genre's best-rated title, dimmed, with the name on a pill in the
+   middle of it. 16/9 so the row lines up with every other landscape row on the page.
+
+   **The pill is the "Recently added" badge's style, deliberately** (1.20.3, asked for): the same
+   fully-rounded dark panel, hairline white border, uppercase and widely letter-spaced. Those numbers
+   are copied from `[data-theme="hbo"] .new-badge` rather than referred to, because the badge is a
+   theme's and the tile belongs to every theme — if that rule is restyled, this does not follow, and
+   it is not meant to.
+
+   The scrim behind it is flat rather than the gradient it used to be. The name sat along the bottom
+   then, so the picture was darkened towards the bottom to put something behind the words; centred,
+   that gradient darkens the wrong half and leaves the label standing in the lighter part.
+
+   The colours are written out rather than taken from var(), and in `rgba()` rather than the modern
+   slash form: this is drawn on the 2017 television build too, which has no custom properties and
+   would fall back to whatever the default theme happened to be (see the Televisions note in
+   CLAUDE.md). */
+.card.genre-tile .frame { aspect-ratio: 16 / 9; }
+.card.genre-tile .frame img { filter: brightness(.55) saturate(.85); transition: filter .18s ease, transform .18s ease; }
+.card.genre-tile:hover .frame img, .card.genre-tile:focus-visible .frame img { filter: brightness(.72) saturate(1); transform: scale(1.03); }
+.card.genre-tile .frame::after {
+  content: ''; position: absolute; inset: 0; background: rgba(0, 0, 0, .28);
+}
+.genre-name {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1;
+  max-width: calc(100% - 28px); box-sizing: border-box;
+  background: rgba(0, 0, 0, .62); border: 1px solid rgba(255, 255, 255, .28); border-radius: 100px;
+  color: #fff; font-size: 12px; font-weight: 600; line-height: 1; letter-spacing: .1em;
+  text-transform: uppercase; text-align: center; padding: 7px 14px; pointer-events: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.genre-count {
+  position: absolute; top: 10px; right: 12px; z-index: 1;
+  padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  color: #fff; background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px);
+}
+.genre-row h2 { font-size: 17px; }
+/* The row lives inside `.page`, which has already applied `--gutter` — and `.row h2` and `.track`
+   each apply it again, so the heading and the first tile sat a whole gutter in from the page's own
+   content edge while the grid underneath started at it. On Home the rows are full-bleed and the same
+   padding is exactly right, which is why this only showed up here.
+
+   So the row simply does not apply it a second time. 1.20.2 instead pulled the row back out to the
+   viewport edge with `margin-inline: calc(-1 * var(--gutter))` and let the track's own padding put it
+   back, which looks equivalent and is not: **`--gutter` is a percentage in the Netflix theme (4%), and
+   a percentage is resolved against the element's own containing block.** `.page` takes 4% of the page's
+   width; the row then takes -4% of `.page`'s *content* box, which is narrower; the track then takes 4%
+   of the row, which is wider again. At 1440px that lands the first tile on 61.8 against the grid's
+   57.6 — the four pixels `test_genre_tiles.py` caught, and only ever in that one theme.
+   **Two percentages of different boxes do not cancel. Do not reintroduce the negative margin.**
+
+   The scroll buttons now sit over the ends of the row rather than beside it. At the start of a row the
+   left one is hidden anyway (`.scroller:not(.can-left)`), they only appear on hover, and they are gone
+   entirely on a touch screen and on a television.
+
+   The bottom margin is the other half of what he reported: the track's own 10px is room for a card's
+   focus ring, not enough to tell two sections apart, so the grid sat right under the tiles. 26px in
+   1.20.2 was still too close to his eye; 52px is what he has now. */
+.page .genre-row { margin-bottom: 52px; }
+/* `.row.genre-row` rather than `.genre-row`, to carry one more class than the themes' own
+   `[data-theme=…] .row h2` rules — those tie with a plain `.page .genre-row h2` and win on load
+   order, which left the heading a gutter in from its own tiles in the Netflix theme. */
+.page .row.genre-row h2 { margin-left: 0; margin-right: 0; }
+.page .row.genre-row .track { padding-left: 0; padding-right: 0; scroll-padding-left: 0; }
+
 .scroll-btn {
   position: absolute; top: 4px; bottom: 10px; width: calc(var(--gutter) - 4px); min-width: 36px;
   border: 0; background: rgb(var(--bg-rgb) / .78); color: var(--text); cursor: pointer; z-index: 2;
