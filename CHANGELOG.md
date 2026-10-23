@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.21.4 — A scroll bar that belongs to the theme
+
+The scroll bar was the one piece of LENTA that ignored which theme you were wearing: the browser's
+default, chunky, grey, with a pale track beside it, the same in all seven.
+
+It is slim now and wears the theme's own accent — red in Netflix, Max Blue in HBO Max, teal in Abyss
+— and brightens to the full colour when you reach for it. The track is gone, so it takes ten pixels
+where it used to take about fifteen. The Settings sidebar gets the same treatment rather than
+keeping its own grey one, and televisions are unaffected: they have never drawn a scroll bar,
+because the remote does the scrolling.
+
 ## 1.21.3 — The same film, properly this time
 
 1.21.2 worked out that this graphics card cannot decode AV1 and stopped asking it to. It then handed

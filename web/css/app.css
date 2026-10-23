@@ -1316,6 +1316,41 @@ body.rail-collapsed .lib-item > a { padding-right: 12px; }
 .tr-order { margin: 0; padding-left: 20px; display: grid; gap: 10px; font-size: 14px; }
 .tr-order code { font-size: 12.5px; background: rgb(255 255 255 / .07); padding: 1px 5px; border-radius: 4px; }
 
+/* ---------- Scroll bars: slim, and in whatever theme you are wearing ----------
+   The thumb is the theme's own accent, so it is red in Netflix, Max Blue in HBO and teal in Abyss
+   without a line per theme — every theme defines --accent. No track at all, which takes the gutter
+   from the browser's ~15px down to 10.
+
+   **The two ways of styling a scroll bar do not compose, and it fails silently.** Chromium ignores
+   ::-webkit-scrollbar entirely the moment `scrollbar-width` is set on the same element — measured
+   23 Oct 2026 in Chromium 141: an 8px bar came back as the browser's own 10px. So the standards
+   track and the WebKit pseudo-elements are kept apart by @supports and never both apply. Checked in
+   Chromium: the gate answers true, the bar measures the 10px asked for, and `scrollbar-width` stays
+   `auto`, i.e. the other branch really is inert. **The Firefox branch has not been run** — no Gecko
+   in the sandbox — so if a bar ever looks wrong there, that is the half to doubt.
+
+   Nothing here reaches a television: `html.tv ::-webkit-scrollbar` below hides every bar, and it
+   carries a class so it out-specifies these. The rows (`.track`, `.tabs`, `.cast-row`, `.mh-chips`)
+   hide their own for the same reason — a class beats a bare pseudo-element.
+
+   `var()` is safe here although the 2017 build has no custom properties, which is the one place in
+   this stylesheet that is true: that build only ever runs on a television, where the bar is hidden. */
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+  /* The 2px transparent border plus content-box clipping is what makes a 10px gutter carry a 6px
+     thumb with air around it, rather than a bar wedged against the edge. */
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--accent) 60%, transparent);
+    border: 2px solid transparent; background-clip: content-box; border-radius: 100px; }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent); background-clip: content-box; }
+}
+@supports not selector(::-webkit-scrollbar) {
+  html:not(.tv) { scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--accent) 60%, transparent) transparent; }
+}
+
 /* ---------- TV mode (remote control): a clear highlight on whatever the remote is on ---------- */
 html.tv *:focus { outline: none; }
 html.tv a:focus, html.tv button:focus, html.tv input:focus, html.tv select:focus, html.tv textarea:focus, html.tv [tabindex]:focus {
@@ -1511,7 +1546,9 @@ html.tv ::-webkit-scrollbar { display: none; }                   /* TVs: no scro
 /* ---- Settings: one page with a sidebar (settings-shell.js) ------------------------------------------ */
 .sset { display: grid; grid-template-columns: 268px minmax(0, 1fr); align-items: start; min-height: 100vh; }
 .sset-nav { position: sticky; top: var(--topbar, 0px); height: calc(100vh - var(--topbar, 0px)); overflow-y: auto; overscroll-behavior: contain;
-  background: rgb(var(--deep-rgb) / .55); border-right: 1px solid var(--line); padding: 18px 0 40px; scrollbar-width: thin; }
+  background: rgb(var(--deep-rgb) / .55); border-right: 1px solid var(--line); padding: 18px 0 40px; }
+/* No `scrollbar-width` here on purpose: setting it makes Chromium ignore the themed bar above and
+   draw its own grey one instead. The sidebar takes the same slim accent bar as everything else. */
 .sset-menu-btn { display: none; }
 .sset-brand { display: flex; align-items: center; gap: 12px; padding: 4px 20px 18px; }
 .sset-brand img { width: 40px; height: 40px; object-fit: contain; }
