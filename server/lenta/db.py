@@ -268,6 +268,20 @@ CREATE TABLE IF NOT EXISTS stream_art (       -- a picture you chose yourself, i
     PRIMARY KEY (tmdb_id, kind)
 );
 
+-- 1.26.0: a key for one program acting for one account (assistant.py). Only a hash is kept; the key
+-- itself is shown once, when it is made. Signing out does not touch it — withdrawing it does.
+CREATE TABLE IF NOT EXISTS assistant_keys (
+    id          INTEGER PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    hash        TEXT NOT NULL UNIQUE,
+    hint        TEXT NOT NULL,              -- the first characters, so a list can tell keys apart
+    scopes      TEXT NOT NULL DEFAULT '[]', -- JSON list, see assistant.SCOPES
+    created_at  REAL,
+    last_used   REAL,
+    expires_at  REAL                        -- NULL: until withdrawn
+);
+
 CREATE TABLE IF NOT EXISTS watchlist (
     user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     item_id  INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,

@@ -758,6 +758,39 @@ def scan_library(library_id: int, refresh_metadata: bool = False, folders: list[
             with db() as con:
                 con.execute("UPDATE libraries SET last_scan = ?, scan_report = ? WHERE id = ?",
                             (now(), json.dumps(report), library_id))
+        _announce(lib, started, report, periodic)
+
+
+def _announce(lib: dict, started: float, report: dict, periodic: bool) -> None:
+    """Tell the event stream (events.py, 1.26.0) what this scan brought: new titles, and how it went.
+
+    New means added since the scan began. A new episode of a show already here is announced with its
+    show, so "the new episode of X arrived" can be said; a whole new show is one show, not its episodes.
+    A quiet periodic look that found nothing says nothing at all.
+    """
+    try:
+        from . import events
+        with db() as con:
+            rows = con.execute(
+                "SELECT i.id, i.kind, sh.id AS show_id, sh.added_at AS show_added FROM items i "
+                "LEFT JOIN items se ON i.kind = 'episode' AND se.id = i.parent_id "
+                "LEFT JOIN items sh ON i.kind = 'episode' AND sh.id = se.parent_id "
+                "WHERE i.library_id = ? AND i.added_at >= ? "
+                "AND i.kind IN ('movie', 'show', 'episode', 'photoalbum', 'album', 'book') "
+                "ORDER BY i.id LIMIT 500", (lib["id"], started)).fetchall()
+        items = [r["id"] for r in rows if r["kind"] != "episode"]
+        episodes = [r for r in rows if r["kind"] == "episode" and (r["show_added"] or 0) < started]
+        if items or episodes:
+            events.publish("added", {"library_id": lib["id"], "item_ids": items,
+                                     "episode_ids": [r["id"] for r in episodes],
+                                     "show_ids": sorted({r["show_id"] for r in episodes if r["show_id"]})},
+                           library_id=lib["id"])
+        if not periodic or not report.get("ok", True) or items or episodes:
+            events.publish("scan", {"library_id": lib["id"], "ok": bool(report.get("ok")),
+                                    "added": report.get("added"), "removed": report.get("removed"),
+                                    "failed": report.get("failed")}, library_id=lib["id"])
+    except Exception:
+        log.debug("Could not announce the scan of %s", lib.get("name"), exc_info=True)
 
 
 def _reparse_movies(lib: dict, roots: list) -> int:

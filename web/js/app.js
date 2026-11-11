@@ -7,6 +7,7 @@ import { inAndroidApp, installAvailable, promptInstall } from './pwa.js';
 import { renderAuth, changePasswordDialog } from './auth.js';
 import { views } from './views.js';
 import { libraryMenu } from './admin.js';
+import { startRemote, stopRemote } from './remote.js';
 import { openPlayer, openLiveChannel, closePlayer, expandPlayer, minimizePlayer, playerIsLive, playerItem, playerMini, playerOpen, restoreMiniPlayer } from './player.js';
 import { ADMIN_TABS, renderSettingsPage } from './settings-shell.js';
 import { applyKeyWatch, initTv, inTvApp, changeServer } from './tv.js';
@@ -86,6 +87,7 @@ const routes = [
   [/^\/library\/(\d+)$/, (m, q) => views.library(Number(m[1]), q)],
   [/^\/item\/(\d+)$/, (m, q) => views.item(Number(m[1]), q)],
   [/^\/search$/, (m, q) => views.search(q)],
+  [/^\/pick$/, (m, q) => views.pick(q)],
   [/^\/person$/, (m, q) => views.person(q.get('name'))],
   [/^\/mylist$/, () => views.mylist()],
   [/^\/guide$/, (m, q) => views.guide(q)],
@@ -425,6 +427,8 @@ export async function startSession() {
   // The page was reloaded with something playing in the bar at the bottom: put it back, paused.
   // After the page it belongs to, so the film lands on top of the right page rather than an empty one.
   restoreMiniPlayer().catch(() => { /* the title has gone, or the server said no: just browse */ });
+  // Check in with the server so another device can pause, move or start a film here (remote.js).
+  startRemote();
 }
 
 async function boot() {
@@ -455,6 +459,7 @@ window.addEventListener('hashchange', route);
 window.addEventListener('lenta:signedout', () => {
   if (!state.user) return;
   state.user = null;
+  stopRemote();
   runCleanups();
   closePlayer({ navigate: false });
   toast('Your session ended. Sign in again.', 'error');

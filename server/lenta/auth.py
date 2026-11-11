@@ -89,10 +89,38 @@ def _token_from_request(request: Request) -> str | None:
     return None
 
 
+KEY_PREFIX = "lk_"
+
+
+def _key_user(request: Request, token: str) -> dict | None:
+    """An assistant key (1.26.0, see assistant.py): a long-lived credential for one program, not a session.
+
+    Signing out and changing the password end every *session* of the account (revoke_tokens), which is
+    right for a person and wrong for Jarvis: it went deaf the first time Vlad signed out on the PC. A key
+    is withdrawn on its own, in Settings, and is limited to what it was given (its scopes), which LENTA
+    enforces here — before any endpoint runs — rather than trusting the program to hold back.
+
+    **Only from the Authorization header.** A key in a URL would sit in browser history and in any page
+    source it was pasted into, and a key in a cookie could be ridden by another site's form.
+    """
+    if not request.headers.get("authorization", "").lower().startswith("bearer "):
+        return None
+    from . import assistant
+    found = assistant.key_lookup(token)
+    if not found:
+        return None
+    key, row = found
+    if not assistant.allowed(request.method, request.url.path, key["scopes"], bool(row["is_admin"])):
+        raise HTTPException(403, "This assistant key may not do that")
+    return {**dict(row), "key": key}
+
+
 def user_from_request(request: Request) -> dict | None:
     token = _token_from_request(request)
     if not token:
         return None
+    if token.startswith(KEY_PREFIX):
+        return _key_user(request, token)
     try:
         payload = jwt.decode(token, _secret(), algorithms=["HS256"])
     except jwt.PyJWTError:

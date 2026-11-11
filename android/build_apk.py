@@ -22,7 +22,7 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from dexwriter import Dex                       # noqa: E402
-from app_code import PKG, VERSION, classes      # noqa: E402
+from app_code import LINK_SCHEME, PKG, VERSION, classes      # noqa: E402
 
 # Android offers an update only when this number goes up, and it never shows it to anybody: bump
 # VERSION in app_code.py, forget this second constant, and the new APK installs over nothing and
@@ -37,6 +37,7 @@ ANDROID_NS = "http://schemas.android.com/apk/res/android"
 # framework attribute ids (android.R.attr), from Android's public.xml
 ATTR = {"theme": 0x01010000, "label": 0x01010001, "icon": 0x01010002, "name": 0x01010003, "exported": 0x01010010,
         "launchMode": 0x0101001d, "screenOrientation": 0x0101001e, "configChanges": 0x0101001f,
+        "scheme": 0x01010027, "host": 0x01010028,
         "drawable": 0x01010199, "minSdkVersion": 0x0101020c, "versionCode": 0x0101021b, "versionName": 0x0101021c,
         "windowSoftInputMode": 0x0101022b, "targetSdkVersion": 0x01010270, "allowBackup": 0x01010280,
         "hardwareAccelerated": 0x010102d3, "supportsRtl": 0x010103af, "usesCleartextTraffic": 0x010104ec,
@@ -163,6 +164,15 @@ def manifest() -> bytes:
                 ("intent-filter", [], [
                     ("action", [("android:name", "android.intent.action.MAIN")], []),
                     ("category", [("android:name", "android.intent.category.LAUNCHER")], []),
+                ]),
+                # "play this title": lenta://play/<id>[?t=<s>] from another app on the phone (app_code.link).
+                # A scheme of LENTA's own rather than http(s): the server's address is only known once the
+                # app is set up, so an http filter would have to claim every web link on the phone. And
+                # DEFAULT without BROWSABLE, so another app can send it but a web page cannot.
+                ("intent-filter", [], [
+                    ("action", [("android:name", "android.intent.action.VIEW")], []),
+                    ("category", [("android:name", "android.intent.category.DEFAULT")], []),
+                    ("data", [("android:scheme", LINK_SCHEME), ("android:host", "play")], []),
                 ]),
             ]),
         ]),

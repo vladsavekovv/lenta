@@ -24,6 +24,7 @@ export const NAV = [
     { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
     { id: 'general', label: 'General', icon: 'sliders' },
     { id: 'users', label: 'Users', icon: 'users' },
+    { id: 'assistants', label: 'Assistants', icon: 'lock' },
     { id: 'network', label: 'Network', icon: 'globe' },
   ] },
   { title: 'Libraries', admin: true, items: [

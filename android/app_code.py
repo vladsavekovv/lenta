@@ -14,10 +14,18 @@ HTTPS: LENTA's own certificate (issued by "LENTA local CA") is accepted for the 
 the setup page while you connect); any other certificate problem shows the setup page with an explanation.
 Music and audiobooks keep playing with the screen off (a partial wake lock while they play). When LENTA
 moves to another port or to https on the same machine, the app remembers the new address by itself.
+
+A "play this" link opens a title in the app (another app on the phone sends it — a voice assistant, say):
+  action android.intent.action.VIEW, data lenta://play/<item id>[?t=<seconds>]  (also lenta://play/live/<channel>)
+The app opens <saved server>/#/play/<id>[?t=<s>], so the link never names a server: it always goes to the one
+the app is already signed in to. Anything else in the link — another host, a path that is not a number, a t
+that is not a number — is ignored rather than guessed at. Not BROWSABLE: a web page cannot send it.
 """
 from dexwriter import ACC_PUBLIC, ACC_VOLATILE, ClassDef, Field, Method
 
-VERSION = "1.1.6"
+VERSION = "1.2.0"
+LINK_SCHEME = "lenta"              # the manifest's intent filter and link() must agree; build_apk.py reads this
+INTENT = "Landroid/content/Intent;"
 PKG = "app.lenta"
 MA, CL, CH, BR, UI = "Lapp/lenta/MainActivity;", "Lapp/lenta/Client;", "Lapp/lenta/Chrome;", "Lapp/lenta/Bridge;", "Lapp/lenta/Ui;"
 ACT = "Landroid/app/Activity;"
@@ -146,8 +154,91 @@ def classes() -> list[ClassDef]:
             ("const-string", "v4", "LentaApp"),
             ("invoke-virtual", ["v0", "v2", "v4"], f"{WV}->addJavascriptInterface({OBJ}{STR})V"),
             ("invoke-virtual", ["v6", "v0"], f"{ACT}->setContentView(Landroid/view/View;)V"),
+            # started by a "play this" link: that title; otherwise the server (or the setup page)
+            ("invoke-virtual", ["v6"], f"{ACT}->getIntent(){INTENT}"),
+            ("move-result-object", "v0"),
+            ("invoke-virtual", ["v6", "v0"], f"{MA}->link({INTENT})Z"),
+            ("move-result", "v0"),
+            ("if-nez", "v0", "linked"),
             ("invoke-virtual", ["v6"], f"{MA}->start()V"),
+            L("linked"),
             ("return-void",)]),
+
+        # already open (singleTask), and a "play this" link arrives: the same window plays it
+        Method("onNewIntent", f"({INTENT})V", regs=3, code=[
+            ("invoke-super", ["v1", "v2"], f"{ACT}->onNewIntent({INTENT})V"),
+            ("invoke-virtual", ["v1", "v2"], f"{ACT}->setIntent({INTENT})V"),
+            ("invoke-virtual", ["v1", "v2"], f"{MA}->link({INTENT})Z"),
+            ("return-void",)]),
+
+        # link: lenta://play/<id>[?t=<s>] opens <saved server>/#/play/<id>[?t=<s>]. True when it did.
+        # The server comes from the app's own settings, never from the link, so a link cannot send the
+        # app (and its sign-in cookie) anywhere else. The id must be digits (or live/<digits>), t too;
+        # a t that is not a number is dropped and the title opens where it was left.
+        Method("link", f"({INTENT})Z", regs=8, code=[
+            ("if-eqz", "v7", "no"),
+            ("invoke-virtual", ["v7"], f"{INTENT}->getData()Landroid/net/Uri;"),
+            ("move-result-object", "v0"),
+            ("if-eqz", "v0", "no"),
+            ("invoke-virtual", ["v0"], f"Landroid/net/Uri;->getScheme(){STR}"),
+            ("move-result-object", "v1"),
+            ("const-string", "v2", LINK_SCHEME),
+            ("invoke-virtual", ["v2", "v1"], f"{STR}->equalsIgnoreCase({STR})Z"),
+            ("move-result", "v1"),
+            ("if-eqz", "v1", "no"),
+            ("invoke-virtual", ["v0"], f"Landroid/net/Uri;->getHost(){STR}"),
+            ("move-result-object", "v1"),
+            ("const-string", "v2", "play"),
+            ("invoke-virtual", ["v2", "v1"], f"{STR}->equalsIgnoreCase({STR})Z"),
+            ("move-result", "v1"),
+            ("if-eqz", "v1", "no"),
+            ("invoke-virtual", ["v0"], f"Landroid/net/Uri;->getPath(){STR}"),
+            ("move-result-object", "v1"),
+            ("if-eqz", "v1", "no"),
+            ("const-string", "v2", "/(live/)?[0-9]{1,18}"),
+            ("invoke-virtual", ["v1", "v2"], f"{STR}->matches({STR})Z"),
+            ("move-result", "v2"),
+            ("if-eqz", "v2", "no"),
+            ("const-string", "v2", "t"),
+            ("invoke-virtual", ["v0", "v2"], f"Landroid/net/Uri;->getQueryParameter({STR}){STR}"),
+            ("move-result-object", "v0"),
+            ("const/4", "v5", 0),                     # v5: there is a t, and it is a number of seconds
+            ("if-eqz", "v0", "tok"),
+            ("const-string", "v2", "[0-9]{1,9}"),
+            ("invoke-virtual", ["v0", "v2"], f"{STR}->matches({STR})Z"),
+            ("move-result", "v5"),
+            L("tok"),
+            *prefs("v2", "v6", "v3"),
+            ("const-string", "v3", "server"),
+            ("const/4", "v4", 0),
+            ("invoke-interface", ["v2", "v3", "v4"], f"{SP}->getString({STR}{STR}){STR}"),
+            ("move-result-object", "v2"),
+            ("if-eqz", "v2", "no"),                   # no server yet: the setup page, as on any first run
+            ("invoke-static", ["v2"], f"Landroid/net/Uri;->parse({STR})Landroid/net/Uri;"),
+            ("move-result-object", "v3"),
+            ("invoke-virtual", ["v3"], f"Landroid/net/Uri;->getHost(){STR}"),
+            ("move-result-object", "v3"),
+            ("iput-object", "v3", "v6", F_HOST),      # as start() does: the saved server's pages stay in the app
+            ("const-string", "v3", "/#/play"),
+            ("invoke-virtual", ["v2", "v3"], f"{STR}->concat({STR}){STR}"),
+            ("move-result-object", "v2"),
+            ("invoke-virtual", ["v2", "v1"], f"{STR}->concat({STR}){STR}"),
+            ("move-result-object", "v2"),
+            ("if-eqz", "v5", "go"),
+            ("const-string", "v3", "?t="),
+            ("invoke-virtual", ["v2", "v3"], f"{STR}->concat({STR}){STR}"),
+            ("move-result-object", "v2"),
+            ("invoke-virtual", ["v2", "v0"], f"{STR}->concat({STR}){STR}"),
+            ("move-result-object", "v2"),
+            L("go"),
+            ("invoke-virtual", ["v6"], f"{MA}->hideCustom()V"),   # a trailer full screen gives way to the film
+            ("iget-object", "v3", "v6", F_WEB),
+            ("invoke-virtual", ["v3", "v2"], f"{WV}->loadUrl({STR})V"),
+            ("const/4", "v0", 1),
+            ("return", "v0"),
+            L("no"),
+            ("const/4", "v0", 0),
+            ("return", "v0")]),
 
         # start: the saved server, or the setup page on first launch
         Method("start", "()V", regs=5, code=[

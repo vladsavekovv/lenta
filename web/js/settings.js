@@ -8,6 +8,7 @@ import { inAndroidApp, installAvailable, installHelp, isAndroid, onInstallChange
 import { keyWatching, setKeyWatch, tvMode } from './tv.js';
 import { avplayOffered } from './avplay.js';
 import { blockLayout, layoutBar, layoutButtons, pageLayout } from './layout.js';
+import { defaultDeviceName, deviceKind, deviceName, setDeviceName } from './remote.js';
 
 // Colours for the theme previews (kept here so a card can show a theme that isn't active).
 const PREVIEW = {
@@ -154,6 +155,10 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
           <input class="range" type="range" id="p-vol" min="0.05" max="1" step="0.05" value="${draft.theme_music_volume}"></div>
         <p style="color:var(--muted);font-size:14px;margin:0">Uses a theme file stored with the movie (theme.mp3) when there is one${f.theme_music_online ? ', otherwise a soundtrack preview from Apple Music' : ''}.
           ${f.trailers ? '' : ' Trailers need a TMDB key in Settings › Metadata › TMDB and language.'}</p>
+        <h4 class="set-sub">This device</h4>
+        <div class="row-field"><label for="p-devname">Name</label>
+          <input class="input" id="p-devname" maxlength="40" value="${deviceName()}" placeholder="${defaultDeviceName()}"></div>
+        <p style="color:var(--muted);font-size:14px;margin:-6px 0 0">What this ${deviceKind() === 'pc' ? 'browser' : deviceKind() === 'tv' ? 'television' : 'phone or tablet'} is called when you move a film between devices, for example "Tablet" or "Living room TV". It is kept on this device only and saved as you type.</p>
       </section>
 
       <section class="panel" data-panel="app"><h3>LENTA app</h3>
@@ -279,6 +284,9 @@ export async function renderSettings(target = $('#view'), page = 'appearance') {
   bind('#p-tvpanel', 'tv_panel', el => el.value);
   bind('#p-home-30', 'home_trailer_30', el => (el.checked ? '1' : '0'));
   bind('#p-vol', 'theme_music_volume', el => el.value);
+  // Kept on this device, not in the account's preferences, so it is not part of Save: every device the
+  // account signs in on needs its own name.
+  $('#p-devname')?.addEventListener('input', e => setDeviceName(e.target.value));
   $('#p-pass').addEventListener('click', changePasswordDialog);
   const installUi = () => {
     if (!$('#p-install')) return;

@@ -995,15 +995,28 @@ function photoAlbumDetail(d, q) {
     const a = e.target.closest('a[data-i]');
     if (!a) return;
     e.preventDefault();
-    lightbox(d.photos, Number(a.dataset.i));
+    lightbox(d.photos, Number(a.dataset.i), d.id);
   });
   if (q.get('photo')) {
-    const open = d.photos.findIndex(p => String(p.id) === q.get('photo'));
-    if (open >= 0) lightbox(d.photos, open);
+    // ?photo=first is what another device asks for ("show the Greece photos on the TV", remote.js)
+    const open = q.get('photo') === 'first' ? 0 : d.photos.findIndex(p => String(p.id) === q.get('photo'));
+    if (open >= 0) lightbox(d.photos, open, d.id);
   }
 }
 
-function lightbox(photos, index) {
+// The photo being shown, for remote control (remote.js, 1.26.0): which album, which photo, and a way
+// to step through them that is the same as pressing the arrows.
+let shownPhotos = null;
+export function photoStatus() {
+  return shownPhotos && document.body.contains(shownPhotos.el)
+    ? { album_id: shownPhotos.albumId, photo_index: shownPhotos.index(), photo_count: shownPhotos.count } : null;
+}
+export function photoStep(n) {
+  if (!shownPhotos || !document.body.contains(shownPhotos.el)) return false;
+  return shownPhotos.step(n);
+}
+
+function lightbox(photos, index, albumId = null) {
   const el = document.createElement('div');
   el.className = 'lightbox';
   el.setAttribute('role', 'dialog');
@@ -1020,7 +1033,8 @@ function lightbox(photos, index) {
   };
   const close = () => { el.remove(); document.removeEventListener('keydown', onKey); window.removeEventListener('hashchange', close); };
   window.addEventListener('hashchange', close);
-  const step = (n) => { const next = index + n; if (next >= 0 && next < photos.length) { index = next; show(); } };
+  const step = (n) => { const next = index + n; if (next >= 0 && next < photos.length) { index = next; show(); return true; } return false; };
+  shownPhotos = { el, albumId, count: photos.length, index: () => index, step };
   const onKey = (e) => {
     if (e.key === 'Escape') close();
     if (e.key === 'ArrowRight') step(1);
@@ -1089,6 +1103,34 @@ async function search(q) {
   };
   input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 250); });
   if (query) run();
+}
+
+// ---------------------------------------------------------------- pick
+// `#/pick?ids=12,34,56` — a short list put on screen by something else (Vlad's voice assistant, when a
+// spoken name fits more than one title), numbered so he can say "the second one". Choosing a picture
+// plays it rather than opening its page: that is what was asked for out loud. The server leaves out
+// anything this account may not see and keeps the order it was given.
+async function pick(q) {
+  const ids = (q.get('ids') || '').split(',').map(s => s.trim()).filter(s => /^\d{1,12}$/.test(s)).join(',');
+  const r = ids ? await api.get(`/api/pick?ids=${ids}`) : { titles: [] };
+  const n = r.titles.length;
+  mount(view(), html`<div class="page pick-page">
+    <div class="page-head"><div><h1 class="page-title">Which one?</h1>
+      <div class="page-sub">${n ? `${n} title${n === 1 ? '' : 's'} — choose one to play` : ''}</div></div></div>
+    ${n ? html`<div class="grid ${wideArt() && !nfx() ? 'landscape' : 'poster'} no-preview" id="pick-grid">${r.titles.map((t, i) =>
+        posterCard(t, { captioned: true, sub: [String(i + 1), t.year].filter(Boolean).join(' · ') }))}</div>`
+      : html`<div class="empty"><h3>Nothing to choose from</h3><p>None of these titles are in a library you can see.</p></div>`}</div>`);
+  $('#pick-grid')?.addEventListener('click', async (e) => {
+    // The picture and the name play; the card's own buttons (its menu, its play button) keep their jobs.
+    if (e.target.closest('button') || !e.target.closest('a[href]')) return;
+    const c = e.target.closest('.card[data-id]');
+    if (!c) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const p = await api.get(`/api/items/${c.dataset.id}/playable`).catch(() => null);
+    if (p?.playable) location.hash = `#/play/${p.item_id}`;
+    else location.hash = `#/item/${c.dataset.id}`;          // not playable: its page says why
+  }, true);
 }
 
 async function person(name) {
@@ -1257,4 +1299,4 @@ async function guide(query) {
   await draw();
 }
 
-export const views = { home, library, item, search, person, mylist, guide };
+export const views = { home, library, item, search, person, mylist, guide, pick };

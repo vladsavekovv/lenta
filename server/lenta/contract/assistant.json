@@ -1,0 +1,1360 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "LENTA assistant contract",
+ "description": "What a program working LENTA for someone (Jarvis) may call, and exactly what comes back. LENTA's tests/test_contract.py calls every endpoint here and validates every answer against it; the program's own tests compare their copy with GET /api/contract. `contract` rises only when something is removed or renamed; added endpoints or optional fields keep it.",
+ "lenta": "1.26.3",
+ "contract": 1,
+ "auth": {
+  "header": "Authorization: Bearer lk_…",
+  "made_in": "Settings › Assistants (administrators)",
+  "notes": [
+   "Only the Authorization header is read for a key; never a URL or cookie.",
+   "Signing out and password changes do not end a key; removing it does.",
+   "Anything not listed for the key's scopes answers 403."
+  ]
+ },
+ "scopes": {
+  "watch": "find, play and control players, libraries, channels and the guide — ids and numbers",
+  "titles": "titles, years, details, artwork and photos (TMDB data: personal, non-commercial, never for training)",
+  "library": "mark watched, My list",
+  "admin": "scans, metadata refreshes, /api/health (administrator accounts only)"
+ },
+ "errors": {
+  "400": "a parameter is missing or wrong; `detail` says which",
+  "401": "no key, or the key was removed or has expired",
+  "403": "the key's scopes do not allow this",
+  "404": "not there, or not this account's (the two look the same)"
+ },
+ "endpoints": [
+  {
+   "id": "capabilities",
+   "method": "GET",
+   "path": "/api/capabilities",
+   "scope": null,
+   "response": {
+    "type": "object",
+    "properties": {
+     "lenta": {
+      "type": "string"
+     },
+     "contract": {
+      "type": "integer"
+     },
+     "account": {
+      "type": "object",
+      "properties": {
+       "id": {
+        "type": "integer"
+       },
+       "admin": {
+        "type": "boolean"
+       }
+      },
+      "required": [
+       "id",
+       "admin"
+      ],
+      "additionalProperties": false
+     },
+     "key": {
+      "anyOf": [
+       {
+        "type": "null"
+       },
+       {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "scopes": {
+          "type": "array",
+          "items": {
+           "$ref": "#/$defs/scope"
+          }
+         }
+        },
+        "required": [
+         "name",
+         "scopes"
+        ],
+        "additionalProperties": false
+       }
+      ]
+     },
+     "features": {
+      "type": "object",
+      "description": "feature → version (or {version, …}); a missing feature is not available"
+     }
+    },
+    "required": [
+     "lenta",
+     "contract",
+     "account",
+     "key",
+     "features"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "id": "contract",
+   "method": "GET",
+   "path": "/api/contract",
+   "scope": null,
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "find",
+   "method": "GET",
+   "path": "/api/find",
+   "scope": "watch",
+   "feature": "find",
+   "params": {
+    "q": "spoken words",
+    "kind": "film | show | any | photos | channel",
+    "season": "integer",
+    "episode": "integer",
+    "genre": "a genre, English or Bulgarian",
+    "unwatched": "1",
+    "random": "1",
+    "exclude": "ids, comma-separated",
+    "year_from": "a year, inclusive: a film's release year, a show's first air year (1.26.3)",
+    "year_to": "a year, inclusive (1.26.3). A title with no known year is left out when either is given",
+    "no_genre": "genre names to leave out, comma-separated, at most 10; Bulgarian words too (1.26.3)",
+    "library": "library ids, comma-separated: pick only from these (1.26.3)",
+    "no_library": "library ids, comma-separated: leave their titles out, and the same film kept elsewhere (1.26.3)"
+   },
+   "response": {
+    "type": "object",
+    "properties": {
+     "item_id": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "kind": {
+      "enum": [
+       null,
+       "movie",
+       "episode",
+       "photoalbum",
+       "channel"
+      ]
+     },
+     "show_id": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "action": {
+      "enum": [
+       null,
+       "start",
+       "resume",
+       "next",
+       "rewatch",
+       "open",
+       "missing",
+       "none"
+      ]
+     },
+     "channel_id": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "matches": {
+      "type": "integer"
+     },
+     "ambiguous": {
+      "type": "boolean"
+     },
+     "candidate_ids": {
+      "type": "array",
+      "items": {
+       "type": "integer"
+      }
+     },
+     "title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "year": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "episode_title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "season": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "episode": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "channel_name": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "candidates": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "item_id": {
+         "type": "integer"
+        },
+        "kind": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "channel_id": {
+         "type": "integer"
+        },
+        "channel_name": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "title": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "year": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "episode_title": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "season": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "episode": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        }
+       },
+       "required": [],
+       "additionalProperties": false
+      }
+     }
+    },
+    "required": [
+     "item_id",
+     "kind",
+     "show_id",
+     "action",
+     "channel_id",
+     "matches",
+     "ambiguous",
+     "candidate_ids"
+    ],
+    "additionalProperties": false
+   },
+   "notes": [
+    "item_id is null when ambiguous; candidate_ids then lists the equally good ones.",
+    "A show answers its next episode (kind episode, show_id the show).",
+    "Present only for a key with the `titles` scope. Also `candidates` with titles.",
+    "1.26.3: an unknown genre in no_genre, an unknown or forbidden library id, or year_from after year_to answers 400 with the reason — nothing is dropped quietly. The capabilities' find.filters lists which filters this LENTA takes."
+   ]
+  },
+  {
+   "id": "now_playing",
+   "method": "GET",
+   "path": "/api/now-playing",
+   "scope": "watch",
+   "feature": "now_playing",
+   "response": {
+    "type": "object",
+    "properties": {
+     "item_id": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "state": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "players": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/device"
+      }
+     },
+     "title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "year": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "episode_title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "season": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "episode": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "item_id",
+     "state",
+     "players"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "id": "playable",
+   "method": "GET",
+   "path": "/api/items/{id}/playable",
+   "scope": "watch",
+   "feature": "find",
+   "response": {
+    "type": "object",
+    "properties": {
+     "playable": {
+      "type": "boolean"
+     },
+     "item_id": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "kind": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "year": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "episode_title": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "season": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "episode": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     }
+    },
+    "required": [
+     "playable",
+     "item_id",
+     "kind"
+    ],
+    "additionalProperties": false
+   }
+  },
+  {
+   "id": "command",
+   "method": "POST",
+   "path": "/api/players/{device_id}/command",
+   "scope": "watch",
+   "feature": "players",
+   "body": {
+    "type": "object",
+    "properties": {
+     "action": {
+      "$ref": "#/$defs/action"
+     },
+     "position_s": {
+      "type": "number",
+      "minimum": 0
+     },
+     "item_id": {
+      "type": "integer"
+     },
+     "channel_id": {
+      "type": "integer"
+     },
+     "language": {
+      "type": "string"
+     },
+     "level": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "muted": {
+      "type": "boolean"
+     },
+     "quality": {
+      "enum": [
+       "original",
+       "1080p",
+       "720p",
+       "480p"
+      ]
+     }
+    },
+    "required": [
+     "action"
+    ],
+    "additionalProperties": false
+   },
+   "response": {
+    "type": "object",
+    "properties": {
+     "command_id": {
+      "type": "string"
+     },
+     "device_id": {
+      "type": "string"
+     },
+     "action": {
+      "$ref": "#/$defs/action"
+     }
+    },
+    "required": [
+     "command_id",
+     "device_id",
+     "action"
+    ],
+    "additionalProperties": false
+   },
+   "actions": {
+    "pause": {},
+    "play": {},
+    "seek": {
+     "needs": [
+      "position_s"
+     ]
+    },
+    "stop": {},
+    "open": {
+     "needs one of": [
+      "item_id",
+      "channel_id"
+     ],
+     "notes": "item_id: a film or episode (a show opens its next one, position_s optional), or a photo album; channel_id: a live channel"
+    },
+    "subtitles": {
+     "needs": [
+      "language"
+     ],
+     "notes": "a code such as bg, or off"
+    },
+    "audio": {
+     "needs": [
+      "language"
+     ]
+    },
+    "next": {
+     "notes": "next episode, or next photo"
+    },
+    "previous": {
+     "notes": "previous photo"
+    },
+    "skip_intro": {},
+    "volume": {
+     "needs": [
+      "level"
+     ]
+    },
+    "mute": {
+     "needs": [
+      "muted"
+     ]
+    },
+    "minimize": {},
+    "expand": {},
+    "quality": {
+     "needs": [
+      "quality"
+     ]
+    }
+   },
+   "notes": [
+    "The device collects it at its next check-in (at once, when the page is in front or playing; otherwise within 2 s while playing, 5 s idle).",
+    "Status: queued → sent (collected) → running (being carried out) → done or failed; expired if never collected within 15 s.",
+    "A page gives up after 20 s: failed, reason \"timeout\", with the second the film was at. Check-ins never wait for a command.",
+    "The outcome is last_command in the players list, and a `command` event."
+   ]
+  },
+  {
+   "id": "libraries",
+   "method": "GET",
+   "path": "/api/libraries",
+   "scope": "watch",
+   "response": {
+    "type": "array"
+   }
+  },
+  {
+   "id": "channels",
+   "method": "GET",
+   "path": "/api/livetv/channels",
+   "scope": "watch",
+   "feature": "live_tv",
+   "response": {
+    "type": "object",
+    "required": [
+     "channels"
+    ]
+   }
+  },
+  {
+   "id": "guide_now",
+   "method": "GET",
+   "path": "/api/livetv/epg/now",
+   "scope": "watch",
+   "feature": "live_tv",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "events",
+   "method": "GET",
+   "path": "/api/events",
+   "scope": null,
+   "feature": "events",
+   "params": {
+    "since": "replay from after this event id (or send Last-Event-ID)"
+   },
+   "response": "text/event-stream; each message: id, event (the type) and data (JSON, see $defs.event)"
+  },
+  {
+   "id": "health",
+   "method": "GET",
+   "path": "/api/health",
+   "scope": "admin",
+   "feature": "health",
+   "response": {
+    "$ref": "#/$defs/health"
+   }
+  },
+  {
+   "id": "scan",
+   "method": "POST",
+   "path": "/api/admin/scan",
+   "scope": "admin",
+   "feature": "admin",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "scan_library",
+   "method": "POST",
+   "path": "/api/admin/libraries/{id}/scan",
+   "scope": "admin",
+   "feature": "admin",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "refresh_item",
+   "method": "POST",
+   "path": "/api/admin/items/{id}/refresh-metadata",
+   "scope": "admin",
+   "feature": "admin",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "watched",
+   "method": "POST",
+   "path": "/api/items/{id}/watched",
+   "scope": "library",
+   "feature": "library_marks",
+   "body": {
+    "type": "object",
+    "properties": {
+     "watched": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "watched"
+    ],
+    "additionalProperties": false
+   },
+   "response": {
+    "type": "object",
+    "required": [
+     "ok",
+     "count"
+    ]
+   }
+  },
+  {
+   "id": "watchlist",
+   "method": "POST",
+   "path": "/api/items/{id}/watchlist",
+   "scope": "library",
+   "feature": "library_marks",
+   "body": {
+    "type": "object",
+    "properties": {
+     "on": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "on"
+    ],
+    "additionalProperties": false
+   },
+   "response": {
+    "type": "object",
+    "required": [
+     "ok"
+    ]
+   }
+  },
+  {
+   "id": "search",
+   "method": "GET",
+   "path": "/api/search",
+   "scope": "titles",
+   "feature": "browse",
+   "params": {
+    "q": "words"
+   },
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "item",
+   "method": "GET",
+   "path": "/api/items/{id}",
+   "scope": "titles",
+   "feature": "browse",
+   "response": {
+    "$ref": "#/$defs/card"
+   }
+  },
+  {
+   "id": "library_items",
+   "method": "GET",
+   "path": "/api/libraries/{id}/items",
+   "scope": "titles",
+   "feature": "browse",
+   "params": {
+    "sort": "added | title | year | rating | random",
+    "genre": "name",
+    "filter": "unwatched | …",
+    "limit": "≤ 500",
+    "offset": "integer"
+   },
+   "response": {
+    "type": "object",
+    "required": [
+     "items"
+    ]
+   }
+  },
+  {
+   "id": "people",
+   "method": "GET",
+   "path": "/api/people",
+   "scope": "titles",
+   "feature": "browse",
+   "params": {
+    "name": "exact name, cast or crew",
+    "unwatched": "1"
+   },
+   "response": {
+    "type": "object",
+    "required": [
+     "name",
+     "items"
+    ],
+    "properties": {
+     "items": {
+      "type": "array",
+      "items": {
+       "$ref": "#/$defs/card"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "watchlist_read",
+   "method": "GET",
+   "path": "/api/watchlist",
+   "scope": "titles",
+   "feature": "browse",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "home",
+   "method": "GET",
+   "path": "/api/home",
+   "scope": "titles",
+   "feature": "browse",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "image",
+   "method": "GET",
+   "path": "/api/img/{kind}/{name}",
+   "scope": "titles",
+   "feature": "browse",
+   "response": "an image; fetch it with the key in the header (never put the key in an <img> address)"
+  },
+  {
+   "id": "me",
+   "method": "GET",
+   "path": "/api/auth/me",
+   "scope": null,
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "server",
+   "method": "GET",
+   "path": "/api/server",
+   "scope": null,
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "system",
+   "method": "GET",
+   "path": "/api/system",
+   "scope": null,
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "guide",
+   "method": "GET",
+   "path": "/api/livetv/epg",
+   "scope": "watch",
+   "feature": "live_tv",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "channel_logo",
+   "method": "GET",
+   "path": "/api/livetv/channels/{id}/logo",
+   "scope": "watch",
+   "feature": "live_tv",
+   "response": "an image"
+  },
+  {
+   "id": "item_about",
+   "method": "GET",
+   "path": "/api/items/{id}/about",
+   "scope": "titles",
+   "feature": "browse",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "item_preview",
+   "method": "GET",
+   "path": "/api/items/{id}/preview",
+   "scope": "titles",
+   "feature": "browse",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "item_extras",
+   "method": "GET",
+   "path": "/api/items/{id}/extras",
+   "scope": "titles",
+   "feature": "browse",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "library_genres",
+   "method": "GET",
+   "path": "/api/libraries/{id}/genres",
+   "scope": "titles",
+   "feature": "browse",
+   "response": {}
+  },
+  {
+   "id": "genre_tiles",
+   "method": "GET",
+   "path": "/api/libraries/{id}/genre-tiles",
+   "scope": "titles",
+   "feature": "browse",
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "home_banner",
+   "method": "GET",
+   "path": "/api/home/banner",
+   "scope": "titles",
+   "feature": "browse",
+   "response": {}
+  },
+  {
+   "id": "pick",
+   "method": "GET",
+   "path": "/api/pick",
+   "scope": "titles",
+   "feature": "browse",
+   "params": {
+    "ids": "comma-separated"
+   },
+   "response": {
+    "type": "object"
+   }
+  },
+  {
+   "id": "photo_thumb",
+   "method": "GET",
+   "path": "/api/photos/{id}/thumb",
+   "scope": "titles",
+   "feature": "browse",
+   "response": "an image"
+  },
+  {
+   "id": "photo_full",
+   "method": "GET",
+   "path": "/api/photos/{id}/full",
+   "scope": "titles",
+   "feature": "browse",
+   "response": "an image"
+  },
+  {
+   "id": "refresh_item_files",
+   "method": "POST",
+   "path": "/api/admin/items/{id}/refresh",
+   "scope": "admin",
+   "feature": "admin",
+   "response": {
+    "type": "object"
+   }
+  }
+ ],
+ "$defs": {
+  "scope": {
+   "enum": [
+    "watch",
+    "titles",
+    "library",
+    "admin"
+   ]
+  },
+  "action": {
+   "enum": [
+    "pause",
+    "play",
+    "seek",
+    "stop",
+    "open",
+    "subtitles",
+    "audio",
+    "next",
+    "previous",
+    "skip_intro",
+    "volume",
+    "mute",
+    "minimize",
+    "expand",
+    "quality"
+   ]
+  },
+  "device": {
+   "type": "object",
+   "properties": {
+    "device_id": {
+     "type": "string"
+    },
+    "kind": {
+     "enum": [
+      "pc",
+      "android",
+      "tv"
+     ]
+    },
+    "name": {
+     "type": "string"
+    },
+    "item_id": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "channel_id": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "state": {
+     "enum": [
+      "playing",
+      "paused",
+      "buffering",
+      "idle"
+     ]
+    },
+    "position_s": {
+     "type": "number"
+    },
+    "duration_s": {
+     "type": "number"
+    },
+    "seen_s": {
+     "type": "number"
+    },
+    "last_command": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "object",
+       "properties": {
+        "id": {
+         "type": "string"
+        },
+        "action": {
+         "$ref": "#/$defs/action"
+        },
+        "status": {
+         "enum": [
+          "queued",
+          "sent",
+          "running",
+          "done",
+          "failed",
+          "expired"
+         ]
+        },
+        "position_s": {
+         "type": [
+          "number",
+          "null"
+         ]
+        },
+        "reason": {
+         "enum": [
+          null,
+          "timeout"
+         ]
+        }
+       },
+       "required": [
+        "id",
+        "action",
+        "status",
+        "reason",
+        "position_s"
+       ],
+       "additionalProperties": false
+      }
+     ]
+    },
+    "audio": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "string",
+       "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+      }
+     ]
+    },
+    "audio_options": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+     }
+    },
+    "subtitles": {
+     "anyOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "string",
+       "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+      }
+     ]
+    },
+    "subtitle_options": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+     }
+    },
+    "can_skip_intro": {
+     "type": "boolean"
+    },
+    "has_next": {
+     "type": "boolean"
+    },
+    "volume": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "muted": {
+     "type": [
+      "boolean",
+      "null"
+     ]
+    },
+    "small": {
+     "type": [
+      "boolean",
+      "null"
+     ]
+    },
+    "quality": {
+     "enum": [
+      null,
+      "original",
+      "1080p",
+      "720p",
+      "480p"
+     ]
+    },
+    "album_id": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "photo_index": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "photo_count": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "title": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "year": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "episode_title": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "season": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "episode": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "album_title": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "channel_name": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   },
+   "required": [
+    "device_id",
+    "kind",
+    "name",
+    "item_id",
+    "channel_id",
+    "state",
+    "position_s",
+    "duration_s",
+    "seen_s",
+    "last_command",
+    "audio",
+    "audio_options",
+    "subtitles",
+    "subtitle_options",
+    "can_skip_intro",
+    "has_next",
+    "volume",
+    "muted",
+    "small",
+    "quality",
+    "album_id",
+    "photo_index",
+    "photo_count"
+   ],
+   "additionalProperties": false
+  },
+  "card": {
+   "type": "object",
+   "description": "A title as the browser draws it. These fields are kept; others may be added.",
+   "required": [
+    "id",
+    "kind",
+    "title",
+    "year",
+    "library_id"
+   ],
+   "properties": {
+    "id": {
+     "type": "integer"
+    },
+    "kind": {
+     "type": "string"
+    },
+    "title": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "year": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "library_id": {
+     "type": "integer"
+    },
+    "overview": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "genres": {},
+    "rating": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "runtime": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "poster": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "backdrop": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   }
+  },
+  "health": {
+   "type": "object",
+   "properties": {
+    "ok": {
+     "type": "boolean"
+    },
+    "problems": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "what"
+      ],
+      "properties": {
+       "what": {
+        "enum": [
+         "scan_failed",
+         "files_unreadable",
+         "disk_low",
+         "no_hardware_encoder",
+         "errors_logged"
+        ]
+       }
+      }
+     }
+    },
+    "lenta": {
+     "type": "string"
+    },
+    "uptime_s": {
+     "type": "integer"
+    },
+    "libraries": {
+     "type": "array"
+    },
+    "scans_running": {
+     "type": "array"
+    },
+    "free_bytes": {
+     "type": "object"
+    },
+    "encoder": {
+     "type": "object"
+    },
+    "gpu_cannot_decode": {
+     "type": "array"
+    },
+    "conversions_running": {
+     "type": "integer"
+    },
+    "log_last_hour": {
+     "type": "object"
+    }
+   },
+   "required": [
+    "ok",
+    "problems",
+    "lenta",
+    "uptime_s",
+    "libraries",
+    "scans_running",
+    "free_bytes",
+    "encoder",
+    "gpu_cannot_decode",
+    "conversions_running",
+    "log_last_hour"
+   ],
+   "additionalProperties": false
+  },
+  "event": {
+   "type": "object",
+   "required": [
+    "type",
+    "at"
+   ],
+   "properties": {
+    "type": {
+     "enum": [
+      "player",
+      "command",
+      "finished",
+      "added",
+      "scan"
+     ]
+    },
+    "at": {
+     "type": "number"
+    }
+   },
+   "description": "player: a device's summary (device_id, kind, name, item_id, channel_id, album_id, state — 'gone' when it went quiet — position_s). command: command_id, device_id, action, status (queued, sent, running, done, failed, expired), reason (\"timeout\" or null), position_s, item_id, channel_id. finished: item_id, kind. added: library_id, item_ids, episode_ids, show_ids. scan (admin): library_id, ok, added, removed, failed. A `titles` key also gets title, year and friends."
+  }
+ }
+}

@@ -31,6 +31,7 @@ dev-data/
 android/build/
 
 # --- Editors and OS ----------------------------------------------------------
+.claude/
 .vscode/
 .idea/
 *.swp

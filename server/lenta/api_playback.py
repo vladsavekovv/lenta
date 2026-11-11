@@ -475,6 +475,10 @@ def report_progress(body: ProgressBody, user: dict = Depends(auth.current_user))
                         "position = excluded.position, duration = excluded.duration, completed = 0, "
                         "updated_at = excluded.updated_at",
                         (user["id"], item["id"], body.position, body.duration, now()))
+    if done and not (prev and prev["completed"]):
+        from . import events                       # 1.26.0: "finished", once, the moment it becomes true
+        events.publish("finished", {"item_id": item["id"], "kind": item["kind"]},
+                       user_id=user["id"], library_id=item.get("library_id"))
     return {"ok": True, "completed": done}
 
 

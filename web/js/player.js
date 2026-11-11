@@ -5,6 +5,7 @@ import { dockMount, dockRefresh, dockRegister, dockUnmount, dockUpdate } from '.
 import { state } from './app.js';
 import { langName, subtitleSearch } from './subtitles.js';
 import { tvMode, tvNote } from './tv.js';
+import { photoStep } from './views.js';
 import { avplayElement, avplayOffered, tvProfile } from './avplay.js';
 import { $, channels, fmtTime, html, icon, img, isTouch, mount, popMenu, restoreOverlays, toast } from './ui.js';
 
@@ -226,11 +227,12 @@ export async function openPlayer(itemId, opts = {}) {
 
   if (P.live) return loadLive();
 
+  const mine = P;
   let detail;
   try {
     detail = await api.get(`/api/items/${itemId}`);
-  } catch (err) { return showMessage("This title can't be played", err.message); }
-  if (!P || P.itemId !== itemId) return;
+  } catch (err) { return P === mine && showMessage("This title can't be played", err.message); }
+  if (P !== mine) return;            // closed, or replaced by another film, while we asked — even the same one
   P.detail = detail;
   const file = (detail.files || []).find(f => f.id === P.fileId) || detail.files?.[0];
   if (!file) return showMessage('No playable file', 'This title has no video file in the library.');
@@ -380,6 +382,132 @@ export async function restoreMiniPlayer() {
 export const playerMini = () => !!P?.mini;
 export const playerIsLive = () => !!P?.live;
 export const playerItem = () => P?.itemId ?? null;
+
+// ---- remote control (remote.js, 1.25.0) --------------------------------------------------------------
+// What this page is doing, for the heartbeat: ids, seconds and language codes only.
+// 1.26.0 adds the tracks on offer and in use, whether an intro can be skipped now, the volume and the
+// size, so an assistant can answer "Bulgarian subtitles" without guessing what the file has.
+export function remoteStatus() {
+  if (!P || !P.video) return { item_id: null, channel_id: null, state: 'idle', position_s: 0, duration_s: 0 };
+  const v = P.video;
+  const state = v.paused ? 'paused' : (v.readyState < 3 || P.loading ? 'buffering' : 'playing');
+  const common = { volume: Math.round(v.volume * 100) / 100, muted: !!v.muted, small: !!P.mini };
+  if (P.live) return { item_id: null, channel_id: P.live.channelId, state, position_s: 0, duration_s: 0, ...common };
+  const file = currentFile();
+  const lang = (t) => (t && (t.lang || t.language)) || null;
+  const audioIdx = P.info?.audio_index ?? file?.audio?.[0]?.index;
+  const sub = (file?.subtitles || []).find(x => x.key === P.subtitleKey);
+  const t = position();
+  const it = P.intro;
+  return {
+    item_id: P.itemId, channel_id: null, state, position_s: t, duration_s: duration(), ...common,
+    audio: lang((file?.audio || []).find(a => a.index === audioIdx)),
+    audio_options: (file?.audio || []).map(lang).filter(Boolean),
+    subtitles: lang(sub),
+    subtitle_options: (file?.subtitles || []).filter(x => !x.forced).map(lang).filter(Boolean),
+    can_skip_intro: !!it && t >= it.start - 0.5 && t < it.end - 1.5,
+    has_next: !!P.info?.next_id,
+    quality: P.quality || null,
+  };
+}
+
+// Carry out one command from another device. Every action goes through what the player's own buttons
+// call, so a remote pause saves the position exactly as pressing pause does (the `pause` listener).
+// Answers { ok, position_s }: where the film was when it was done, so it can be carried elsewhere.
+export async function remoteCommand(c) {
+  const at = () => (P && !P.live ? Math.round(position() * 10) / 10 : null);
+  const no = () => ({ ok: false, position_s: at() });
+  const yes = () => ({ ok: true, position_s: at() });
+  try {
+    switch (c.action) {
+      case 'open': {
+        if (c.target === 'channel') { location.hash = `#/play/live/${c.channel_id}`; return { ok: true, position_s: null }; }
+        if (c.target === 'photos') { location.hash = `#/item/${c.item_id}?photo=first`; return { ok: true, position_s: null }; }
+        const t = c.position_s != null ? `?t=${Math.floor(c.position_s)}` : '';
+        location.hash = `#/play/${c.item_id}${t}`;
+        return { ok: true, position_s: c.position_s ?? null };
+      }
+      case 'pause':
+        if (!P) return { ok: false, position_s: null };
+        P.video.pause();
+        return yes();
+      case 'play':
+        if (!P) return { ok: false, position_s: null };
+        if (P.mini) expandPlayer({ navigate: false });
+        await P.video.play();
+        return yes();
+      case 'seek':
+        if (!P || P.live) return { ok: false, position_s: null };
+        seekTo(c.position_s);
+        return { ok: true, position_s: c.position_s };
+      case 'stop': {
+        if (!P) return { ok: true, position_s: null };
+        const pos = at();
+        if (!P.video.paused) P.video.pause();    // saves the position, as a pause does
+        closePlayer();
+        return { ok: true, position_s: pos };
+      }
+      case 'subtitles': {
+        if (!P || P.live) return no();
+        if (c.language === 'off') { await selectSubtitle(null); return yes(); }
+        const subs = (currentFile()?.subtitles || []).filter(x => sameLang(x.lang || x.language, c.language));
+        const pick = subs.find(x => !x.forced && !x.image) || subs.find(x => !x.forced) || subs[0];
+        if (!pick) return no();
+        await selectSubtitle(pick.key);
+        return yes();
+      }
+      case 'audio': {
+        if (!P || P.live) return no();
+        const file = currentFile();
+        const a = (file?.audio || []).find(x => sameLang(x.lang || x.language, c.language));
+        if (!a) return no();
+        P.audioIndex = a.index === file.audio[0]?.index ? null : a.index;     // as the audio menu does
+        await load(position(), { keepPaused: P.video.paused });
+        return yes();
+      }
+      case 'next':
+        if (photoStep(1)) return { ok: true, position_s: null };
+        if (!P?.info?.next_id) return no();
+        playNext();
+        return { ok: true, position_s: null };
+      case 'previous':
+        return photoStep(-1) ? { ok: true, position_s: null } : no();
+      case 'skip_intro': {
+        const it = P?.intro;
+        const t = P ? position() : 0;
+        if (!it || t < it.start - 0.5 || t >= it.end - 1.5) return no();
+        it.skipped = true;
+        seekTo(it.end);
+        return { ok: true, position_s: it.end };
+      }
+      case 'volume':
+        if (!P) return no();
+        P.video.volume = Math.max(0, Math.min(1, c.level));
+        P.video.muted = c.level === 0;
+        store.set('volume', P.video.volume); store.set('muted', P.video.muted ? '1' : '0');
+        return yes();
+      case 'mute':
+        if (!P) return no();
+        P.video.muted = !!c.muted;
+        store.set('muted', P.video.muted ? '1' : '0');
+        return yes();
+      case 'minimize':
+        if (!P || P.mini) return P ? yes() : no();
+        minimizePlayer();
+        return yes();
+      case 'expand':
+        if (!P) return no();
+        if (P.mini) expandPlayer();
+        return yes();
+      case 'quality':
+        if (!P || P.live || !QUALITIES.some(([v]) => v === c.quality)) return no();
+        P.quality = c.quality; store.set('quality', c.quality);
+        await load(position(), { keepPaused: P.video.paused });
+        return yes();
+    }
+  } catch { /* a play() the browser refused, a player gone mid-way */ }
+  return no();
+}
 
 export function minimizePlayer({ navigate = true } = {}) {
   if (!P || P.mini) return;
@@ -736,8 +864,14 @@ async function loadLive() {
 }
 
 
+// Numbered across every player this page opens, not per player. A per-player count starts again at 1
+// for each film, so the answer to film A's start could arrive after film B had been opened, find B's
+// count also at 1, and put A's stream into B's player — with B's own conversion left running on the
+// server for nobody (1.24.0: a voice assistant switching films by address found it).
+let loads = 0;
+
 async function load(position, { keepPaused = false } = {}) {
-  const seq = ++P.loadSeq;
+  const seq = P.loadSeq = ++loads;
   showSpinner(true);
   let info;
   try {
@@ -747,9 +881,17 @@ async function load(position, { keepPaused = false } = {}) {
       replace_session: P.sessionId,
     });
   } catch (err) {
+    if (!P || seq !== P.loadSeq) return;            // a film nobody is waiting for any more
     return showMessage("Playback didn't start", err.message, true);
   }
-  if (!P || seq !== P.loadSeq) return;
+  if (!P || seq !== P.loadSeq) {
+    // Superseded while the server was starting it: nobody will ever ask for this stream, so say so
+    // now rather than leaving a conversion running until the server notices it is idle.
+    if (info?.session_id && info.session_id !== P?.sessionId) {
+      fetch(`/api/hls/${info.session_id}`, { method: 'DELETE', credentials: 'same-origin', keepalive: true }).catch(() => {});
+    }
+    return;
+  }
   P.info = info;
   P.sessionId = info.session_id;
   P.offset = info.offset || 0;

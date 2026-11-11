@@ -90,7 +90,7 @@ class TMDB:
         return f"{self.language.split('-')[0]},en,null"
 
     def movie(self, tmdb_id: int) -> dict:
-        d = self._get(f"/movie/{tmdb_id}", append_to_response="credits,release_dates,images,videos,external_ids,keywords",
+        d = self._get(f"/movie/{tmdb_id}", append_to_response="credits,release_dates,images,videos,external_ids,keywords,translations",
                       include_image_language=self._image_language())
         cert = ""
         for rel in d.get("release_dates", {}).get("results", []):
@@ -123,7 +123,7 @@ class TMDB:
         }
 
     def show(self, tmdb_id: int) -> dict:
-        d = self._get(f"/tv/{tmdb_id}", append_to_response="credits,content_ratings,images,videos,external_ids,keywords",
+        d = self._get(f"/tv/{tmdb_id}", append_to_response="credits,content_ratings,images,videos,external_ids,keywords,translations",
                       include_image_language=self._image_language())
         cert = next((r.get("rating") for r in d.get("content_ratings", {}).get("results", [])
                      if r.get("iso_3166_1") == self.region), "")
@@ -229,6 +229,22 @@ def _languages(d: dict) -> tuple[str | None, list[str]]:
     return original, [n for n in names.values() if n][:6]
 
 
+def _aka(d: dict) -> list[str]:
+    """The title in every language TMDB has one for, so a name said in Bulgarian finds the film.
+
+    Kept for one purpose: matching words against the library on the server (`/api/find`). It is
+    never sent anywhere — not to a client and not to anything that asks `/api/find`, which answers
+    with ids."""
+    out, seen = [], set()
+    for t in ((d.get("translations") or {}).get("translations") or []):
+        data = t.get("data") or {}
+        name = (data.get("title") or data.get("name") or "").strip()
+        if name and len(name) <= 150 and name.casefold() not in seen:
+            seen.add(name.casefold())
+            out.append(name)
+    return out[:80]
+
+
 def _common_details(d: dict) -> dict:
     ext = d.get("external_ids") or {}
     kw = d.get("keywords") or {}
@@ -252,6 +268,7 @@ def _movie_details(d: dict) -> dict:
     coll = d.get("belongs_to_collection")
     return {
         **_common_details(d),
+        "aka": _aka(d),
         "composer": _crew(crew, "Original Music Composer", "Music", limit=2),
         "cinematography": _crew(crew, "Director of Photography", limit=2),
         "editors": _crew(crew, "Editor", limit=2),
@@ -269,6 +286,7 @@ def _show_details(d: dict) -> dict:
         out["countries"] = list(d.get("origin_country") or [])[:4]
     nxt = d.get("next_episode_to_air") or {}
     out.update({
+        "aka": _aka(d),
         "composer": _crew(crew, "Original Music Composer", "Music", limit=2),
         "producers": _crew(crew, "Executive Producer", "Producer", limit=4),
         "companies": [c["name"] for c in d.get("production_companies", []) if c.get("name")][:3],
@@ -370,7 +388,10 @@ def _update(con, item_id: int, values: dict, new_extra: dict | None = None) -> N
     locks = locked_fields(old_extra)
     values = {k: (row[k] if k in locks else v) for k, v in values.items()}
     if new_extra is not None:
-        for key in ("locked_fields", "edition"):
+        # What a person set by hand and TMDB never supplies, so a refresh has nothing to replace it with:
+        # the banner tick and the trailer links pasted in the editor. Until 1.24.1 a refresh dropped both,
+        # and one press of Refresh metadata emptied the Home banner's list of trailers (6 Nov 2026).
+        for key in ("locked_fields", "edition", "home_trailer", "trailer_links"):
             if key in old_extra:
                 new_extra[key] = old_extra[key]
         for key in EXTRA_LOCKABLE:

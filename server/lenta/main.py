@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import (about, api_admin, api_auth, api_editor, api_extras, api_library, api_livetv, api_network, api_playback,
+from . import (about, api_admin, api_auth, api_editor, api_extras, api_library, assistant, events, find, players, api_livetv, api_network, api_playback,
                api_prefs, api_streaming, api_subtitles, api_system, certs, epg, intros, livestream, livetv, logs,
                scanner, streaming, trailers, transcode, trickplay, watcher)
 from .config import APP_NAME, TMDB_KEY_ENV, VERSION, WEB_DIR, ensure_dirs
@@ -89,6 +89,11 @@ app = FastAPI(title=APP_NAME, version=VERSION, lifespan=lifespan, redoc_url=None
               openapi_url="/api/openapi.json" if _DOCS else None)
 app.include_router(api_auth.router)
 app.include_router(api_library.router)
+app.include_router(find.router)
+app.include_router(players.router)
+app.include_router(assistant.router)
+app.include_router(assistant.admin)
+app.include_router(events.router)
 app.include_router(api_playback.router)
 app.include_router(api_admin.router)
 app.include_router(api_prefs.router)

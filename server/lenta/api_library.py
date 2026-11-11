@@ -651,7 +651,7 @@ def _extra(item: dict) -> dict:
     extra = jloads(item.get("extra"), {})
     for person in extra.get("cast", []):
         person["profile"] = images.url(person.get("profile"))
-    return {k: v for k, v in extra.items() if not k.startswith("parsed_")}
+    return {k: v for k, v in extra.items() if not k.startswith("parsed_") and k != "aka"}
 
 
 def _files(item_id: int) -> list[dict]:
@@ -878,7 +878,7 @@ CREW_ROLES = (("directors", "Director"), ("creators", "Creator"), ("writers", "W
 
 
 @router.get("/people")
-def person(name: str, user: dict = Depends(auth.current_user)):
+def person(name: str, unwatched: bool = False, user: dict = Depends(auth.current_user)):
     where, params = auth.library_filter(user, "i.library_id")
     with db() as con:
         rows = con.execute(
@@ -909,6 +909,18 @@ def person(name: str, user: dict = Depends(auth.current_user)):
     for item, row in zip(items, rows):
         item["character"] = row["character"] if "character" in row.keys() else None
         item["roles"] = roles.get(row["id"], [])
+    if unwatched:      # 1.26.0: "Nolan films I haven't seen" — a finished film or a show with nothing left
+        shows = [i["id"] for i in items if i["kind"] == "show"]
+        left = {}
+        if shows:
+            remaining = UNWATCHED_SHOW.replace(" AS unwatched", "")
+            with db() as con:
+                for sid in shows:
+                    row = con.execute(f"SELECT {remaining} AS n FROM items i WHERE i.id = :id",
+                                      {"uid": user["id"], "id": sid}).fetchone()
+                    left[sid] = row["n"] if row else 0
+        items = [i for i in items if (i["kind"] == "show" and left.get(i["id"], 0) > 0)
+                 or (i["kind"] != "show" and not (i.get("progress") or {}).get("completed"))]
     return {"name": name, "profile": images.url(profile["p"]) if profile else None, "items": items}
 
 

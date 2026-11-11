@@ -149,7 +149,12 @@ export function blockLayout({ root, canvas, value, save, names = {}, form = null
     if (phone()) {                       // one column, in reading order
       cols.classList.remove('lay-free');
       cols.style.height = '';
-      sorted().forEach(id => { const p = el(id); p.style.cssText = ''; p.classList.remove('lay-fixed'); cols.append(p); });
+      // Move a block only when it is out of order. Taking a block out and putting it back takes the
+      // focus out of any field inside it — and a phone's keyboard opening is itself a resize, so
+      // re-appending every block on every resize closed the keyboard the moment a field was tapped.
+      const want = sorted().map(el);
+      want.forEach(p => { p.style.cssText = ''; p.classList.remove('lay-fixed'); });
+      if (want.some((p, i) => panels()[i] !== p)) want.forEach(p => cols.append(p));
       return [];
     }
     cols.classList.add('lay-free');

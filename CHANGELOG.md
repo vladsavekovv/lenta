@@ -1,5 +1,234 @@
 # Changelog
 
+## 1.26.3 — "any film from the 1980s, not boxing or animation"
+
+I asked Jarvis for a film from the 1980s and got an animation; I said no animation and got Freddy vs.
+Jason (2003). A random pick could only be narrowed by type, one genre or unwatched, so it came from the
+whole library.
+
+`/api/find` now also takes:
+
+- `year_from` / `year_to` — a film's release year, a show's first air year. A title whose year is not
+  known is left out when a range is asked.
+- `no_genre` — genres to leave out (Bulgarian words too). A title with no genres stays in.
+- `library` / `no_library` — pick only from those libraries, or leave them out. Leaving my Boxing
+  library out also leaves out a boxing film I keep in another library too.
+
+Anything wrong is refused with the reason instead of being ignored: a genre no title has, a library that
+does not exist or is not mine to see, years the wrong way round. Without the new parameters every answer
+is exactly what it was.
+
+## 1.26.2 — a slow command no longer silences the page
+
+Jarvis asked for English subtitles on the PC. They appeared, but the command never reported back, and
+half a minute later the PC dropped off the list of devices while the film played on. Each command ran
+inside the page's check-in, so one that waited — subtitles the server prepares on demand, a picture
+subtitle burned into a new stream, an audio or quality change — stopped every check-in after it.
+
+- Commands now run beside the check-ins, which keep going every 2 seconds whatever a command is doing.
+- A command being carried out says so: `running`, between `sent` and `done`.
+- After 20 seconds a command is given up and reported `failed` with the reason `timeout`, and the second
+  the film was at, so the outcome is always known.
+- A pause sent while subtitles are still loading is done at once instead of waiting behind them.
+- A check-in the server has not answered in 10 seconds is given up and tried again.
+
+## 1.26.1 — typing in Settings on a phone
+
+On a phone, tapping any text field in Settings brought the keyboard up and took it straight down again,
+so nothing could be typed: the new device name, the server's name, the ports, the TMDB key — all sixteen
+text fields in Settings blocks. On a tablet it worked.
+
+On a phone Settings shows its blocks in one column, and every time the page changed size every block was
+taken out and put back in the same place. Taking out the block holding the field took the focus with it —
+and a keyboard coming up is itself a change of size. A block is now only moved when it is out of order.
+
+## 1.26.0 — Jarvis and LENTA: a key that lasts, commands in a third of a second, and LENTA says what happens
+
+Jarvis signed in to LENTA like a person, and since 1.19.0 **signing out on any browser signs the whole
+account out** — Jarvis included, without a word. Its sign-in also died after 30 days. And a command
+took about two seconds to reach the screen, because a page only collected commands on its next check-in.
+
+**Assistant keys** (Settings › Server › Assistants). A key belongs to one program and one account.
+Signing out and changing the password do not touch it; removing it does. It is shown once, when it is
+made, and LENTA keeps only a hash. It is read only from the `Authorization` header. What it may do is
+ticked when it is made, and **LENTA enforces that itself**:
+
+- *Play and control* — find, start, pause, move between devices; ids only.
+- *Titles and details* — titles, years, details, artwork and photos. Off unless ticked.
+- *Watched and My list*.
+- *Look after LENTA* — scans, metadata refreshes and the health summary (administrator accounts only).
+- Never: deleting anything, users, permissions, settings or keys.
+
+**More commands**, each doing exactly what the player's own button does: subtitles by language (or off),
+audio by language, next episode, skip intro, volume, mute, small and full size, quality. `open` now also
+takes a live channel or a photo album; `next` and `previous` step through photos. Each device reports
+the audio and subtitle languages on offer and in use, whether an intro can be skipped right now,
+whether there is a next episode, its volume, size and quality, and which photo is showing.
+
+**Commands arrive in about 0.3 s instead of 2**: a page that is in front, or playing, listens for its
+own commands and checks in the moment one is queued. The check-in every 2 seconds stays as it was and
+still works if the stream does not (a proxy that holds it back, a tab in the background).
+
+**LENTA says what happens** — `GET /api/events`, a stream: a device appears, goes or changes state; a
+command's outcome; a film watched to the end; new titles after a scan (a new episode with its show);
+a scan finished or failed. Reconnecting with the last id replays what was missed.
+
+**Also new:**
+
+```
+GET /api/capabilities   this LENTA's version and what this key can use, feature by feature
+GET /api/contract       the machine-readable contract both sides test against
+GET /api/health         libraries, scans, free space, the encoder, errors in the last hour (admin)
+GET /api/find?kind=channel&q=nova     a live channel by name ("Nova" is Nova TV, not Kino Nova)
+GET /api/find?kind=photos&q=greece    a photo album by name
+GET /api/people?name=…&unwatched=1    a person's films and shows you have not finished
+```
+
+- **A random pick is fast again.** Picking from Vlad's 1,900 films took about 35 seconds on the server;
+  grouping duplicate copies compared every pair. Same result now, in milliseconds.
+- Measured here, from sending a command to the page confirming it was done: 0.25–0.5 s for most,
+  0.7 s for switching the audio track (the stream restarts at the same second). A new device reaches
+  the event stream about 0.3 s after it first checks in.
+- A person's own session and a key without *Titles and details* get exactly the ids-only answers of
+  1.24.0 and 1.25.0. Nothing changes for anybody until a key is made.
+
+## 1.25.0 — Move a film between devices: pause, resume, seek, stop and open from anywhere
+
+Saying "move it to my tablet" to a voice assistant started the film on the tablet and left it **playing
+on the phone**: nothing could reach a LENTA player to pause it. A player only reported itself every ten
+seconds, from its drawing loop, so in a hidden tab or an app sent to the background it went quiet while
+the film played on, and a paused one never spoke again.
+
+Now every signed-in LENTA page checks in with the server on a timer of its own (every 2 seconds while
+something plays, every 5 while nothing does) and takes commands meant for it:
+
+```
+GET  /api/now-playing                   → as before, plus "players": this account's devices
+     [{device_id, kind, name, item_id, channel_id, state, position_s, duration_s, seen_s,
+       last_command: {id, action, status, position_s}}]
+POST /api/players/<device_id>/command   {"action": "pause|play|seek|stop|open", "position_s"?, "item_id"?}
+     → {"command_id"}    (404 when that device is not connected)
+```
+
+- **A pause saves the position at once**, exactly like pressing pause, and the second it stopped at is
+  reported back under `last_command`, so it can be carried to the next device.
+- **`open` starts a title on any device where LENTA is open** — a browser, the phone or tablet app, or
+  the TV app — and checks first that the account may play it. A show opens its next episode.
+- A command nobody collects within 15 seconds expires, so a stale "pause" cannot reach a tab that wakes
+  up an hour later. A device silent for 30 seconds drops off the list.
+- **Name each device** in Settings › Media pages › This device ("Tablet", "Living room TV"). Until you
+  do, it is called PC, Android phone, Android tablet or TV.
+- Only your own account's devices, only ids, states and seconds — never a title.
+- Measured here, from the command to the film reacting: pause about 1–2 s, resume under 1 s, seek and
+  stop about 2 s, open on another device about 3 s including starting the stream. A browser tab that
+  has been hidden and silent for over five minutes may take up to a minute: the browser slows its timers.
+
+
+## 1.24.1 — Refresh metadata no longer clears the Home banner's trailers
+
+Pressing **Refresh metadata** on a library quietly unticked *Show the trailer in the Home banner* on
+every title in it, so the banner found nothing ticked and showed pictures only. A refresh rebuilds
+each title's details from TMDB and kept only a fixed list of what was there before; the banner tick
+was not on that list, and neither were trailer links pasted in by hand. TMDB never sends either, so
+there was nothing to put back.
+
+Both are now kept through a refresh. Titles unticked before 1.24.1 stay unticked: tick them again
+once (Edit › General), and a later refresh will leave them alone.
+
+
+## 1.24.0 — Starting a film by name, from another program
+
+Another program on the network — a voice assistant, in the case that asked for it — could start a film
+in LENTA only if it already knew the film's number, and the only way to find that number was to search
+and read the answers: titles, overviews, genres and artwork. Everything LENTA shows about a title
+beyond its file name comes from TMDB, and **TMDB's terms do not allow their content to be used with an
+AI application**. So a program like that could not be given the search.
+
+Now the server does the finding itself and answers with numbers only:
+
+```
+GET /api/find?q=<words>[&kind=film|show|any][&season=N&episode=N][&genre=…][&unwatched=1][&random=1][&exclude=1,2]
+  → {"item_id", "kind", "show_id", "action", "matches", "ambiguous", "candidate_ids"}
+GET /api/now-playing           → {"item_id", "state"}        your own account's, nobody else's
+GET /api/items/<id>/playable   → {"playable", "item_id", "kind"}
+#/pick?ids=12,34,56            a page showing those titles, numbered, that plays the one chosen
+```
+
+- **No title, name or genre is ever in those answers** — ids, counts and yes/no only. A test asks every
+  one of them and fails on any word it was not told to expect.
+- **Words are matched the way they are said.** "Rocky two", "Rocky II" and "Роки втора част" are one
+  film; "Rocky" alone is the first film, not a sequel; a misheard long word still matches; a year
+  narrows; "the original" picks the oldest of several. A show answers with the episode its Play button
+  would start, or the season and episode asked for.
+- **Titles in other languages.** LENTA now asks TMDB for each title's translations and keeps them,
+  for matching on the server only — they are never sent to any page. They arrive as titles are
+  refreshed, so a name in Bulgarian finds a film once its details have been fetched again.
+- **One film kept twice is not a question**; two films of one name are, and come back as a list of
+  numbers for `#/pick`.
+- Every answer obeys the account's library permissions: a title in a library it cannot see is not
+  found, not playable and not drawn.
+
+**Fixed: switching films too quickly could put the first one into the second one's player.** Opening
+film B while film A was still starting — which, on a conversion, can take several seconds — let A's
+answer arrive into B's player, so A played instead, and the conversion started for B ran on the server
+for nobody. The player now ignores an answer it is no longer waiting for, and tells the server to stop
+that conversion straight away.
+
+## 1.23.0 — Another app can start a film in the LENTA app
+
+**Android app 1.2.0.** Until now the app could only be opened from its icon. Anything else on the phone
+that wanted to start a film — a voice assistant asked to "play Dune", an automation — had no way in, and
+the only thing it could do was send the phone's browser to the server's address, so the film opened in
+Chrome instead of the app.
+
+The app now answers a link of its own:
+
+```
+lenta://play/<title number>[?t=<seconds>]      lenta://play/live/<channel number>
+```
+
+sent as an Android `VIEW` intent. It opens that title on the server the app is already set up for, in
+the app's own window and full screen, starting at `t` when there is one. If the app is already open it
+plays it there rather than opening a second copy.
+
+- **The link names a title, never a server.** The address comes from the app's own settings, so a link
+  cannot send the app — and the sign-in it carries — anywhere else.
+- **Only another app can send it, not a web page.** The link is not marked as one a browser may follow,
+  and the app does not claim `http` links: the server's address is only known once the app is set up, so
+  doing that would have meant claiming every web link on the phone.
+- **Anything it does not understand is left alone** rather than guessed at: a title that is not a
+  number, a path with more in it, another host. A `t` that is not a number of seconds is dropped and
+  the title opens where it was left. With no server set up yet, the setup page opens as it always has.
+- `tests/test_android_link.py` runs the app's hand-written instructions for the link, one by one,
+  against 24 links, and fails on 1.22.0.
+
+## 1.22.0 — Years of Plex history, brought across
+
+Moving from Plex meant starting again: every film already seen showed as new, every series began at
+its first episode, and every film left half way was back at the start. Plex knows all of it — what was
+watched, where each film was stopped, how many times — and it now comes across.
+
+It is a command, run once, on the machine that can read both databases:
+
+```bash
+python3 server/lenta/plex_import.py --plex-db /path/to/com.plexapp.plugins.library.db \
+    --lenta-db /path/to/lenta.db --map "PlexName=lentaname"
+```
+
+It only shows what it would do until you add `--apply`. Each Plex account is named and given the LENTA
+account it becomes; an account you do not name is left alone. Stop LENTA before applying.
+
+- **A record goes to whichever LENTA title owns the same file**, because both servers usually read the
+  same folders (`--path-map` when they see them under different names). A film renamed since is found
+  by its TMDB number instead. A renamed episode is listed rather than guessed at.
+- **LENTA always wins where it knows better.** A title already watched or started in LENTA more
+  recently than in Plex keeps LENTA's record, so running it twice changes nothing the second time.
+- **Nothing can be half done.** A copy of LENTA's database is taken first, and everything is written
+  in one go or not at all. Plex's database is only ever read from a copy.
+- **It tells you where LENTA groups things Plex keeps apart** — two shows whose names only differ after
+  a " - ", or a folder of separate films taken for one film with several files. Those get the newest
+  record, and the list is worth reading: it is a list of titles LENTA has merged.
+
 ## 1.21.4 — A scroll bar that belongs to the theme
 
 The scroll bar was the one piece of LENTA that ignored which theme you were wearing: the browser's

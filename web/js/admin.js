@@ -43,6 +43,7 @@ export async function renderAdminPage(page, body, q = new URLSearchParams()) {
   if (page === 'libraries') return libraries(body);
   if (page === 'library-sections') return librarySections(body);
   if (page === 'users') return users(body);
+  if (page === 'assistants') return assistants(body);
   if (page === 'fix-matches') return metadata(body, q);
   if (page === 'logs') return logs(body);
   if (page === 'livetv') return renderLiveTv(body);
@@ -543,6 +544,88 @@ function userDialog(u, libs, done) {
       if (u) await api.put(`/api/admin/users/${u.id}`, payload); else await api.post('/api/admin/users', payload);
       m.close(); toast(u ? 'User saved' : `Added ${payload.username}`); done();
     } catch (ex) { box.querySelector('#uerr').textContent = ex.message; }
+  });
+}
+
+// ---------------------------------------------------------------- assistants
+/** Keys for a program that works LENTA for someone — Jarvis, Vlad's voice assistant (1.26.0).
+ *
+ * A key is not a sign-in: signing out on a browser does not end it, and it can only do what is ticked
+ * here. The server enforces that (assistant.py), so a key without "titles" gets ids and nothing else,
+ * whatever the program asks for. The key itself is shown once, when it is made, and never again. */
+const SCOPE_TEXT = {
+  watch: ['Play and control', 'find titles by name, start them, pause, move them between devices — ids only'],
+  titles: ['Titles and details', 'titles, years, descriptions, artwork and photos (data from TMDB: for your own use, never for training)'],
+  library: ['Watched and My list', 'mark titles watched and add them to My list'],
+  admin: ['Look after LENTA', 'scan libraries, refresh metadata and read the server\'s health (administrator accounts only)'],
+};
+
+async function assistants(body) {
+  const draw = async () => {
+    const [res, users] = await Promise.all([api.get('/api/admin/assistant-keys'), api.get('/api/admin/users')]);
+    const who = (id) => users.find(u => u.id === id)?.username || '?';
+    mount(body, html`
+      <p style="color:var(--muted);margin:0 0 18px;max-width:720px">A key lets a program — a voice assistant, say — use LENTA for one account.
+        Signing out does not stop it; removing it here does. It can only do what is ticked.</p>
+      <div class="actions" style="margin-bottom:22px"><button class="btn primary" id="add-key">${icon('plus')}Make a key</button></div>
+      ${res.keys.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Account</th><th>Can</th><th>Last used</th><th></th></tr></thead><tbody>
+      ${res.keys.map(k => html`<tr>
+        <td><b>${k.name}</b> <span style="color:var(--faint)">${k.hint}…</span></td>
+        <td>${who(k.user_id)}</td>
+        <td>${k.scopes.map(s => html`<span class="pill" style="margin:0 4px 4px 0">${SCOPE_TEXT[s]?.[0] || s}</span>`)}</td>
+        <td>${k.last_used ? fmtAgo(k.last_used) : 'Never'}</td>
+        <td class="right"><button class="btn small icon" data-edit="${k.id}" aria-label="Change">${icon('edit')}</button>
+          <button class="btn small icon danger" data-del="${k.id}" aria-label="Remove">${icon('trash')}</button></td></tr>`)}
+      </tbody></table></div>` : html`<p style="color:var(--faint)">No keys yet.</p>`}`);
+    $('#add-key').addEventListener('click', () => keyDialog(null, users, res, draw));
+    body.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => keyDialog(res.keys.find(k => k.id === Number(b.dataset.edit)), users, res, draw)));
+    body.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+      const k = res.keys.find(x => x.id === Number(b.dataset.del));
+      if (!await confirmDialog(`Remove the key "${k.name}"?`, 'The program using it stops working with LENTA at once.', 'Remove key', true)) return;
+      await api.del(`/api/admin/assistant-keys/${k.id}`); toast(`Removed ${k.name}`); draw();
+    }));
+  };
+  await draw();
+}
+
+function keyDialog(k, users, res, done) {
+  const on = new Set(k ? k.scopes : res.default_scopes);
+  const m = modal(html`<h2>${k ? `Change ${k.name}` : 'Make a key'}</h2>
+    <form id="kform">
+      <div class="field"><label for="kname">Name</label><input class="input" id="kname" maxlength="40" value="${k?.name || ''}" placeholder="Jarvis" required autofocus></div>
+      ${k ? '' : html`<div class="field"><label for="kuser">For the account</label><select class="input" id="kuser">
+        ${users.map(u => html`<option value="${u.id}" ${u.id === state.user.id ? raw('selected') : ''}>${u.username}</option>`)}</select></div>`}
+      <div class="field"><span class="label">It can</span>
+        ${res.scopes.map(s => html`<label class="check" style="align-items:flex-start"><input type="checkbox" value="${s}" ${on.has(s) ? raw('checked') : ''}>
+          <span><b>${SCOPE_TEXT[s]?.[0] || s}</b><br><span class="hint">${SCOPE_TEXT[s]?.[1] || ''}</span></span></label>`)}
+        <span class="hint">Never: delete anything, change users, permissions or settings.</span></div>
+      <p class="error-text" id="kerr"></p>
+      <div class="foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">${k ? 'Save' : 'Make key'}</button></div>
+    </form>`);
+  const box = m.box;
+  box.querySelector('#kform').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = box.querySelector('.foot .primary');
+    const scopes = [...box.querySelectorAll('.field input[type=checkbox]:checked')].map(i => i.value);
+    const name = box.querySelector('#kname').value;
+    btn.disabled = true;
+    try {
+      if (k) {
+        await api.patch(`/api/admin/assistant-keys/${k.id}`, { name, scopes });
+        m.close(); toast('Key saved'); done(); return;
+      }
+      const made = await api.post('/api/admin/assistant-keys', { name, scopes, user_id: Number(box.querySelector('#kuser').value) });
+      m.close(); done();
+      const shown = modal(html`<h2>The key for ${made.name}</h2>
+        <p style="color:var(--muted)">Copy it now and give it to the program. LENTA does not keep it and cannot show it again.</p>
+        <div class="field"><input class="input" id="kshow" readonly value="${made.key}" style="font-family:monospace"></div>
+        <div class="foot"><button type="button" class="btn" id="kcopy">Copy</button><button type="button" class="btn primary" data-close>Done</button></div>`);
+      const input = shown.box.querySelector('#kshow');
+      input.select();
+      shown.box.querySelector('#kcopy').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(input.value); toast('Copied'); } catch { input.select(); document.execCommand('copy'); toast('Copied'); }
+      });
+    } catch (ex) { box.querySelector('#kerr').textContent = ex.message; btn.disabled = false; }
   });
 }
 

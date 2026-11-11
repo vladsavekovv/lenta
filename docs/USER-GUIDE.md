@@ -329,6 +329,13 @@ the app says so. When you move LENTA to another port or to https in *Settings �
 remembers the new address. (Downloads over https with LENTA's own certificate need the certificate installed on
 the phone, or use the http address.)
 
+**Opening a title from another app:** the app answers a link of its own, `lenta://play/<title number>`
+(add `?t=<seconds>` to start at a given point; `lenta://play/live/<channel number>` for a live channel). It
+opens that title on the server the app is already set up for, full screen, in the app rather than the
+browser — which is how a voice assistant or an automation on the phone can start a film. The link names only
+the title, never a server, and a web page cannot send it: only an app on the phone can (an Android intent
+with action `android.intent.action.VIEW`, package `app.lenta`).
+
 **Updating the app:** download and install the new APK the same way; it installs over the old one and keeps
 your server and sign-in. To point the app at
 another server: profile › **Change server…**. If the server can't be reached the app says so, with *Try
